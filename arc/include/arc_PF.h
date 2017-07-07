@@ -1,14 +1,30 @@
-//
-// Created by sujinglan on 7/7/17.
-//
+/*********************************************************************************
+ *  ARC-SRTK - Single Frequency RTK Pisitioning Library
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ *  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ *  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ *  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ *  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  Created on: July 07, 2017
+ *      Author: SuJingLan
+ *********************************************************************************/
+
+/**
+ * @brief ARC-SRTK Particle Filter Some Const-Variable and Marco
+ * @author sujinglan
+ */
 
 #ifndef ARC_ARC_PF_H
 #define ARC_ARC_PF_H
-/**
- * @brief ARC-SRTK Particle Filter Some Const-Variable and Marco
- *
- * @author sujinglan
- */
+
 #define ARC_PF_BASEPOS_STD                 (1.0)           /// initial standard deviation of base station position (m)
 #define ARC_PF_ROVERPOS_STD                (100.0)         /// initial standard deviation of rover station position (m)
 #define ARC_PF_BASECLK_STD                 (200.0)         /// initial standard deviation of base station clock drift (m)
