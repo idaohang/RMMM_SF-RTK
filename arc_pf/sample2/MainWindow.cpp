@@ -58,7 +58,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::initStates()
 {
-    m_TrueCarState.setXPos(m_RenderWidget->width()/2); // x-position
+    m_TrueCarState.setXPos(m_RenderWidget->width()/2);  // x-position
     m_TrueCarState.setYPos(m_RenderWidget->height()/2); // y-position
     m_TrueCarState.setTheta(0.0);
     m_TrueCarState.setSpeed(0.0);
