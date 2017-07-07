@@ -43,11 +43,45 @@ class ARC_MovementModel : public libPF::MovementModel<ARC_States>
     void diffuse(ARC_States& state, double dt) const;
 
     /**
-     * @param d new standard deviation for the diffusion of x
+     * @param d new standard deviation for the diffusion of x,y,z
+     *          of base and rover station position
      */
-    void setXStdDev(double d);
+    void setBaesXStdDev(double d) {m_Std_BaseX=d;}
+    void setBaseYstdDev(double d) {m_Std_BaseY=d;}
+    void setBaseZStdDev(double d) {m_Std_BaseZ=d;}
+    void setRoverXStdDev(double d) {m_Std_RoverX=d;}
+    void setRoverYStdDev(double d) {m_Std_RoverY=d;}
+    void setRoverZStdDev(double d) {m_Std_RoverZ=d;}
+    
+    /**
+     * @param d new standard deviation for the diffusion of clock drift
+     *          of base and rover station
+     */
+    void setBaseClkStdDev(double d) {m_Std_Base_Clk=d;}
+    void setRoverClkStdDev(double d) {m_Std_Rover_Clk=d;}
+    /**
+     * @param d new standard deviation for the diffusion of trosphere delay
+     *          of base and rover station
+     */
+    void setBaseTrpStdDev(double d) {m_Std_Base_Trp=d;}
+    void setRoverTrpStdDev(double d) {m_Std_Rover_Trp=d;}
+    /**
+     * @param d new standard deviation for the diffusion of ambguity
+     *          of single difference ambguity on base and rover station
+     */
+    void setNStdDev(double *d) {
+        for (size_t i=0;i<MAXSAT;i++) m_Std_N[i]=d[i];
+    }
 
 private:
-    
+    /// \brief standard deviation for the base and rover position
+    double m_Std_BaseX,m_Std_BaseY,m_Std_BaseZ;
+    double m_Std_RoverX,m_Std_RoverY,m_Std_RoverZ;
+    /// \brief standard deviation for the base and rover clock drift
+    double m_Std_Base_Clk,m_Std_Rover_Clk;
+    /// \brief standard deviation for the base and rover trosphere delay
+    double m_Std_Base_Trp,m_Std_Rover_Trp;
+    /// \brief standard deviation for ambguity
+    double m_Std_N[MAXSAT];
 };
 #endif //ARC_ARC_MOVEMENTMODEL_H
