@@ -1,0 +1,13 @@
+# Created by .ignore support plugin (hsz.mobi)
+.gitignore
+.idea/.name
+.idea/workspace.xml
+arc_flags/doc/
+arc_log/CMakeLists.txt~
+arc_plot/examples/CMakeLists.txt~
+arc_test/arc_test1.cc~
+arc_test/data/
+cmake-build-debug/
+lib/
+windows/arc.vcxproj.filters~
+windows/arc.vcxproj~

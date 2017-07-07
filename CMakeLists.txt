@@ -64,6 +64,7 @@ add_library(${PROJECT_NAME}_rtk STATIC
     arc_srtk/src/arc_pnt.cc
     arc_cmn/src/arc_lambda.cc
     arc/src/arc_core.cc
+    arc_rinex/src/arc_preco.cc
 )
 
 target_link_libraries(${PROJECT_NAME}_rtk glog)

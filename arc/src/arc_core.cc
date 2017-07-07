@@ -1,7 +1,6 @@
 
 #include "arc.h"
 #include "glog/logging.h"
-#include "yaml-cpp/yaml.h"
 
 /* constants/global variables ------------------------------------------------*/
 #define MIN(x,y)    ((x)<(y)?(x):(y))
