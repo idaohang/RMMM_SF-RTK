@@ -51,6 +51,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/arc_log/include
     ${PROJECT_SOURCE_DIR}/arc/include
     ${GFLAGS_INCLUDE_DIR}
+    ${PROJECT_SOURCE_DIR}/arc_pf/lib/include
 )
 add_subdirectory(arc_plot)
 add_subdirectory(arc_log)

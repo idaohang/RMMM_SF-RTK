@@ -42,6 +42,7 @@ extern "C" {
 #define SC2RAD      3.1415926535898     /* semi-circle to radian (IS-GPS) */
 #define AU          149597870691.0      /* 1 AU (m) */
 #define AS2R        (D2R/3600.0)        /* arc sec to radian */
+#defien SQR(x)      ((x)*(x))
 
 #define OMGE        7.2921151467E-5     /* earth angular velocity (IS-GPS) (rad/s) */
 

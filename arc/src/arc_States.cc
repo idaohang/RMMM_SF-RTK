@@ -8,7 +8,7 @@
  * @author sujinglan
  */
 
-#include "arc_States.h
+#include "arc_States.h"
 
 /// The default constructor.
 ARC_States::ARC_States():m_BaseX(0.0),m_BaseY(0.0),m_BaseZ(0.0),
@@ -38,7 +38,7 @@ void ARC_States::setRoverClk(double RoverClk) {m_RoverClk=RoverClk;}
 void ARC_States::setBaseClk(double BaseTrop) {m_BaseTrop=BaseTrop;}
 
 /// set the ambguity of every satelite (cycle)
-void ARC_States::setAmb(double &N)
+void ARC_States::setAmb(double *N)
 {
     for (size_t i=0;i<MAXSAT;i++) m_N[i]=N[i];
 }
@@ -66,8 +66,8 @@ double* ARC_States::getAmb() const
 }
 
 /// get the troephere delay of base and rover station
-double ARC_States::getBaseTrop() const {}() const { return m_RoverTrop;}
-double ARC_States::getRoverTrop() const {}() const { return m_BaseTrop;}
+double ARC_States::getBaseTrop()  const { return m_RoverTrop;}
+double ARC_States::getRoverTrop() const { return m_BaseTrop;}
 
 ARC_States ARC_States::operator*(double factor) const
 {

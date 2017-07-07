@@ -8,7 +8,7 @@
 #include "arc_States.h"
 
 /**
- * @class ARC-SRTK MovementModel
+ * @class ARC_MovementModel
  *
  * @brief single frequency rtk position movement model propagates class
  *
@@ -83,5 +83,14 @@ private:
     double m_Std_Base_Trp,m_Std_Rover_Trp;
     /// \brief standard deviation for ambguity
     double m_Std_N[MAXSAT];
+
+    /// \brief Stores the random number generator
+    libPF::RandomNumberGenerationStrategy* m_RNG;
+
+    /**
+     * Private Method
+     */
+    double SQR(double x) { return x*x;}
+
 };
 #endif //ARC_ARC_MOVEMENTMODEL_H

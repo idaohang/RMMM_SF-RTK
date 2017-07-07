@@ -6,7 +6,7 @@
 #define ARC_ARC_STATES_H
 #include "arc.h"
 /**
- * @class ARC-SRTK State
+ * @class ARC_States
  * @brief the SRTK states for particel filter
  *
  * This state has the following parameters:
@@ -25,9 +25,18 @@
  */
 class ARC_States{
 public:
+    /**
+     * Constructor
+     */
     ARC_States();
+    /**
+     * Destructor
+     */
     virtual ~ARC_States();
 
+    /**
+     * Opereator
+     */
     ARC_States operator*(double factor) const;
     ARC_States& operator+=(const ARC_States& other);
 
@@ -68,7 +77,7 @@ public:
     double getRoverTrop() const ;
 
     /// \brief set the ambguity of every satelite for single-difference on base-rover station
-    void setAmb(double &N);
+    void setAmb(double *N);
 
     /// \brief get the ambguity
     double* getAmb() const;
