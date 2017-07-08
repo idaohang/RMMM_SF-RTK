@@ -21,7 +21,6 @@
  * @brief ARC-SRTK Particle Filter Some Const-Variable and Marco
  * @author sujinglan
  */
-
 #ifndef ARC_ARC_PF_H
 #define ARC_ARC_PF_H
 
@@ -32,5 +31,4 @@
 #define ARC_PF_BASETROP_STD                (5.0)           /// initial standard deviation of base station trosphere delay (m)
 #define ARC_PF_ROVERTROP_STD               (5.0)           /// initial standard deviation of rover station trosphere delay (m)
 #define ARC_PF_AMB_STD                     (10.0)          /// initial standard deviation of single-difference ambguity (cycle)
-
 #endif //ARC_ARC_PF_H

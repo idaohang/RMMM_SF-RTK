@@ -74,6 +74,7 @@ void MainWindow::simulateMovement()
         return;
     }
     double dt = m_LoopTimer.restart() / 1000.0;
+    std::cout<<dt<<std::endl;
 
     double acceleration = m_AccelerationSpinBox->value();
     double maxSpeed = m_MaxSpeedSpinBox->value();
