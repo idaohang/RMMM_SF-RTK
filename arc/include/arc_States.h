@@ -125,10 +125,20 @@ namespace ARC {
         double getRoverIon() const { return m_RoverIon;}
 
         /// \brief get and set the velecity of base station and rover station
-        void setBaseVel(double Vel) {m_Base_Vel=Vel;}
-        void setRoverVel(double Vel) {m_Rover_Vel=Vel;}
-        double getBaseVel() const{ return m_Base_Vel;}
-        double getRoverVel() const { return m_Rover_Vel;}
+        void setBaseVelX(double Vel) {m_Base_VelX=Vel;}
+        void setRoverVelX(double Vel) {m_Rover_VelX=Vel;}
+        double getBaseVelX() const{ return m_Base_VelX;}
+        double getRoverVelX() const { return m_Rover_VelX;}
+
+        void setBaseVelY(double Vel) {m_Base_VelY=Vel;}
+        void setRoverVelY(double Vel) {m_Rover_VelY=Vel;}
+        double getBaseVelY() const{ return m_Base_VelY;}
+        double getRoverVelY() const { return m_Rover_VelY;}
+
+        void setBaseVelZ(double Vel) {m_Base_VelZ=Vel;}
+        void setRoverVelZ(double Vel) {m_Rover_VelZ=Vel;}
+        double getBaseVelZ() const{ return m_Base_VelZ;}
+        double getRoverVelZ() const { return m_Rover_VelZ;}
 
     private:
         /// \brief the states for base station position
@@ -153,9 +163,9 @@ namespace ARC {
         double m_RoverIon;
 
         /// \brief the velecity of base station
-        double m_Base_Vel;
+        double m_Base_VelX,m_Base_VelY,m_Base_VelZ;
         /// \brief the velecity of rover station
-        double m_Rover_Vel;
+        double m_Rover_Vel,m_Rover_VelY,m_Rover_VelZ;
     };
 }
 #endif //ARC_ARC_STATES_H

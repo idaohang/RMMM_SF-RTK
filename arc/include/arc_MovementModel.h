@@ -104,6 +104,17 @@ namespace ARC {
             for (size_t i = 0; i < MAXSAT; i++) m_Std_N[i] = d[i];
         }
 
+        /**
+         * @param d new standard deviation for the diffusion of base and rover station velecity
+         */
+        void setBaseStdDevX(double d) {m_Std_Base_VelX=d;}
+        void setBaseStdDevY(double d) {m_Std_Base_VelY=d;}
+        void setBaseStdDevZ(double d) {m_Std_Base_VelZ=d;}
+
+        void setRoverStdDevX(double d) {m_Std_Rover_VelX=d;}
+        void setRoverStdDevY(double d) {m_Std_Rover_VelY=d;}
+        void setRoverStdDevZ(double d) {m_Std_Rover_VelZ=d;}
+
     private:
         /// \brief standard deviation for the base and rover position
         double m_Std_BaseX, m_Std_BaseY, m_Std_BaseZ;
@@ -118,6 +129,10 @@ namespace ARC {
         /// \brief standard deviation of base station and rover station ionsphere delay (m)
         double m_Std_Base_Ion;
         double m_Std_Rover_Ion;
+
+        /// \brief standard deviation of the velecity of base station and rover station (m/s)
+        double m_Std_Base_VelX,m_Std_Base_VelY,m_Std_Base_VelZ;
+        double m_Std_Rover_VelX,m_Std_Rover_VelY,m_Std_Rover_VelZ;
 
         /// \brief Stores the random number generator
         libPF::RandomNumberGenerationStrategy* m_RNG;

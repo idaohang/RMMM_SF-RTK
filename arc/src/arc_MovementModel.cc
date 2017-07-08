@@ -50,6 +50,33 @@ namespace ARC {
 
     void ARC_MovementModel::drift(ARC_States &state, double dt) const
     {
-        state.setRoverPosX(state.getRoverPosX()+state.)
+        state.setRoverPosX(state.getRoverPosX()+state.getRoverVelX()*dt);
+        state.setRoverPosY(state.getRoverPosY()+state.getRoverVelY()*dt);
+        state.setRoverPosZ(state.getRoverPosZ()+state.getRoverVelZ()*dt);
+    }
+    void ARC_MovementModel::diffuse(ARC_States &state, double dt) const
+    {
+        state.setBasePosX(state.getBasePosX()+m_RNG->getGaussian(m_Std_BaseX)*dt);
+        state.setBasePosY(state.getBasePosY()+m_RNG->getGaussian(m_Std_BaseY)*dt);
+        state.setBasePosZ(state.getBasePosZ()+m_RNG->getGaussian(m_Std_BaseZ)*dt);
+        state.setRoverPosX(state.getRoverPosX()+m_RNG->getGaussian(m_Std_RoverX)*dt);
+        state.setRoverPosY(state.getRoverPosY()+m_RNG->getGaussian(m_Std_RoverY)*dt);
+        state.setRoverPosZ(state.getRoverPosZ()+m_RNG->getGaussian(m_Std_RoverZ)*dt);
+
+        state.setBaseVelX(state.getBaseVelX()+m_RNG->getGaussian(m_Std_Base_VelX)*dt);
+        state.setBaseVelY(state.getBaseVelY()+m_RNG->getGaussian(m_Std_Base_VelY)*dt);
+        state.setBaseVelZ(state.getBaseVelZ()+m_RNG->getGaussian(m_Std_Base_VelZ)*dt);
+        state.setRoverVelX(state.getRoverVelX()+m_RNG->getGaussian(m_Std_Rover_VelX)*dt);
+        state.setRoverVelX(state.getRoverVelX()+m_RNG->getGaussian(m_Std_Rover_VelY)*dt);
+        state.setRoverVelX(state.getRoverVelX()+m_RNG->getGaussian(m_Std_Rover_VelZ)*dt);
+
+        state.setRoverClk(state.getRoverClk()+m_RNG->getGaussian(m_Std_Rover_Clk)*dt);
+        state.setBaseClk(state.getRoverClk()+m_RNG->getGaussian(m_Std_Base_Clk)*dt);
+
+        state.setRoverTrop(state.getRoverTrop()+m_RNG->getGaussian(m_Std_Rover_Trp)*dt);
+        state.setBaseTrop(state.getBaseTrop()+m_RNG->getGaussian(m_Std_Base_Trp)*dt);
+        state.setRoverIon(state.getRoverIon()+m_RNG->getGaussian(m_Std_Rover_Ion)*dt);
+        state.setBaseIon(state.getBaseIon()+m_RNG->getGaussian(m_Std_Base_Ion)*dt);
+
     }
 }

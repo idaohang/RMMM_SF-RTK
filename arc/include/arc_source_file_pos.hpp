@@ -55,7 +55,6 @@ public:
         s << file << ":" << line << ": " << function << "()";
         return s.str();
     }
-
   };
 
 }// namespace ARC
