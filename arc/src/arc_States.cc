@@ -66,6 +66,9 @@ namespace ARC {
     void ARC_States::setAmb(double *N) {
         for (size_t i = 0; i < MAXSAT; i++) m_N[i] = N[i];
     }
+    void ARC_States::setAmb(double N, int i) {
+        m_N[i-1]=N;
+    }
 
     /// get the base postion in ECEF (m)
     double ARC_States::getBasePosX() const { return m_BaseX; }
@@ -112,7 +115,6 @@ namespace ARC {
         states.m_BaseTrop = m_BaseTrop * factor;
 
         for (size_t i = 0; i < MAXSAT; i++) states.m_N[i] = m_N[i] * factor;
-
         return states;
     }
 

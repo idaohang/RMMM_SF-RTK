@@ -78,5 +78,9 @@ namespace ARC {
         state.setRoverIon(state.getRoverIon()+m_RNG->getGaussian(m_Std_Rover_Ion)*dt);
         state.setBaseIon(state.getBaseIon()+m_RNG->getGaussian(m_Std_Base_Ion)*dt);
 
+        for (size_t i=0;i<MAXSAT;i++) {
+            state.setAmb(state.getAmb(i+1)+m_RNG->getGaussian(m_Std_N[i])*dt,i+1);
+        }
+
     }
 }

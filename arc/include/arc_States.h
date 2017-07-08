@@ -110,10 +110,15 @@ namespace ARC {
         double getRoverTrop() const;
 
         /// \brief set the ambguity of every satelite for single-difference on base-rover station
+        /// @param N[in] is the ambguity of satelite of single difference on base and rover station
         void setAmb(double *N);
+        /// @param N[in] the ith satelite single difference ambguity
+        void setAmb(double N,int i);
 
         /// \brief get the ambguity
         double *getAmb() const;
+        /// \brief get the ith satelite single difference ambguity
+        double getAmb(int i) const { return m_N[i-1];}
 
         /// \brief set the ionosphere delay of base station
         void setBaseIon(double BaseIon) {m_BaseIon=BaseIon;}
