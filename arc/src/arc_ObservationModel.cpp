@@ -42,15 +42,28 @@ namespace ARC {
             
         }
     }
-    int ARC_ObservationModel::ComputeZd()
+    void ARC_ObservationModel::ComputeZd()
     {
         
     }
-    int ARC_ObservationModel::ComputeSatPos()
+    void ARC_ObservationModel::ComputeSatPos()
     {
-        int svh[MAXOBS*2];
-        double *var=mat(1,Nu+Nb);
-        
+        double *SatPos=mat(6,Nu+Nb),*SatClk=mat(2,Nu+Nb),*Var=mat(1,Nu+Nb);
+        int Svh[MAXSAT*2];
+        satposs(m_RoverTime,m_Obs,Nu+Nb,&m_Nav,m_Opt.sateph,SatPos,SatClk,Var,Svh);
+        for (int i=0;i<Nu+Nb;i++) {
+            if (SatList[i]) {
+                for (int j=0;j<6;i++) {
+                    m_SatPos[(SatList[i]-1)*6+j]=SatPos[i*6+j];
+                }
+                for (int j=0;j<2;j++) {
+                    m_SatClk[(SatList[i]-1)*2+j]=SatClk[i*2+j];
+                }
+                m_SatPosVar[SatList[i]-1]=Var[i];
+                m_SVH[SatList[i]-1]=Svh[i];
+            }
+        }
+        delete SatPos; delete SatClk; delete Var;
     }
 }
 

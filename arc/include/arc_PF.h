@@ -36,5 +36,5 @@ typedef obs_t ARC_OBS;                                     /// arc-srtk gnss obs
 typedef ssat_t ARC_SAT;                                    /// arc-srtk satellite status type
 typedef obsd_t ARC_OBSD;                                   /// arc-srtk gnss observation data record
 typedef prcopt_t ARC_OPT;                                  /// arc-srtk processing options type
-typedef time_t  ARC_Time;                                  /// arc-srtk observation time
+typedef gtime_t  ARC_Time;                                 /// arc-srtk observation time
 #endif //ARC_ARC_PF_H

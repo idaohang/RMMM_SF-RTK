@@ -91,18 +91,21 @@ namespace ARC {
         int Nb,Nu;
 
         /// \brief the flag satellite heathy
-        int SVH[MAXSAT];
+        int m_SVH[MAXSAT];
 
         /// \brief the satellite clock
-        double SatClk[MAXSAT*2];
+        double m_SatClk[MAXSAT*2];
 
         /// \brief variance of satellite position (ECEF)
-        double SatPosVar[MAXSAT];
+        double m_SatPosVar[MAXSAT];
 
         /// \brief the observation time of base station
         ARC_Time m_BaseTime;
         /// \brief the observation time of rover station
         ARC_Time m_RoverTime;
+
+        /// \brief this epoch satellite no. list
+        int SatList[MAXSAT];
 
         /**
          * Method
@@ -110,8 +113,8 @@ namespace ARC {
         /**
          * \brief compute the undifferenced phase/code residuals
          */
-        int ComputeZd();
-        int ComputeSatPos();
+        void ComputeZd();
+        void ComputeSatPos();
 
 
     };
