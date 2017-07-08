@@ -26,17 +26,30 @@
 #include "arc_ObservationModel.h"
 
 namespace ARC {
-    ARC_ObservationMoel::ARC_ObservationMoel() : libPF::ObservationModel<ARC_States>() {
+    ARC_ObservationModel::ARC_ObservationMoel() : libPF::ObservationModel<ARC_States>() {
     }
 
-    ARC_ObservationMoel::~ARC_ObservationMoel() {
+    ARC_ObservationModel::~ARC_ObservationModel() {
     }
-    void ARC_ObservationMoel::setTrueCarState(const ARC_States& state)
+    void ARC_ObservationModel::setTrueCarState(const ARC_States& state)
     {
         m_TrueCarState = state;
     }
-    double ARC_ObservationMoel::measure(const ARC_States &state) const
+    double ARC_ObservationModel::measure(const ARC_States &state) const
     {
+        double v[MAXSAT]={0.0};
+        for (size_t i=0;i<MAXSAT;i++) {
+            
+        }
+    }
+    int ARC_ObservationModel::ComputeZd()
+    {
+        
+    }
+    int ARC_ObservationModel::ComputeSatPos()
+    {
+        int svh[MAXOBS*2];
+        double *var=mat(1,Nu+Nb);
         
     }
 }

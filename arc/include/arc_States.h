@@ -170,7 +170,7 @@ namespace ARC {
         /// \brief the velecity of base station
         double m_Base_VelX,m_Base_VelY,m_Base_VelZ;
         /// \brief the velecity of rover station
-        double m_Rover_Vel,m_Rover_VelY,m_Rover_VelZ;
+        double m_Rover_VelX,m_Rover_VelY,m_Rover_VelZ;
     };
 }
 #endif //ARC_ARC_STATES_H

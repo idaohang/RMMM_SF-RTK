@@ -31,4 +31,10 @@
 #define ARC_PF_BASETROP_STD                (5.0)           /// initial standard deviation of base station trosphere delay (m)
 #define ARC_PF_ROVERTROP_STD               (5.0)           /// initial standard deviation of rover station trosphere delay (m)
 #define ARC_PF_AMB_STD                     (10.0)          /// initial standard deviation of single-difference ambguity (cycle)
+typedef nav_t ARC_NAV;                                     /// arc-srtk navigation data type
+typedef obs_t ARC_OBS;                                     /// arc-srtk gnss observation data type
+typedef ssat_t ARC_SAT;                                    /// arc-srtk satellite status type
+typedef obsd_t ARC_OBSD;                                   /// arc-srtk gnss observation data record
+typedef prcopt_t ARC_OPT;                                  /// arc-srtk processing options type
+typedef time_t  ARC_Time;                                  /// arc-srtk observation time
 #endif //ARC_ARC_PF_H

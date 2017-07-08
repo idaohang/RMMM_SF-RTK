@@ -29,18 +29,21 @@
 
 #include <libPF/ObservationModel.h>
 #include "arc_States.h"
+#include "arc_PF.h"
 
 namespace ARC {
-    class ARC_ObservationMoel: public libPF::ObservationModel<ARC_States> {
+
+    class ARC_ObservationModel: public libPF::ObservationModel<ARC_States> {
+
         /**
-             * Constructor
-             */
-        ARC_ObservationMoel();
+         * Constructor
+         */
+        ARC_ObservationModel();
 
         /**
          * Destructor
          */
-        ~ARC_ObservationMoel();
+        ~ARC_ObservationModel();
 
         /**
          * @param state Reference to the state that has to be weightened.
@@ -56,6 +59,61 @@ namespace ARC {
     private:
         /// \brief the true States of Observation Model
         ARC_States m_TrueCarState;
+   
+        /// \brief the navigation data,(x,y,z,vx,vy,vz){m,m/s}
+        double m_SatPos[MAXSAT*6];
+        /// \brief save all satelite information
+        ARC_SAT m_SatInfo[MAXSAT];
+        /// \brief navigation data
+        ARC_NAV m_Nav;
+        /// \brief observation data
+        ARC_OBSD m_Obs[MAXSAT*2];
+        /// \brief processing options type
+        ARC_OPT m_Opt;
+        /// \brief hydro‐static mapping function of rover and base station
+        double m_THMap[MAXSAT][2];
+        /// \brief wet mapping function of rover and base station
+        double m_TWMap[MAXSAT][2];
+        /// \brief tropospheric zenith total delay (m) of base and rover station
+        double m_TH[MAXSAT][2];
+        /// \brief tropospheric zenith hydro‐static delay (m) of base and rover station
+        double m_TW[MAXSAT][2];
+        /// \brief the vertical ionospheric delay in L1 frequency (m) of base and rover station
+        double m_Ion[MAXSAT][2];
+        /// \brief the ionosphere map function
+        double m_IonMap[MAXSAT][2];
+        /// \brief the ambguity of gps and bds satelites
+        double m_N[MAXSAT];
+        /// \brief the measurement variance matrix
+        double m_R[MAXSAT];
+
+        /// \brief the number of rover and base station obsservations
+        int Nb,Nu;
+
+        /// \brief the flag satellite heathy
+        int SVH[MAXSAT];
+
+        /// \brief the satellite clock
+        double SatClk[MAXSAT*2];
+
+        /// \brief variance of satellite position (ECEF)
+        double SatPosVar[MAXSAT];
+
+        /// \brief the observation time of base station
+        ARC_Time m_BaseTime;
+        /// \brief the observation time of rover station
+        ARC_Time m_RoverTime;
+
+        /**
+         * Method
+         */
+        /**
+         * \brief compute the undifferenced phase/code residuals
+         */
+        int ComputeZd();
+        int ComputeSatPos();
+
+
     };
 }
 #endif //ARC_ARC_OBSERVATIONMODEL_H
