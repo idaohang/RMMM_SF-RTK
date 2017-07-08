@@ -1112,6 +1112,10 @@ extern int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
                   const double *vare, const int *svh, const nav_t *nav,
                   const prcopt_t *opt, sol_t *sol, double *azel, int *vsat,
                   double *resp, char *msg);
+extern int zdres(int base, const obsd_t *obs, int n, const double *rs,
+                 const double *dts, const int *svh, const nav_t *nav,
+                 const double *rr, const prcopt_t *opt, int index, double *y,
+                 double *e, double *azel);
 
 /* application defined functions ---------------------------------------------*/
 extern int showmsg(char *format,...);

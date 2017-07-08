@@ -60,9 +60,9 @@ void MainWindow::initStates()
 {
     m_TrueCarState.setXPos(m_RenderWidget->width()/2);  // x-position
     m_TrueCarState.setYPos(m_RenderWidget->height()/2); // y-position
-    m_TrueCarState.setTheta(0.0);
-    m_TrueCarState.setSpeed(0.0);
-    m_TrueCarState.setRotationSpeed(0.0);
+    m_TrueCarState.setTheta(1.0);
+    m_TrueCarState.setSpeed(1.0);
+    m_TrueCarState.setRotationSpeed(1.0);
     m_ParticleFilter.setPriorState(m_TrueCarState);
 }
 
@@ -85,6 +85,7 @@ void MainWindow::simulateMovement()
         newSpeed -= acceleration * dt; // break
     else
         newSpeed *= 0.99; // rolling
+    // newSpeed += acceleration * dt; // accelerate
     // clamp speed
     if (newSpeed > maxSpeed) newSpeed = maxSpeed;
     if (newSpeed < -maxSpeed) newSpeed = -maxSpeed;
@@ -100,6 +101,7 @@ void MainWindow::simulateMovement()
     else
         newRotSpeed *= 0.95; // rolling
     // clamp rotation speed
+    // newRotSpeed -= torque * dt;
     if (newRotSpeed > maxRotSpeed) newRotSpeed = maxRotSpeed;
     if (newRotSpeed < -maxRotSpeed) newRotSpeed = -maxRotSpeed;
     m_TrueCarState.setRotationSpeed(newRotSpeed);

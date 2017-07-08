@@ -58,7 +58,7 @@ namespace ARC {
         void setTrueCarState(const ARC_States& state);
     private:
         /// \brief the true States of Observation Model
-        ARC_States m_TrueCarState;
+        ARC_States m_TrueArcState;
    
         /// \brief the navigation data,(x,y,z,vx,vy,vz){m,m/s}
         double m_SatPos[MAXSAT*6];
@@ -107,14 +107,23 @@ namespace ARC {
         /// \brief this epoch satellite no. list
         int SatList[MAXSAT];
 
+        /// \brief undifferenced phase/code residuals
+        double m_ZDRes[MAXSAT*2];
+
         /**
          * Method
          */
         /**
          * \brief compute the undifferenced phase/code residuals
          */
-        void ComputeZd();
+        int ComputeZd();
         void ComputeSatPos();
+        void SetObsData(const ARC_OBSD Obs,int Nu,int Nb);
+        void SetNavData(const ARC_NAV Nav);
+        double IntPres(ARC_Time time, const ARC_OBSD *obs, int n, const ARC_NAV *nav,
+                       double *y);
+        int SelectCommonSat(const ARC_OBSD *obs, double *azel, int nu, int nr,
+                            const ARC_OPT *opt, int *sat, int *iu, int *ir);
 
 
     };

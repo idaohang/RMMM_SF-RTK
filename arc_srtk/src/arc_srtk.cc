@@ -493,7 +493,6 @@ static void zdres_sat(int base, double r, const obsd_t *obs, const nav_t *nav,
                       const prcopt_t *opt, double *y)
 {
     const double *lam=nav->lam[obs->sat-1];
-    double f1,f2,C1,C2,dant_if;
     int i,nf=NF(opt);
     
     for (i=0;i<nf;i++) {
@@ -509,7 +508,7 @@ static void zdres_sat(int base, double r, const obsd_t *obs, const nav_t *nav,
     }
 }
 /* undifferenced phase/code residuals ----------------------------------------*/
-static int zdres(int base, const obsd_t *obs, int n, const double *rs,
+extern int zdres(int base, const obsd_t *obs, int n, const double *rs,
                  const double *dts, const int *svh, const nav_t *nav,
                  const double *rr, const prcopt_t *opt, int index, double *y,
                  double *e, double *azel)
@@ -1385,8 +1384,8 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
         for (i=0;i<6;i++) rtk->rb[i]=i<3?opt->rb[i]:0.0;
     }
     /* count rover/base station observations */
-    for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ;
-    for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;
+    for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ;   /* rover */
+    for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
     
     time=rtk->sol.time; /* previous epoch */
     

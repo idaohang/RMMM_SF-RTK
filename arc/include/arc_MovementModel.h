@@ -61,59 +61,59 @@ namespace ARC {
          * @param d new standard deviation for the diffusion of x,y,z
          *          of base and rover station position
          */
-        void setBaesXStdDev(double d) { m_Std_BaseX = d; }
+        inline void setBaesXStdDev(double d) { m_Std_BaseX = d; }
 
-        void setBaseYstdDev(double d) { m_Std_BaseY = d; }
+        inline void setBaseYstdDev(double d) { m_Std_BaseY = d; }
 
-        void setBaseZStdDev(double d) { m_Std_BaseZ = d; }
+        inline void setBaseZStdDev(double d) { m_Std_BaseZ = d; }
 
-        void setRoverXStdDev(double d) { m_Std_RoverX = d; }
+        inline void setRoverXStdDev(double d) { m_Std_RoverX = d; }
 
-        void setRoverYStdDev(double d) { m_Std_RoverY = d; }
+        inline void setRoverYStdDev(double d) { m_Std_RoverY = d; }
 
-        void setRoverZStdDev(double d) { m_Std_RoverZ = d; }
+        inline void setRoverZStdDev(double d) { m_Std_RoverZ = d; }
 
         /**
          * @param d new standard deviation for the diffusion of clock drift
          *          of base and rover station
          */
-        void setBaseClkStdDev(double d) { m_Std_Base_Clk = d; }
+        inline void setBaseClkStdDev(double d) { m_Std_Base_Clk = d; }
 
-        void setRoverClkStdDev(double d) { m_Std_Rover_Clk = d; }
+        inline void setRoverClkStdDev(double d) { m_Std_Rover_Clk = d; }
 
         /**
          * @param d new standard deviation for the diffusion of trosphere delay
          *          of base and rover station
          */
-        void setBaseTrpStdDev(double d) { m_Std_Base_Trp = d; }
+        inline void setBaseTrpStdDev(double d) { m_Std_Base_Trp = d; }
 
-        void setRoverTrpStdDev(double d) { m_Std_Rover_Trp = d; }
+        inline void setRoverTrpStdDev(double d) { m_Std_Rover_Trp = d; }
 
         /**
          * @param d new standard deviation for the diffusion of ionsphere delay
          *          of base and rover station
          */
-        void setBaseIonStdDev(double d) {m_Std_Base_Ion=d;}
-        void setRoverIonStDev(double d) {m_Std_Rover_Ion=d;}
+        inline void setBaseIonStdDev(double d) {m_Std_Base_Ion=d;}
+        inline void setRoverIonStDev(double d) {m_Std_Rover_Ion=d;}
 
         /**
          * @param d new standard deviation for the diffusion of ambguity
          *          of single difference ambguity on base and rover station
          */
-        void setNStdDev(double *d) {
+        inline void setNStdDev(double *d) {
             for (size_t i = 0; i < MAXSAT; i++) m_Std_N[i] = d[i];
         }
 
         /**
          * @param d new standard deviation for the diffusion of base and rover station velecity
          */
-        void setBaseStdDevX(double d) {m_Std_Base_VelX=d;}
-        void setBaseStdDevY(double d) {m_Std_Base_VelY=d;}
-        void setBaseStdDevZ(double d) {m_Std_Base_VelZ=d;}
+        inline void setBaseStdDevX(double d) {m_Std_Base_VelX=d;}
+        inline void setBaseStdDevY(double d) {m_Std_Base_VelY=d;}
+        inline void setBaseStdDevZ(double d) {m_Std_Base_VelZ=d;}
 
-        void setRoverStdDevX(double d) {m_Std_Rover_VelX=d;}
-        void setRoverStdDevY(double d) {m_Std_Rover_VelY=d;}
-        void setRoverStdDevZ(double d) {m_Std_Rover_VelZ=d;}
+        inline void setRoverStdDevX(double d) {m_Std_Rover_VelX=d;}
+        inline void setRoverStdDevY(double d) {m_Std_Rover_VelY=d;}
+        inline void setRoverStdDevZ(double d) {m_Std_Rover_VelZ=d;}
 
     private:
         /// \brief standard deviation for the base and rover position
