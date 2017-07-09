@@ -70,6 +70,8 @@ namespace ARC {
         ARC_OBSD m_Obs[MAXSAT*2];
         /// \brief processing options type
         ARC_OPT m_Opt;
+        /// \brief arc-srtk solution type
+        ARC_RTK m_ARC;
         /// \brief hydro‐static mapping function of rover and base station
         double m_THMap[MAXSAT][2];
         /// \brief wet mapping function of rover and base station
@@ -111,21 +113,45 @@ namespace ARC {
         double m_ZDRes[MAXSAT*2];
 
         /**
-         * Method
+         * Methods
          */
         /**
          * \brief compute the undifferenced phase/code residuals
          */
-        int ComputeZd();
-        void ComputeSatPos();
-        void SetObsData(const ARC_OBSD Obs,int Nu,int Nb);
-        void SetNavData(const ARC_NAV Nav);
+        /// \brief undifferenced phase/code residuals
+        int ComputeZd() const;
+        /// \brief compute the satellite position
+        void ComputeSatPos() const;
+        /// \brief set the gnss observation and navgation data
+        void SetObsData(const ARC_OBSD Obs,int Nu,int Nb) const;
+        void SetNavData(const ARC_NAV Nav) const;
+        /// \brief time-interpolation of residuals (for post-mission)
         double IntPres(ARC_Time time, const ARC_OBSD *obs, int n, const ARC_NAV *nav,
-                       double *y);
+                       double *y) const;
+        /// \brief select common satellites between rover and reference station
         int SelectCommonSat(const ARC_OBSD *obs, double *azel, int nu, int nr,
-                            const ARC_OPT *opt, int *sat, int *iu, int *ir);
-
-
+                            const ARC_OPT *opt, int *sat, int *iu, int *ir) const;
+        /// \brief precise tropspheric model
+        double PrecTrop(ARC_Time time, const double *pos, int r,
+                        const double *azel, const ARC_OPT *opt,
+                        double *dtdx) const;
+        /// \brief test navi system (m=0:gps/qzs/sbs,1:glo,2:gal,3:bds)
+        inline int test_sys(int sys, int m) const {
+            switch (sys) {
+                case SYS_GPS: return m==0;
+                case SYS_QZS: return m==0;
+                case SYS_SBS: return m==0;
+                case SYS_GLO: return m==1;
+                case SYS_GAL: return m==2;
+                case SYS_CMP: return m==3;
+            }
+            return 0;
+        };
+        /// \brief test valid observation data
+        inline  int validobs(int i, int j, int f, int nf, double *y) const {
+            return y[f+i*nf*2]!=0.0&&y[f+j*nf*2]!=0.0&&
+                (f<nf||(y[f-nf+i*nf*2]!=0.0&&y[f-nf+j*nf*2]!=0.0));
+        }
     };
 }
 #endif //ARC_ARC_OBSERVATIONMODEL_H

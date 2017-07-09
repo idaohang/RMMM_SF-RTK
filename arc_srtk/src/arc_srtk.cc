@@ -633,7 +633,7 @@ static int constbl(rtk_t *rtk, const double *x, const double *P, double *v,
     return 1;
 }
 /* precise tropspheric model -------------------------------------------------*/
-static double prectrop(gtime_t time, const double *pos, int r,
+extern double prectrop(gtime_t time, const double *pos, int r,
                        const double *azel, const prcopt_t *opt, const double *x,
                        double *dtdx)
 {

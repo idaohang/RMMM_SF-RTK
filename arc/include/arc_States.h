@@ -62,88 +62,101 @@ namespace ARC {
         ARC_States &operator+=(const ARC_States &other);
 
         /// \brief set the position of base station in ECEF
-        void setBasePosX(double BasePosX);
+        inline void setBasePosX(double BasePosX);
 
-        void setBasePosY(double BasePosY);
+        inline void setBasePosY(double BasePosY);
 
-        void setBasePosZ(double BasePosZ);
+        inline void setBasePosZ(double BasePosZ);
 
         /// \brief set the position of rover station in ECEF
-        void setRoverPosX(double RoverX);
+        inline void setRoverPosX(double RoverX);
 
-        void setRoverPosY(double RoverY);
+        inline void setRoverPosY(double RoverY);
 
-        void setRoverPosZ(double RoverZ);
+        inline void setRoverPosZ(double RoverZ);
 
         /// \brief get the postion of base station in ECEF
-        double getBasePosX() const;
+        inline double getBasePosX() const;
 
-        double getBasePosY() const;
+        inline double getBasePosY() const;
 
-        double getBasePosZ() const;
+        inline double getBasePosZ() const;
 
         /// \brief get the postion of rover station in ECEF
-        double getRoverPosX() const;
+        inline double getRoverPosX() const;
 
-        double getRoverPosY() const;
+        inline double getRoverPosY() const;
 
-        double getRoverPosZ() const;
+        inline double getRoverPosZ() const;
 
         /// \brief set the clock drift value of base and rover station (m)
-        void setBaseClk(double BaseClk);
+        inline void setBaseClk(double BaseClk);
 
-        void setRoverClk(double RoverClk);
+        inline void setRoverClk(double RoverClk);
 
         /// \brief get the clock drift value of base and rover station (m)
-        double getRoverClk() const;
+        inline double getRoverClk() const;
 
-        double getBaseClk() const;
+        inline double getBaseClk() const;
 
         /// \brief set the trosphere delay of base and rover station
-        void setBaseTrop(double BaseTrop);
+        inline void setBaseTrop(double BaseTrop);
 
-        void setRoverTrop(double RoverTrop);
+        inline void setRoverTrop(double RoverTrop);
 
         /// \brief get the trosphere delay of base and rover station
-        double getBaseTrop() const;
+        inline double getBaseTrop() const;
 
-        double getRoverTrop() const;
+        inline double getRoverTrop() const;
 
         /// \brief set the ambguity of every satelite for single-difference on base-rover station
         /// @param N[in] is the ambguity of satelite of single difference on base and rover station
-        void setAmb(double *N);
+        inline void setAmb(double *N);
         /// @param N[in] the ith satelite single difference ambguity
-        void setAmb(double N,int i);
+        inline void setAmb(double N,int i);
 
         /// \brief get the ambguity
-        double *getAmb() const;
+        inline double *getAmb() const;
         /// \brief get the ith satelite single difference ambguity
-        double getAmb(int i) const { return m_N[i-1];}
+        inline double getAmb(int i) const { return m_N[i-1];}
 
         /// \brief set the ionosphere delay of base station
-        void setBaseIon(double BaseIon) {m_BaseIon=BaseIon;}
+        inline void setBaseIon(double BaseIon) {m_BaseIon=BaseIon;}
         /// \brief set the ionosphere delay of rover station
-        void setRoverIon(double RoverIon) {m_RoverIon=RoverIon;}
+        inline void setRoverIon(double RoverIon) {m_RoverIon=RoverIon;}
 
         /// \brief get the ionosphere delay of base station
-        double getBaseIon() const { return m_BaseIon;}
-        double getRoverIon() const { return m_RoverIon;}
+        inline double getBaseIon() const { return m_BaseIon;}
+        inline double getRoverIon() const { return m_RoverIon;}
 
         /// \brief get and set the velecity of base station and rover station
-        void setBaseVelX(double Vel) {m_Base_VelX=Vel;}
-        void setRoverVelX(double Vel) {m_Rover_VelX=Vel;}
-        double getBaseVelX() const{ return m_Base_VelX;}
-        double getRoverVelX() const { return m_Rover_VelX;}
+        inline void setBaseVelX(double Vel) {m_Base_VelX=Vel;}
+        inline void setRoverVelX(double Vel) {m_Rover_VelX=Vel;}
+        inline double getBaseVelX() const{ return m_Base_VelX;}
+        inline double getRoverVelX() const { return m_Rover_VelX;}
 
-        void setBaseVelY(double Vel) {m_Base_VelY=Vel;}
-        void setRoverVelY(double Vel) {m_Rover_VelY=Vel;}
-        double getBaseVelY() const{ return m_Base_VelY;}
-        double getRoverVelY() const { return m_Rover_VelY;}
+        inline void setBaseVelY(double Vel) {m_Base_VelY=Vel;}
+        inline void setRoverVelY(double Vel) {m_Rover_VelY=Vel;}
+        inline double getBaseVelY() const{ return m_Base_VelY;}
+        inline double getRoverVelY() const { return m_Rover_VelY;}
 
-        void setBaseVelZ(double Vel) {m_Base_VelZ=Vel;}
-        void setRoverVelZ(double Vel) {m_Rover_VelZ=Vel;}
-        double getBaseVelZ() const{ return m_Base_VelZ;}
-        double getRoverVelZ() const { return m_Rover_VelZ;}
+        inline void setBaseVelZ(double Vel) {m_Base_VelZ=Vel;}
+        inline void setRoverVelZ(double Vel) {m_Rover_VelZ=Vel;}
+        inline double getBaseVelZ() const{ return m_Base_VelZ;}
+        inline double getRoverVelZ() const { return m_Rover_VelZ;}
+
+        inline double getBaseTrpGN() const { return m_BaseTrpGN;}
+        inline double getBaseTrpGE() const { return m_BaseTrpGE;}
+
+        inline double getRoverTrpGN() const { return m_RoverTrpGN;}
+        inline double getRoverTrpGE() const { return m_RoverTrpGE;}
+
+        inline void setBaseTrpGN(double GN) {m_BaseTrpGN=GN;}
+        inline void setBaseTrpGE(double GE) {m_BaseTrpGE=GE;}
+
+        inline void setRoverTrpGN(double GN) {m_RoverTrpGN=GN;}
+        inline void setRoverTrpGE(double GE) {m_RoverTrpGE=GE;}
+
 
     private:
         /// \brief the states for base station position
@@ -157,7 +170,7 @@ namespace ARC {
         /// \brief the clock drift of base and rover station
         double m_BaseClk;
         double m_RoverClk;
-        /// \brief the trosphere delay of base station
+        /// \brief the troposphere delay of base station
         double m_BaseTrop;
         double m_RoverTrop;
         /// \brief the ambiguity value of every satelite
@@ -171,6 +184,10 @@ namespace ARC {
         double m_Base_VelX,m_Base_VelY,m_Base_VelZ;
         /// \brief the velecity of rover station
         double m_Rover_VelX,m_Rover_VelY,m_Rover_VelZ;
+
+        /// \brief the gradient parameters of troposphere
+        double m_BaseTrpGN,m_BaseTrpGE;
+        double m_RoverTrpGn,m_RoverTrpGE;
     };
 }
 #endif //ARC_ARC_STATES_H

@@ -37,6 +37,7 @@ typedef ssat_t ARC_SAT;                                    /// arc-srtk satellit
 typedef obsd_t ARC_OBSD;                                   /// arc-srtk gnss observation data record
 typedef prcopt_t ARC_OPT;                                  /// arc-srtk processing options type
 typedef gtime_t  ARC_Time;                                 /// arc-srtk observation time
+typedef rtk_t ARC_RTK;                                     /// arc-srtk solution data type
 
 #define NF(opt) ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf) /// how many frequency of gnss data
 

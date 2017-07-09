@@ -85,7 +85,7 @@ void MainWindow::simulateMovement()
         newSpeed -= acceleration * dt; // break
     else
         newSpeed *= 0.99; // rolling
-    // newSpeed += acceleration * dt; // accelerate
+     newSpeed += acceleration * dt; // accelerate
     // clamp speed
     if (newSpeed > maxSpeed) newSpeed = maxSpeed;
     if (newSpeed < -maxSpeed) newSpeed = -maxSpeed;
@@ -101,7 +101,7 @@ void MainWindow::simulateMovement()
     else
         newRotSpeed *= 0.95; // rolling
     // clamp rotation speed
-    // newRotSpeed -= torque * dt;
+     newRotSpeed -= torque * dt;
     if (newRotSpeed > maxRotSpeed) newRotSpeed = maxRotSpeed;
     if (newRotSpeed < -maxRotSpeed) newRotSpeed = -maxRotSpeed;
     m_TrueCarState.setRotationSpeed(newRotSpeed);

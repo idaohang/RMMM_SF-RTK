@@ -39,9 +39,54 @@ namespace ARC {
     }
     double ARC_ObservationModel::measure(const ARC_States &state) const
     {
+        static double azel[MAXSAT*2];
+        static int Iu[MAXSAT],Ir[MAXSAT],Sat[MAXSAT];
+        static double Im[MAXSAT*2],posu[3],posr[3],ru[3],rb[3];
+        static double tropu[MAXSAT],tropr[MAXSAT],dtdxu[MAXSAT*3],dtdxr[MAXSAT*3];
+        double ns=0;
+
+        ComputeSatPos();
+        ComputeZd();
+        rb[0]=m_TrueArcState.getBasePosX();
+        rb[1]=m_TrueArcState.getBasePosY();
+        rb[2]=m_TrueArcState.getBasePosZ();
+        ru[0]=m_TrueArcState.getRoverPosX();
+        ru[1]=m_TrueArcState.getRoverPosY();
+        ru[2]=m_TrueArcState.getRoverPosZ();
+        ecef2pos(ru,posu); ecef2pos(rb,posr);
+
+        for (int i=0;i<Nu+Nb;i++) {
+            for (int j=0;j<2;j++) azel[i*2+j]=m_SatInfo[SatList[i]-1].azel[j];
+        }
+        if ((ns=SelectCommonSat(m_Obs,azel,Nu,Nb,&m_Opt,Sat,Iu,Ir))<=0) {
+            return 0.0;
+        }
+        for (int i=0;i<ns;i++) {
+            if (m_Opt.ionoopt>=IONOOPT_EST) {
+                Im[i*2  ]=ionmapf(posu,azel+Iu[i]*2);
+                Im[i*2+1]=ionmapf(posr,azel+Ir[i]*2);
+            }
+            if (m_Opt.tropopt>=TROPOPT_EST) {
+                tropu[i]=PrecTrop(m_Obs[0 ].time,posu,0,azel+Iu[i]*2,&m_Opt,dtdxu+i*3);
+                tropr[i]=PrecTrop(m_Obs[Nu].time,posr,1,azel+Ir[i]*2,&m_Opt,dtdxr+i*3);
+            }
+        }
+        for (int m=0;m<2;m++) {
+            for (int i=-1,j=0;j<ns;j++) {
+                int sysi=m_ARC.ssat[Sat[j]-1].sys;
+                if (!test_sys(sysi,m)) continue;
+                if (!validobs(iu[j],ir[j],f,nf,y)) continue;
+                if (i<0||azel[1+iu[j]*2]>=azel[1+iu[i]*2]) i=j;
+            }
+            if (i<0) continue;
+        }
+
         
+        
+        
+
     }
-    int ARC_ObservationModel::ComputeZd()
+    int ARC_ObservationModel::ComputeZd() const
     {
         double r,rr_[3],pos[3],dant[NFREQ]={0},disp[3],*y,
                 *e,rb[3]={0.0},*rs,*azel,*dts;
@@ -117,9 +162,11 @@ namespace ARC {
             if (norm(y+2*i,2)==0.0) continue;
             for (int j=0;j<2;j++) m_ZDRes[SatList[i]*i+j]=y[i*2+j];
         }
+        delete y; delete e;
+        delete rs; delete dts; delete azel;
         return 1;
     }
-    void ARC_ObservationModel::ComputeSatPos()
+    void ARC_ObservationModel::ComputeSatPos() const
     {
         double *SatPos=mat(6,Nu+Nb),*SatClk=mat(2,Nu+Nb),*Var=mat(1,Nu+Nb);
         int Svh[MAXSAT*2];
@@ -139,7 +186,7 @@ namespace ARC {
         delete SatPos; delete SatClk; delete Var;
     }
     double ARC_ObservationModel::IntPres(ARC_Time time, const ARC_OBSD *obs, int n,
-                                         const ARC_NAV *nav, double *y)
+                                         const ARC_NAV *nav, double *y) const
     {
         static obsd_t obsb[MAXOBS];
         static double yb[MAXOBS*NFREQ*2],rs[MAXOBS*6],dts[MAXOBS*2],var[MAXOBS];
@@ -172,8 +219,9 @@ namespace ARC {
         }
         return fabs(ttb)>fabs(tt)?ttb:tt;
     }
-    int ARC_ObservationModel::SelectCommonSat(const ARC_OBSD *obs, double *azel, int nu, int nr,
-                                              const ARC_OPT *opt, int *sat, int *iu,int *ir)
+    int ARC_ObservationModel::SelectCommonSat(const ARC_OBSD *obs, double *azel,
+                                              int nu, int nr, const ARC_OPT *opt,
+                                              int *sat, int *iu,int *ir) const
     {
         int i,j,k=0;
         for (i=0,j=nu;i<nu&&j<nu+nr;i++,j++) {
@@ -184,6 +232,36 @@ namespace ARC {
             }
         }
         return k;
+    }
+    double ARC_ObservationModel::PrecTrop(ARC_Time time, const double *pos, int r,
+                                          const double *azel,
+                                          const ARC_OPT *opt,double *dtdx) const
+    {
+        double m_w=0.0,cotz,grad_n,grad_e;
+        double x[3]={0.0};
+
+        if (r==1) {
+            x[0]=m_TrueArcState.getBaseTrop();
+            x[1]=m_TrueArcState.getBaseTrpGN();
+            x[2]=m_TrueArcState.getBaseTrpGE();
+        }
+        else {
+            x[0]=m_TrueArcState.getRoverTrop();
+            x[1]=m_TrueArcState.getRoverTrpGN();
+            x[2]=m_TrueArcState.getRoverTrpGE();
+        };
+        tropmapf(time,pos,azel,&m_w);
+        if (opt->tropopt>=TROPOPT_ESTG&&azel[1]>0.0) {
+            cotz=1.0/tan(azel[1]);
+            grad_n=m_w*cotz*cos(azel[0]);
+            grad_e=m_w*cotz*sin(azel[0]);
+            m_w+=grad_n*x[1]+grad_e*x[2];
+            dtdx[1]=grad_n*x[0];
+            dtdx[2]=grad_e*x[0];
+        }
+        else dtdx[1]=dtdx[2]=0.0;
+        dtdx[0]=m_w;
+        return m_w*x[0];
     }
 }
 

@@ -1116,6 +1116,9 @@ extern int zdres(int base, const obsd_t *obs, int n, const double *rs,
                  const double *dts, const int *svh, const nav_t *nav,
                  const double *rr, const prcopt_t *opt, int index, double *y,
                  double *e, double *azel);
+extern double prectrop(gtime_t time, const double *pos, int r,
+                       const double *azel, const prcopt_t *opt, const double *x,
+                       double *dtdx);
 
 /* application defined functions ---------------------------------------------*/
 extern int showmsg(char *format,...);
