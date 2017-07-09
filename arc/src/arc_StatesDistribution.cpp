@@ -26,19 +26,34 @@
 #include <cmath>
 #include <libPF/CRandomNumberGenerator.h>
 #include <arc_StateDistribution.h>
-
+#include <arc.h>
 #include "arc_StateDistribution.h"
 namespace ARC {
-    ARC_StateDistribution::ARC_StateDistribution() : {
+    ARC_StateDistribution::ARC_StateDistribution() {
         m_RNG = new libPF::CRandomNumberGenerator();
     }
-
+    ARC_StateDistribution::ARC_StateDistribution(const ARC_OPT *OPT,
+                                                 const ARC_RTK *SRTK) {
+        m_OPT=OPT; m_SRTK=SRTK;
+        m_UniState=mat(2,m_SRTK->nx);
+    }
     ARC_StateDistribution::~ARC_StateDistribution() {
         delete m_RNG;
+        delete m_UniState;
     }
 
     const ARC_States ARC_StateDistribution::draw() const {
         ARC_States state;
-        return state;
+        for (int i=0;i<m_SRTK->nx;i++) {
+            state.SetStatesValue(m_RNG->getUniform(m_UniState[2*i],m_UniState[2*i+1]),i);
+        }
+    }
+    void ARC_StateDistribution::SetUniformofStates(double min,
+                                                   double max,
+                                                   int index) {
+        if (index>=m_SRTK->nx)
+            return;
+        m_UniState[2*index  ]=min;
+        m_UniState[2*index+1]=max;
     }
 }

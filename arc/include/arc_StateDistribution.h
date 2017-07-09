@@ -39,20 +39,19 @@ namespace ARC {
     {
     public:
         ARC_StateDistribution();
+        ARC_StateDistribution(const ARC_OPT *OPT,const ARC_RTK* SRTK);
         ~ARC_StateDistribution();
 
         const ARC_States draw() const;
+        void SetUniformofStates(double min,double max,int index);
     private:
         libPF::RandomNumberGenerationStrategy* m_RNG;
-        double BaseXMIn,BaseYmin,BaseZmin;
-        double BaseXMax,BaseYMax,BaseZMax;
-        double RoverXMin,RoverYMin,RoverZMin;
-        double RoverXMax,RoverYMax,RoverZMax;
-        double BaseClkMin,BaseClkMax;
-        double RoverClkMIn,RoverClkMax;
-        double BaseTrpMin,BaseTrpMax;
-        double RoverTrpMin,RoverTrpMax;
-        double Nmin[MAXSAT],Nmax[MAXSAT];
+        /// \brief the arc-srtk solution settings
+        const ARC_OPT* m_OPT;
+        /// \brief the arc-srtk soliution type
+        const ARC_RTK* m_SRTK;
+        /// \brief the uniform distribution of states
+        double *m_UniState;
     };
 }
 #endif //ARC_ARC_STATEDISTRIBUTION_H

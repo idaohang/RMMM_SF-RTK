@@ -20,8 +20,8 @@ CarStateDistribution::~CarStateDistribution()
 const CarState CarStateDistribution::draw() const
 {
     CarState state;
-    state.setXPos(m_RNG->getUniform(m_XMin, m_XMax));
-    state.setYPos(m_RNG->getUniform(m_YMin, m_YMax));
-    state.setTheta(m_RNG->getUniform(-M_PI, M_PI));
+    //state.setXPos(m_RNG->getUniform(m_XMin, m_XMax));
+    //state.setYPos(m_RNG->getUniform(m_YMin, m_YMax));
+    //state.setTheta(m_RNG->getUniform(-M_PI, M_PI));
     return state;
 }
