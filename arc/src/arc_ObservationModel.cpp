@@ -40,10 +40,11 @@ namespace ARC {
     double ARC_ObservationModel::measure(const ARC_States &state) const
     {
         static double azel[MAXSAT*2];
-        static int Iu[MAXSAT],Ir[MAXSAT],Sat[MAXSAT];
-        static double Im[MAXSAT*2],posu[3],posr[3],ru[3],rb[3];
+        static int Iu[MAXSAT],Ir[MAXSAT],Sat[MAXSAT],ns=0;
+        static double Im[MAXSAT*2],posu[3],posr[3],ru[3],rb[3],y[MAXSAT*2];
         static double tropu[MAXSAT],tropr[MAXSAT],dtdxu[MAXSAT*3],dtdxr[MAXSAT*3];
-        double ns=0;
+        static double V[MAXSAT];
+        int i,j,m,nv=0;
 
         ComputeSatPos();
         ComputeZd();
@@ -55,36 +56,66 @@ namespace ARC {
         ru[2]=m_TrueArcState.getRoverPosZ();
         ecef2pos(ru,posu); ecef2pos(rb,posr);
 
-        for (int i=0;i<Nu+Nb;i++) {
-            for (int j=0;j<2;j++) azel[i*2+j]=m_SatInfo[SatList[i]-1].azel[j];
+        for (i=0;i<Nu+Nb;i++) {
+            for (j=0;j<2;j++) azel[i*2+j]=m_SatInfo[SatList[i]-1].azel[j];
         }
-        if ((ns=SelectCommonSat(m_Obs,azel,Nu,Nb,&m_Opt,Sat,Iu,Ir))<=0) {
+        for (i=0;i<Nu+Nb;i++) {
+            for (j=0;j<2;j++) y[i*2+j]=m_ZDRes[SatList[i]*2+j];
+        }
+        if ((ns=SelectCommonSat(m_Obs,azel,Nu,Nb,m_Opt,Sat,Iu,Ir))<=0) {
             return 0.0;
         }
-        for (int i=0;i<ns;i++) {
-            if (m_Opt.ionoopt>=IONOOPT_EST) {
+        for (i=0;i<ns;i++) {
+            if (m_Opt->ionoopt>=IONOOPT_EST) {
                 Im[i*2  ]=ionmapf(posu,azel+Iu[i]*2);
                 Im[i*2+1]=ionmapf(posr,azel+Ir[i]*2);
             }
-            if (m_Opt.tropopt>=TROPOPT_EST) {
-                tropu[i]=PrecTrop(m_Obs[0 ].time,posu,0,azel+Iu[i]*2,&m_Opt,dtdxu+i*3);
-                tropr[i]=PrecTrop(m_Obs[Nu].time,posr,1,azel+Ir[i]*2,&m_Opt,dtdxr+i*3);
+            if (m_Opt->tropopt>=TROPOPT_EST) {
+                tropu[i]=PrecTrop(m_Obs[0 ].time,posu,0,azel+Iu[i]*2,m_Opt,dtdxu+i*3);
+                tropr[i]=PrecTrop(m_Obs[Nu].time,posr,1,azel+Ir[i]*2,m_Opt,dtdxr+i*3);
             }
         }
-        for (int m=0;m<2;m++) {
-            for (int i=-1,j=0;j<ns;j++) {
-                int sysi=m_ARC.ssat[Sat[j]-1].sys;
-                if (!test_sys(sysi,m)) continue;
-                if (!validobs(iu[j],ir[j],f,nf,y)) continue;
-                if (i<0||azel[1+iu[j]*2]>=azel[1+iu[i]*2]) i=j;
+        for (m=0;m<2;m++) {
+            for (int f=0;f<2;f++) {
+                for (i=-1,j=0;j<ns;j++) {
+                    int sysi=m_SatInfo[Sat[j]-1].sys;
+                    if (!test_sys(sysi,m)) continue;
+                    if (!validobs(Iu[j],Ir[j],0,1,y)) continue;
+                    if (i<0||azel[1+Iu[j]*2]>=azel[1+Iu[i]*2]) i=j;
+                }
+                if (i<0) continue;
+                for (j=0;j<ns;j++) {
+                    if (i==j) continue;
+                    int sysi=m_SatInfo[Sat[i]-1].sys;
+                    int sysj=m_SatInfo[Sat[j]-1].sys;
+                    if (!test_sys(sysj,m)) continue;
+                    if (!validobs(Iu[j],Ir[j],0,1,y)) continue;
+                    double lami=m_Nav->lam[Sat[i]-1][0];
+                    double lamj=m_Nav->lam[Sat[j]-1][0];
+                    if (lami<=0.0||lamj<=0.0) continue;
+                    V[nv]=(y[Iu[i]*2]-y[Ir[i]*2])-(y[Iu[j]*2]-y[Ir[j]*2]);
+                    if (m_Opt->ionoopt==IONOOPT_EST) {
+                        double fi=lami/lam_carr[0];
+                        double fj=lamj/lam_carr[0];
+                        double didxi_u=(f<1?-1.0:1.0)*fi*fi*Im[2*i  ];
+                        double didxi_r=(f<1?-1.0:1.0)*fi*fi*Im[2*i+1];
+
+                        double didxj_u=(f<1?-1.0:1.0)*fj*fj*Im[2*j  ];
+                        double didxj_r=(f<1?-1.0:1.0)*fj*fj*Im[2*j+1];
+                        V[nv]-=m_TrueArcState.getRoverIon(Sat[i])*didxi_u-m_TrueArcState.getBaseIon(Sat[i])*didxi_r-
+                                (m_TrueArcState.getRoverIon(Sat[j])*didxj_u-m_TrueArcState.getBaseIon(Sat[j])*didxj_r);
+                    }
+                    if (m_Opt->tropopt==TROPOPT_EST||m_Opt->tropopt==TROPOPT_ESTG) {
+                        V[nv]-=(tropu[i]-tropu[j])-(tropr[i]-tropr[j]);
+                    }
+                    if (f<1) {
+                        V[nv]-=lami*m_TrueArcState.getAmb(Sat[i])-lamj*m_TrueArcState.getAmb(Sat[j]);
+                    }
+                    nv++;
+                }
             }
-            if (i<0) continue;
         }
-
-        
-        
-        
-
+        return 1.0/norm(V,nv);
     }
     int ARC_ObservationModel::ComputeZd() const
     {
@@ -126,37 +157,37 @@ namespace ARC {
                 index=0;
             }
             if (norm(rr_,3)<=0.0) continue;
-            if (m_Opt.tidecorr) {
-                tidedisp(gpst2utc(Obsp[0].time),rr_,m_Opt.tidecorr,&m_Nav.erp,
-                         m_Opt.odisp[1],disp);
+            if (m_Opt->tidecorr) {
+                tidedisp(gpst2utc(Obsp[0].time),rr_,m_Opt->tidecorr,&m_Nav->erp,
+                         m_Opt->odisp[1],disp);
                 for (int i=0;i<3;i++) rr_[i]+=disp[i];
             }
             ecef2pos(rr_,pos);
             for (int i=0;i<N;i++) {
                 if ((r=geodist(rsp+i*6,rr_,e+i*3))<=0.0) continue;
-                if (satazel(pos,e+i*3,azel+i*2)<m_Opt.elmin) continue;
+                if (satazel(pos,e+i*3,azel+i*2)<m_Opt->elmin) continue;
 
-                if (satexclude(Obsp[i].sat,svhp[i],&m_Opt)) continue;
+                if (satexclude(Obsp[i].sat,svhp[i],m_Opt)) continue;
 
                 r+=-CLIGHT*dtsp[i*2];
 
                 zhd=tropmodel(Obsp[0].time,pos,zazel,0.0);
                 r+=tropmapf(Obsp[i].time,pos,azel+i*2,NULL)*zhd;
 
-                antmodel(m_Opt.pcvr+index,m_Opt.antdel[index],azel+i*2,m_Opt.posopt[1],dant);
-                const double *lam=m_Nav.lam[Obsp[i].sat-1];
+                antmodel(m_Opt->pcvr+index,m_Opt->antdel[index],azel+i*2,m_Opt->posopt[1],dant);
+                const double *lam=m_Nav->lam[Obsp[i].sat-1];
 
                 if (lam[0]==0.0) continue;
 
-                if (testsnr(index,0,azel[i*2+1],Obsp[i].SNR[i]*0.25,&m_Opt.snrmask)) {
+                if (testsnr(index,0,azel[i*2+1],Obsp[i].SNR[i]*0.25,&m_Opt->snrmask)) {
                     continue;
                 }
                 if (Obsp[i].L[0]!=0.0) yp[i*2  ]=Obsp[i].L[0]*lam[0]-r-dant[0];
                 if (Obsp[i].P[0]!=0.0) yp[i*2+1]=Obsp[i].P[0]       -r-dant[0];
             }
         }
-        if (m_Opt.intpref) {
-            IntPres(m_Obs[0].time,m_Obs+Nu,Nb,&m_Nav,y+Nu*2);
+        if (m_Opt->intpref) {
+            IntPres(m_Obs[0].time,m_Obs+Nu,Nb,m_Nav,y+Nu*2);
         }
         for (int i=0;i<n;i++) {
             if (norm(y+2*i,2)==0.0) continue;
@@ -170,10 +201,10 @@ namespace ARC {
     {
         double *SatPos=mat(6,Nu+Nb),*SatClk=mat(2,Nu+Nb),*Var=mat(1,Nu+Nb);
         int Svh[MAXSAT*2];
-        satposs(m_RoverTime,m_Obs,Nu+Nb,&m_Nav,m_Opt.sateph,SatPos,SatClk,Var,Svh);
+        satposs(m_RoverTime,m_Obs,Nu+Nb,m_Nav,m_Opt->sateph,SatPos,SatClk,Var,Svh);
         for (int i=0;i<Nu+Nb;i++) {
             if (SatList[i]) {
-                for (int j=0;j<6;i++) {
+                for (int j=0;j<6;j++) {
                     m_SatPos[(SatList[i]-1)*6+j]=SatPos[i*6+j];
                 }
                 for (int j=0;j<2;j++) {
@@ -200,14 +231,14 @@ namespace ARC {
             return tt;
         }
         ttb=timediff(time,obsb[0].time);
-        if (fabs(ttb)>m_Opt.maxtdiff*2.0||ttb==tt) return tt;
+        if (fabs(ttb)>m_Opt->maxtdiff*2.0||ttb==tt) return tt;
 
-        satposs(time,obsb,nb,nav,m_Opt.sateph,rs,dts,var,svh);
+        satposs(time,obsb,nb,nav,m_Opt->sateph,rs,dts,var,svh);
         rb[0]=m_TrueArcState.getBasePosX();
         rb[1]=m_TrueArcState.getBasePosY();
         rb[2]=m_TrueArcState.getBasePosZ();
 
-        if (!zdres(1,obsb,nb,rs,dts,svh,nav,rb,&m_Opt,1,yb,e,azel)) {
+        if (!zdres(1,obsb,nb,rs,dts,svh,nav,rb,m_Opt,1,yb,e,azel)) {
             return tt;
         }
         for (i=0;i<n;i++) {
@@ -262,6 +293,23 @@ namespace ARC {
         else dtdx[1]=dtdx[2]=0.0;
         dtdx[0]=m_w;
         return m_w*x[0];
+    }
+    void ARC_ObservationModel::SetObsData(const ARC_OBSD* Obs, int nu, int nb)
+    {
+        Nu=nu; Nb=nb;
+        for (int i=0;i<Nu+Nb;i++) m_Obs[i]=Obs[i];
+    }
+    void ARC_ObservationModel::SetNavData(const ARC_NAV* Nav)
+    {
+        m_Nav=Nav;
+    }
+    void ARC_ObservationModel::SetOpt(const ARC_OPT* Opt)
+    {
+        m_Opt=Opt;
+    }
+    void ARC_ObservationModel::SetSatInfo(const ARC_SAT* SatInfo)
+    {
+        for (int i=0;i<MAXSAT;i++) m_SatInfo[i]=SatInfo[i];
     }
 }
 

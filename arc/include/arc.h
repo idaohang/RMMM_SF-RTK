@@ -876,6 +876,7 @@ typedef struct {        /* RTK control/result type */
     int neb;             /* bytes in error message buffer */
     char errbuf[MAXERRMSG]; /* error message buffer */
     prcopt_t opt;           /* processing options */
+    
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */

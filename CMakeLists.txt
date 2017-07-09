@@ -68,7 +68,7 @@ add_library(${PROJECT_NAME}_rtk STATIC
     arc_rinex/src/arc_preco.cc
     arc/src/arc_States.cc
     arc/src/arc_MovementModel.cc
-        arc/include/arc_ObservationModel.h arc/src/arc_ObservationModel.cpp)
+        arc/include/arc_ObservationModel.h arc/src/arc_ObservationModel.cpp arc/include/arc_StateDistribution.h arc/src/arc_StatesDistribution.cpp)
 
 target_link_libraries(${PROJECT_NAME}_rtk glog)
 add_executable(arc_test1 

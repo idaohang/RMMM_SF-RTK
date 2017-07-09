@@ -65,11 +65,11 @@ namespace ARC {
         /// \brief save all satelite information
         ARC_SAT m_SatInfo[MAXSAT];
         /// \brief navigation data
-        ARC_NAV m_Nav;
+        const ARC_NAV* m_Nav;
         /// \brief observation data
         ARC_OBSD m_Obs[MAXSAT*2];
         /// \brief processing options type
-        ARC_OPT m_Opt;
+        const ARC_OPT* m_Opt;
         /// \brief arc-srtk solution type
         ARC_RTK m_ARC;
         /// \brief hydro‐static mapping function of rover and base station
@@ -123,8 +123,12 @@ namespace ARC {
         /// \brief compute the satellite position
         void ComputeSatPos() const;
         /// \brief set the gnss observation and navgation data
-        void SetObsData(const ARC_OBSD Obs,int Nu,int Nb) const;
-        void SetNavData(const ARC_NAV Nav) const;
+        void SetObsData(const ARC_OBSD *Obs,int Nu,int Nb) ;
+        void SetNavData(const ARC_NAV* Nav) ;
+        /// \brief set the process settings
+        void SetOpt(const ARC_OPT* Opt);
+        /// \brief set the satellite information
+        void SetSatInfo(const ARC_SAT* SatInfo);
         /// \brief time-interpolation of residuals (for post-mission)
         double IntPres(ARC_Time time, const ARC_OBSD *obs, int n, const ARC_NAV *nav,
                        double *y) const;

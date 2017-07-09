@@ -48,12 +48,10 @@ namespace ARC {
          * Constructor
          */
         ARC_States();
-
         /**
          * Destructor
          */
         virtual ~ARC_States();
-
         /**
          * Opereator
          */
@@ -118,16 +116,16 @@ namespace ARC {
         /// \brief get the ambguity
         inline double *getAmb() const;
         /// \brief get the ith satelite single difference ambguity
-        inline double getAmb(int i) const { return m_N[i-1];}
+        inline double getAmb(int sat) const { return m_N[sat-1];}
 
         /// \brief set the ionosphere delay of base station
         inline void setBaseIon(double BaseIon) {m_BaseIon=BaseIon;}
         /// \brief set the ionosphere delay of rover station
         inline void setRoverIon(double RoverIon) {m_RoverIon=RoverIon;}
 
-        /// \brief get the ionosphere delay of base station
-        inline double getBaseIon() const { return m_BaseIon;}
-        inline double getRoverIon() const { return m_RoverIon;}
+        /// \brief get the ionosphere delay of base and rover station
+        inline double getBaseIon(int sat) const { return m_BaseIon[sat-1];}
+        inline double getRoverIon(int sat) const { return m_RoverIon[sat-1];}
 
         /// \brief get and set the velecity of base station and rover station
         inline void setBaseVelX(double Vel) {m_Base_VelX=Vel;}
@@ -176,9 +174,9 @@ namespace ARC {
         /// \brief the ambiguity value of every satelite
         double m_N[MAXSAT];
         /// \brief the ionosphere delay of base station
-        double m_BaseIon;
+        double m_BaseIon[MAXSAT];
         /// \brief the ionosphere delay of rover station
-        double m_RoverIon;
+        double m_RoverIon[MAXSAT];
 
         /// \brief the velecity of base station
         double m_Base_VelX,m_Base_VelY,m_Base_VelZ;
