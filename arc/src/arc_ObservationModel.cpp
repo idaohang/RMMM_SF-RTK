@@ -23,7 +23,7 @@
  * @brief SRTK Observation Model source file
  * @author SuJingLan
  */
-#include <arc.h>
+#include "arc.h"
 #include "arc_ObservationModel.h"
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -32,17 +32,6 @@ static double sdobs(const obsd_t *obs, int i, int j, int f)
 {
     double pi=f<NFREQ?obs[i].L[f]:obs[i].P[f-NFREQ];
     double pj=f<NFREQ?obs[j].L[f]:obs[j].P[f-NFREQ];
-    return pi==0.0||pj==0.0?0.0:pi-pj;
-}
-/* single-differenced geometry-free linear combination of phase --------------*/
-static double gfobs_L1L2(const obsd_t *obs, int i, int j, const double *lam)
-{
-    double pi=sdobs(obs,i,j,0)*lam[0],pj=sdobs(obs,i,j,1)*lam[1];
-    return pi==0.0||pj==0.0?0.0:pi-pj;
-}
-static double gfobs_L1L5(const obsd_t *obs, int i, int j, const double *lam)
-{
-    double pi=sdobs(obs,i,j,0)*lam[0],pj=sdobs(obs,i,j,2)*lam[2];
     return pi==0.0||pj==0.0?0.0:pi-pj;
 }
 /* single-differenced measurement error variance -----------------------------*/
@@ -71,7 +60,8 @@ static double varerr(int sat, int sys, double el, double bl, double dt, int f,
         a=fact*opt->err[1];
         b=fact*opt->err[2];
     }
-    return 2.0*(opt->ionoopt==IONOOPT_IFLC?3.0:1.0)*(a*a+b*b/sinel/sinel+c*c)+d*d;
+    return 2.0*(opt->ionoopt==IONOOPT_IFLC?3.0:1.0)*
+                   (a*a+b*b/sinel/sinel+c*c)+d*d;
 }
 /* baseline length -----------------------------------------------------------*/
 static double baseline(const double *ru, const double *rb, double *dr)
@@ -85,11 +75,10 @@ static int selsat(const obsd_t *obs, double *azel, int nu, int nr,
                   const prcopt_t *opt, int *sat, int *iu, int *ir)
 {
     int i,j,k=0;
-
     for (i=0,j=nu;i<nu&&j<nu+nr;i++,j++) {
         if      (obs[i].sat<obs[j].sat) j--;
         else if (obs[i].sat>obs[j].sat) i--;
-        else if (azel[1+j*2]>=opt->elmin) { /* elevation at base station */
+        else if (azel[1+j*2]>=opt->elmin) { 
             sat[k]=obs[i].sat; iu[k]=i; ir[k++]=j;
         }
     }
@@ -116,7 +105,7 @@ static void zdres_sat(int base, double r, const obsd_t *obs, const nav_t *nav,
     }
 }
 /* undifferenced phase/code residuals ----------------------------------------*/
-extern int zdres(int base, const obsd_t *obs, int n, const double *rs,
+static int zdres(int base, const obsd_t *obs, int n, const double *rs,
                  const double *dts, const int *svh, const nav_t *nav,
                  const double *rr, const prcopt_t *opt, int index, double *y,
                  double *e, double *azel)
@@ -184,7 +173,7 @@ static void ddcov(const int *nb, int n, const double *Ri, const double *Rj,
     }
 }
 /* precise tropspheric model -------------------------------------------------*/
-extern double prectrop(gtime_t time, const double *pos, int r,
+ static double prectrop(gtime_t time, const double *pos, int r,
                        const double *azel, const prcopt_t *opt, const double *x,
                        double *dtdx)
 {
@@ -338,25 +327,6 @@ static double intpres(gtime_t time, const obsd_t *obs, int n, const nav_t *nav,
     }
     return fabs(ttb)>fabs(tt)?ttb:tt;
 }
-/* validation of solution ----------------------------------------------------*/
-static int valpos(rtk_t *rtk, const double *v, const double *R, const int *vflg,
-                  int nv, double thres)
-{
-    double fact=thres*thres;
-    int i,stat=1,sat1,sat2,type,freq;
-    char *stype;
-
-    /* post-fit residual test */
-    for (i=0;i<nv;i++) {
-        if (v[i]*v[i]<=fact*R[i+i*nv]) continue;
-        sat1=(vflg[i]>>16)&0xFF;
-        sat2=(vflg[i]>> 8)&0xFF;
-        type=(vflg[i]>> 4)&0xF;
-        freq=vflg[i]&0xF;
-        strcpy(stype,type==0?"L":(type==1?"L":"C"));
-    }
-    return stat;
-}
 /* relative positioning ------------------------------------------------------*/
 static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                   const nav_t *nav,double *sdy,double *ddy,int *nsdy,int *nddy,
@@ -364,8 +334,8 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 {
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
-    double *rs,*dts,*var,*y,*e,*azel,*v,*R,*xp,*Pp,*xa,*bias,dt;
-    int i,j,f,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT];
+    double *rs,*dts,*var,*y,*e,*azel,*v,*R,dt;
+    int i,j,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT];
     int vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
     int nf=1;
 
@@ -374,11 +344,6 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     y=mat(nf*2,n); e=mat(3,n);
     azel=zeros(2,n);
 
-    for (i=0;i<MAXSAT;i++) {
-        rtk->ssat[i].sys=satsys(i+1,NULL);
-        for (j=0;j<NFREQ;j++) rtk->ssat[i].vsat[j]=0;
-        for (j=1;j<NFREQ;j++) rtk->ssat[i].snr [j]=0;
-    }
     satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
 
     if (!zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,rtk->rb,opt,1,
@@ -393,37 +358,29 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
         return 0;
     }
-    xp=mat(rtk->nx,1);
-    matcpy(xp,rtk->x,rtk->nx,1);
-
     ny=ns*nf*2+2;
     v=mat(ny,1); R=mat(ny,ny);
 
-    zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel);
-    nv=ddres(rtk,nav,dt,xp,sat,y,azel,iu,ir,ns,v,R);
+    zdres(0,obs,nu,rs,dts,svh,nav,rtk->x,opt,0,y,e,azel);
+    nv=ddres(rtk,nav,dt,rtk->x,sat,y,azel,iu,ir,ns,v,R);
     for (i=0;i<nv;i++) ddy[i]=v[i];
     for (i=0;i<n;i++) {
         for (j=0;j<2;j++) sdy[2*i+j]=y[i*2+j];
     }
     for (i=0;i<nv;i++) DDR[i+i*nv]=R[i+nv*i];
     *nsdy=n; *nddy=nv;
-    free(rs); free(dts); free(var); free(y); free(e); free(azel);
-    free(xp); free(v); free(R);
+    free(rs); free(dts); free(var);
+    free(y); free(e); free(azel); free(v); free(R);
     return 1;
 }
 static int arc_measure(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav,
                        double *sdy,double *ddy,int *nsdy,int *nddy,double *DDR)
 {
-    prcopt_t *opt=&rtk->opt;
-    gtime_t time;
-    int i,nu,nr;
+    int nu,nr;
 
     /* count rover/base station observations */
     for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ;   /* rover */
     for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
-
-    time=rtk->sol.time; /* previous epoch */
-    if (time.time!=0) rtk->tt=timediff(rtk->sol.time,time);
 
     relpos(rtk,obs,nu,nr,nav,sdy,ddy,nsdy,nddy,DDR);
     return 1;
@@ -434,9 +391,12 @@ namespace ARC {
             libPF::ObservationModel<ARC_States>() {
     }
 
-    ARC_ObservationModel::ARC_ObservationModel(const ARC_OPT *OPT, const ARC_OBSD *OBS,
-                                               const ARC_NAV *NAV, ARC_RTK* SRTK,
-                                               int NObs) {
+    ARC_ObservationModel::ARC_ObservationModel(const ARC_OPT *OPT,
+                                               const ARC_OBSD *OBS,
+                                               const ARC_NAV *NAV,
+                                               ARC_RTK* SRTK,
+                                               int NObs)
+            : libPF::ObservationModel<ARC_States>(){
         m_OPT=OPT;
         m_RTK=SRTK;
         m_OBS=OBS;
@@ -446,14 +406,18 @@ namespace ARC {
     ARC_ObservationModel::~ARC_ObservationModel() {
     }
     double ARC_ObservationModel::measure(const ARC_States &state) const {
-        for (int i=0;i<state.getStatesNum();i++) {
-            m_RTK->x[i]=state.getStateValue(i);
-        }
+
         double Y[MAXSAT*2];
         double DDY[MAXSAT];
         double DDR[MAXSAT];
+        double *xb=mat(1,m_RTK->nx);
         int NY,NDDY;
+        matcpy(xb,m_RTK->x,m_RTK->nx,1);
+        for (int i=0;i<state.getStatesNum();i++) {
+            m_RTK->x[i]=state.getStateValue(i);
+        }
         arc_measure(m_RTK,m_OBS,m_NObs,m_NAV,Y,DDY,&NY,&NDDY,DDR);
+        matcpy(m_RTK->x,xb,m_RTK->nx,1);
         double sum=0.0;
         for (int i=0;i<NDDY;i++) sum+=SQR(DDY[i])/DDR[i];
         return 1.0/SQRT(sum);

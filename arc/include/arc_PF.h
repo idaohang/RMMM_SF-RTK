@@ -38,22 +38,21 @@
 #define MIN(x,y)    ((x)<=(y)?(x):(y))
 #define ROUND(x)    (int)floor((x)+0.5)
 
-#define VAR_POS     SQR(30.0) /* initial variance of receiver pos (m^2) */
-#define VAR_VEL     SQR(10.0) /* initial variance of receiver vel ((m/s)^2) */
-#define VAR_ACC     SQR(10.0) /* initial variance of receiver acc ((m/ss)^2) */
-#define VAR_HWBIAS  SQR(1.0)  /* initial variance of h/w bias ((m/MHz)^2) */
-#define VAR_GRA     SQR(0.001) /* initial variance of gradient (m^2) */
-#define INIT_ZWD    0.15     /* initial zwd (m) */
+#define VAR_POS     SQR(30.0)                              /// initial variance of receiver pos (m^2)
+#define VAR_VEL     SQR(10.0)                              /// initial variance of receiver vel ((m/s)^2)
+#define VAR_ACC     SQR(10.0)                              /// initial variance of receiver acc ((m/ss)^2)
+#define VAR_HWBIAS  SQR(1.0)                               /// initial variance of h/w bias ((m/MHz)^2)
+#define VAR_GRA     SQR(0.001)                             /// initial variance of gradient (m^2)
+#define INIT_ZWD    0.15                                   /// initial zwd (m)
 
-#define PRN_HWBIAS  1E-6     /* process noise of h/w bias (m/MHz/sqrt(s)) */
-#define GAP_RESION  120      /* gap to reset ionosphere parameters (epochs) */
+#define PRN_HWBIAS  1E-6                                   /// process noise of h/w bias (m/MHz/sqrt(s))
+#define GAP_RESION  120                                    /// gap to reset ionosphere parameters (epochs)
 
-#define VAR_HOLDAMB 0.001    /* constraint to hold ambiguity (cycle^2) */
+#define VAR_HOLDAMB 0.001                                  /// constraint to hold ambiguity (cycle^2)
 
-#define TTOL_MOVEB  (1.0+2*DTTOL)
-/* time sync tolerance for moving-baseline (s) */
+#define TTOL_MOVEB  (1.0+2*DTTOL)                          /// time sync tolerance for moving-baseline (s)
 
-/* number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated) */
+                                                           /// number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated)
 #define NF(opt)     ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf)
 #define NP(opt)     ((opt)->dynamics==0?3:9)
 #define NI(opt)     ((opt)->ionoopt!=IONOOPT_EST?0:MAXSAT)
@@ -62,12 +61,11 @@
 #define NB(opt)     ((opt)->mode<=PMODE_DGPS?0:MAXSAT*NF(opt))
 #define NR(opt)     (NP(opt)+NI(opt)+NT(opt)+NL(opt))
 #define NX(opt)     (NR(opt)+NB(opt))
-
-/* state variable index */
-#define II(s,opt)   (NP(opt)+(s)-1)                 /* ionos (s:satellite no) */
-#define IT(r,opt)   (NP(opt)+NI(opt)+NT(opt)/2*(r)) /* tropos (r:0=rov,1:ref) */
-#define IL(f,opt)   (NP(opt)+NI(opt)+NT(opt)+(f))   /* receiver h/w bias */
-#define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1) /* phase bias (s:satno,f:freq) */
+                                                           /// state variable index
+#define II(s,opt)   (NP(opt)+(s)-1)                        /// ionos (s:satellite no)
+#define IT(r,opt)   (NP(opt)+NI(opt)+NT(opt)/2*(r))        /// tropos (r:0=rov,1:ref)
+#define IL(f,opt)   (NP(opt)+NI(opt)+NT(opt)+(f))          /// receiver h/w bias
+#define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1)             /// phase bias (s:satno,f:freq)
 typedef nav_t                               ARC_NAV;       /// arc-srtk navigation data type
 typedef obs_t                               ARC_OBS;       /// arc-srtk gnss observation data type
 typedef ssat_t                              ARC_SAT;       /// arc-srtk satellite status type

@@ -17,7 +17,8 @@ namespace libPF
  *
  * @author Stephan Wirth
  */
-class CRandomNumberGenerator : public RandomNumberGenerationStrategy {
+class CRandomNumberGenerator :
+        public RandomNumberGenerationStrategy {
 
   public:
 

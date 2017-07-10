@@ -28,10 +28,8 @@
 #include "glog/logging.h"
 
 /* constants/global variables ------------------------------------------------*/
-#define MIN(x,y)    ((x)<(y)?(x):(y))
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))
 
-#define MAXPRCDAYS  100         /* max days of continuous processing */
 #define MAXINFILE   1000        /* max number of input files */
 
 static pcvs_t pcvss={0};        /* receiver antenna parameters */
@@ -95,10 +93,10 @@ static int nextobsb(const obs_t *obs, int *i, int rcv)
     return n;
 }
 /* input obs data, navigation messages and sbas correction -------------------*/
-static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt)
+static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int *nr)
 {
     gtime_t time={0};
-    int i,nu,nr,n=0;
+    int i,n=0;
     
     trace(ARC_INFO,"infunc  : revs=%d iobsu=%d iobsr=%d isbs=%d\n",revs,iobsu,iobsr,isbs);
     
@@ -109,34 +107,34 @@ static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt)
         }
     }
     if (!revs) { /* input forward data */
-        if ((nu=nextobsf(&obss,&iobsu,1))<=0) return -1;
+        if ((*nu=nextobsf(&obss,&iobsu,1))<=0) return -1;
         if (popt->intpref) {
-            for (;(nr=nextobsf(&obss,&iobsr,2))>0;iobsr+=nr)
+            for (;(*nr=nextobsf(&obss,&iobsr,2))>0;iobsr+=*nr)
                 if (timediff(obss.data[iobsr].time,obss.data[iobsu].time)>-DTTOL) break;
         }
         else {
-            for (i=iobsr;(nr=nextobsf(&obss,&i,2))>0;iobsr=i,i+=nr)
+            for (i=iobsr;(*nr=nextobsf(&obss,&i,2))>0;iobsr=i,i+=*nr)
                 if (timediff(obss.data[i].time,obss.data[iobsu].time)>DTTOL) break;
         }
-        nr=nextobsf(&obss,&iobsr,2);
-        for (i=0;i<nu&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsu+i];
-        for (i=0;i<nr&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsr+i];
-        iobsu+=nu;
+        *nr=nextobsf(&obss,&iobsr,2);
+        for (i=0;i<*nu&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsu+i];
+        for (i=0;i<*nr&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsr+i];
+        iobsu+=*nu;
     }
     else { /* input backward data */
-        if ((nu=nextobsb(&obss,&iobsu,1))<=0) return -1;
+        if ((*nu=nextobsb(&obss,&iobsu,1))<=0) return -1;
         if (popt->intpref) {
-            for (;(nr=nextobsb(&obss,&iobsr,2))>0;iobsr-=nr)
+            for (;(*nr=nextobsb(&obss,&iobsr,2))>0;iobsr-=*nr)
                 if (timediff(obss.data[iobsr].time,obss.data[iobsu].time)<DTTOL) break;
         }
         else {
-            for (i=iobsr;(nr=nextobsb(&obss,&i,2))>0;iobsr=i,i-=nr)
+            for (i=iobsr;(*nr=nextobsb(&obss,&i,2))>0;iobsr=i,i-=*nr)
                 if (timediff(obss.data[i].time,obss.data[iobsu].time)<-DTTOL) break;
         }
-        nr=nextobsb(&obss,&iobsr,2);
-        for (i=0;i<nu&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsu-nu+1+i];
-        for (i=0;i<nr&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsr-nr+1+i];
-        iobsu-=nu;
+        *nr=nextobsb(&obss,&iobsr,2);
+        for (i=0;i<*nu&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsu-*nu+1+i];
+        for (i=0;i<*nr&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsr-*nr+1+i];
+        iobsu-=*nu;
     }
     return n;
 }
@@ -166,36 +164,29 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
     rtk_t rtk;
     obsd_t obs[MAXOBS*2]; /* for rover and base */
     double rb[3]={0};
-    int i,nobs,n,solstatic,pri[]={0,1,2,3,4,5,1,6};
+    int i,nobs,n,solstatic,pri[]={0,1,2,3,4,5,1,6},nu=0,nr=0;
     
     trace(ARC_INFO,"procpos : mode=%d\n",mode);
     
     solstatic=sopt->solstatic&&
               (popt->mode==PMODE_STATIC||popt->mode==PMODE_PPP_STATIC);
-    
     rtkinit(&rtk,popt);
-    
-    while ((nobs=inputobs(obs,rtk.sol.stat,popt))>=0) {
+
+    while ((nobs=inputobs(obs,rtk.sol.stat,popt,&nu,&nr))>=0) {
         /*abort */
         if (aborts) break;
-        
+
         /* exclude satellites */
         for (i=n=0;i<nobs;i++) {
             if ((satsys(obs[i].sat,NULL)&popt->navsys)&&
                 popt->exsats[obs[i].sat-1]!=1) obs[n++]=obs[i];
         }
         if (n<=0) continue;
-        
+
         /* carrier-phase bias correction */
         if (navs.nf>0) {
             corr_phase_bias_fcb(obs,n,&navs);
         }
-        /* disable L2 */
-#if 0
-        if (popt->freqopt==1) {
-            for (i=0;i<n;i++) obs[i].L[1]=obs[i].P[1]=0.0;
-        }
-#endif
         if (!rtkpos(&rtk,obs,n,&navs)) continue;
         
         if (mode==0) { /* forward/backward */
@@ -792,7 +783,7 @@ static int execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
 *
 *          ssr corrections are valid only for forward estimation.
 *-----------------------------------------------------------------------------*/
-extern int arc_srtk(gtime_t ts, gtime_t te, double ti, double tu,
+extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
                    const prcopt_t *popt, const solopt_t *sopt,
                    const filopt_t *fopt, char **infile, int n, char *outfile,
                    const char *rov, const char *base)

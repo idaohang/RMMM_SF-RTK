@@ -1104,7 +1104,7 @@ extern void rtkfree(rtk_t *rtk);
 extern int  rtkpos (rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
 
 /* post-processing positioning -----------------------------------------------*/
-extern int arc_srtk(gtime_t ts, gtime_t te, double ti, double tu,
+extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
                    const prcopt_t *popt, const solopt_t *sopt,
                    const filopt_t *fopt, char **infile, int n, char *outfile,
                    const char *rov, const char *base);
@@ -1112,13 +1112,10 @@ extern int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
                   const double *vare, const int *svh, const nav_t *nav,
                   const prcopt_t *opt, sol_t *sol, double *azel, int *vsat,
                   double *resp, char *msg);
-extern int zdres(int base, const obsd_t *obs, int n, const double *rs,
-                 const double *dts, const int *svh, const nav_t *nav,
-                 const double *rr, const prcopt_t *opt, int index, double *y,
-                 double *e, double *azel);
-extern double prectrop(gtime_t time, const double *pos, int r,
-                       const double *azel, const prcopt_t *opt, const double *x,
-                       double *dtdx);
+extern int arc_srtk(gtime_t ts, gtime_t te, double ti, double tu,
+                    const prcopt_t *popt, const solopt_t *sopt,
+                    const filopt_t *fopt, char **infile, int n, char *outfile,
+                    const char *rov, const char *base);
 
 /* application defined functions ---------------------------------------------*/
 extern int showmsg(char *format,...);

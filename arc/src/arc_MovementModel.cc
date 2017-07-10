@@ -23,10 +23,8 @@
  * @author SuJingLan
  */
 
+#include "arc.h"
 #include "arc_MovementModel.h"
-#include "arc_PF.h"
-#include <libPF/CRandomNumberGenerator.h>
-#include <arc.h>
 
 /* initialize state and covariance -------------------------------------------*/
 static void initx(rtk_t *rtk, double xi, double var, int i)
@@ -42,17 +40,6 @@ static double sdobs(const obsd_t *obs, int i, int j, int f)
 {
     double pi=f<NFREQ?obs[i].L[f]:obs[i].P[f-NFREQ];
     double pj=f<NFREQ?obs[j].L[f]:obs[j].P[f-NFREQ];
-    return pi==0.0||pj==0.0?0.0:pi-pj;
-}
-/* single-differenced geometry-free linear combination of phase --------------*/
-static double gfobs_L1L2(const obsd_t *obs, int i, int j, const double *lam)
-{
-    double pi=sdobs(obs,i,j,0)*lam[0],pj=sdobs(obs,i,j,1)*lam[1];
-    return pi==0.0||pj==0.0?0.0:pi-pj;
-}
-static double gfobs_L1L5(const obsd_t *obs, int i, int j, const double *lam)
-{
-    double pi=sdobs(obs,i,j,0)*lam[0],pj=sdobs(obs,i,j,2)*lam[2];
     return pi==0.0||pj==0.0?0.0:pi-pj;
 }
 /* temporal update of position/velocity/acceleration -------------------------*/
@@ -296,14 +283,24 @@ static void arc_udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,
 /////////////////////////////////////////////////////////////////////////////////
 /// \brief ARC Main namespace of this package.
 namespace ARC {
-    ARC_MovementModel::ARC_MovementModel() : libPF::MovementModel<ARC_States>() {
+    
+    ARC_MovementModel::ARC_MovementModel() :
+            libPF::MovementModel<ARC_States>() {
         m_RNG = new libPF::CRandomNumberGenerator();
     }
     ARC_MovementModel::~ARC_MovementModel() {
         if (m_RNG) delete m_RNG;
+        if (StdX) delete StdX;
+    }
+    ARC_MovementModel::ARC_MovementModel(const ARC_OPT *OPT,ARC_RTK* SRTK):
+            libPF::MovementModel<ARC_States>() {
+        NX=SRTK->nx;
+        StdX=mat(1,NX);
+        m_RNG = new libPF::CRandomNumberGenerator();
     }
     void ARC_MovementModel::drift(ARC_States &state, double dt) const
     {
+        if (Ns<=0) return;
         arc_udstate(m_SRTK,m_OBS,SatList,m_RoverSat,m_BaseSat,Ns,m_NAV,dt);
         for (int i=0;i<state.getStatesNum();i++) {
             state.SetStatesValue(m_SRTK->x[i],i);
@@ -314,7 +311,7 @@ namespace ARC {
     {
         for (int i=0;i<m_SRTK->nx;i++) {
             state.SetStatesValue(state.getStateValue(i)
-                                 +m_RNG->getGaussian(StdX[i]),i);
+                                 +m_RNG->getGaussian(StdX[i])*dt,i);
         }
     }
 }

@@ -27,16 +27,18 @@
 #ifndef ARC_ARC_OBSERVATIONMODEL_H
 #define ARC_ARC_OBSERVATIONMODEL_H
 
-#include <libPF/ObservationModel.h>
+#include "libPF/ObservationModel.h"
 #include "arc_States.h"
 #include "arc_PF.h"
 
 namespace ARC {
 
-    class ARC_ObservationModel: public libPF::ObservationModel<ARC_States> {
+    class ARC_ObservationModel:
+            public libPF::ObservationModel<ARC_States> {
         /**
          * Constructor
          */
+    public:
         ARC_ObservationModel();
         ARC_ObservationModel(const ARC_OPT *OPT,const ARC_OBSD* OBS,
                              const ARC_NAV *NAV,ARC_RTK * SRTK,
@@ -60,6 +62,22 @@ namespace ARC {
         /// \brief get the states value given index
         double getStateVal(int index) {
             return m_TrueArcState.getStateValue(index);
+        }
+        /// \brief set the settings of arc-srtk
+        void SetOpt(const ARC_OPT* OPT) {
+            m_OPT=OPT;
+        }
+        /// \brief set the navigation data
+        void SetNav(const ARC_NAV* NAV) {
+            m_NAV=NAV;
+        }
+        /// \brief set the observation data
+        void SetObs(const ARC_OBSD* OBS,int Nobs) {
+            m_OBS=OBS; m_NObs=Nobs;
+        }
+        /// \brief set the arc-srtk solution data
+        void SetSRTK(ARC_RTK* SRTK) {
+            m_RTK=SRTK;
         }
     private:
         /// \brief the true States of Observation Model

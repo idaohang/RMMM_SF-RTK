@@ -26,8 +26,8 @@
 #ifndef ARC_ARC_STATEDISTRIBUTION_H
 #define ARC_ARC_STATEDISTRIBUTION_H
 
-#include <libPF/StateDistribution.h>
 #include "arc_States.h"
+#include <libPF/StateDistribution.h>
 
 namespace libPF {
     class RandomNumberGenerationStrategy;
@@ -44,6 +44,12 @@ namespace ARC {
 
         const ARC_States draw() const;
         void SetUniformofStates(double min,double max,int index);
+        /// \brief setting of arc-srtk
+        void SetOpt(const ARC_OPT* OPT);
+        /// \brief set the arc-srtk solution data
+        void SetSRTK(const ARC_RTK* SRTK) {
+            m_SRTK=SRTK;
+        }
     private:
         libPF::RandomNumberGenerationStrategy* m_RNG;
         /// \brief the arc-srtk solution settings

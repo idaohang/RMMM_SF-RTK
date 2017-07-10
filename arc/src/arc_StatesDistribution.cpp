@@ -45,8 +45,10 @@ namespace ARC {
     const ARC_States ARC_StateDistribution::draw() const {
         ARC_States state;
         for (int i=0;i<m_SRTK->nx;i++) {
-            state.SetStatesValue(m_RNG->getUniform(m_UniState[2*i],m_UniState[2*i+1]),i);
+            state.SetStatesValue(m_RNG->getUniform(m_UniState[2*i],
+                                                   m_UniState[2*i+1]),i);
         }
+        return state;
     }
     void ARC_StateDistribution::SetUniformofStates(double min,
                                                    double max,
@@ -55,5 +57,8 @@ namespace ARC {
             return;
         m_UniState[2*index  ]=min;
         m_UniState[2*index+1]=max;
+    }
+    void ARC_StateDistribution::SetOpt(const ARC_OPT *OPT) {
+        if (OPT) m_OPT=OPT;
     }
 }

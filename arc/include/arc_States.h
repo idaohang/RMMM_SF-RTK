@@ -49,7 +49,7 @@ namespace ARC {
          * Constructor
          */
         ARC_States();
-        ARC_States(ARC_OPT* OPT);
+        ARC_States(const ARC_OPT* OPT);
         /**
          * Destructor
          */

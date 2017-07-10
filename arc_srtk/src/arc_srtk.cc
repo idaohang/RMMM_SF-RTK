@@ -324,52 +324,6 @@ static void detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
         rtk->ssat[sat-1].half[f]=(obs[i].LLI[f]&2)?0:1;
     }
 }
-/* detect cycle slip by L1-L2 geometry free phase jump -----------------------*/
-static void detslp_gf_L1L2(rtk_t *rtk, const obsd_t *obs, int i, int j,
-                           const nav_t *nav)
-{
-    int sat=obs[i].sat;
-    double g0,g1;
-    
-    trace(ARC_INFO,"detslp_gf_L1L2: i=%d j=%d\n",i,j);
-    
-    if (rtk->opt.nf<=1||(g1=gfobs_L1L2(obs,i,j,nav->lam[sat-1]))==0.0) return;
-    
-    g0=rtk->ssat[sat-1].gf; rtk->ssat[sat-1].gf=g1;
-        
-    if (g0!=0.0&&fabs(g1-g0)>rtk->opt.thresslip) {
-        
-        rtk->ssat[sat-1].slip[0]|=1;
-        rtk->ssat[sat-1].slip[1]|=1;
-        errmsg(rtk,"slip detected (sat=%2d GF_L1_L2=%.3f %.3f)\n",sat,g0,g1);
-    }
-}
-/* detect cycle slip by L1-L5 geometry free phase jump -----------------------*/
-static void detslp_gf_L1L5(rtk_t *rtk, const obsd_t *obs, int i, int j,
-                           const nav_t *nav)
-{
-    int sat=obs[i].sat;
-    double g0,g1;
-    
-    trace(ARC_INFO,"detslp_gf_L1L5: i=%d j=%d\n",i,j);
-    
-    if (rtk->opt.nf<=2||(g1=gfobs_L1L5(obs,i,j,nav->lam[sat-1]))==0.0) return;
-    
-    g0=rtk->ssat[sat-1].gf2; rtk->ssat[sat-1].gf2=g1;
-        
-    if (g0!=0.0&&fabs(g1-g0)>rtk->opt.thresslip) {
-        
-        rtk->ssat[sat-1].slip[0]|=1;
-        rtk->ssat[sat-1].slip[2]|=1;
-        
-        errmsg(rtk,"slip detected (sat=%2d GF_L1_L5=%.3f %.3f)\n",sat,g0,g1);
-    }
-}
-/* detect cycle slip by doppler and phase difference -------------------------*/
-static void detslp_dop(rtk_t *rtk, const obsd_t *obs, int i, int rcv,
-                       const nav_t *nav)
-{
-}
 /* temporal update of phase biases -------------------------------------------*/
 static void udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
                    const int *iu, const int *ir, int ns, const nav_t *nav)
@@ -385,14 +339,6 @@ static void udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
         for (f=0;f<rtk->opt.nf;f++) rtk->ssat[sat[i]-1].slip[f]&=0xFC;
         detslp_ll(rtk,obs,iu[i],1);
         detslp_ll(rtk,obs,ir[i],2);
-        
-        /* detect cycle slip by geometry-free phase jump */
-        detslp_gf_L1L2(rtk,obs,iu[i],ir[i],nav);
-        detslp_gf_L1L5(rtk,obs,iu[i],ir[i],nav);
-        
-        /* detect cycle slip by doppler and phase difference */
-        detslp_dop(rtk,obs,iu[i],1,nav);
-        detslp_dop(rtk,obs,ir[i],2,nav);
         
         /* update half-cycle valid flag */
         for (f=0;f<nf;f++) {

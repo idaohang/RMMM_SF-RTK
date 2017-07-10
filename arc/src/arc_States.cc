@@ -31,11 +31,13 @@ namespace ARC {
     /// The default constructor.
     ARC_States::ARC_States()  {
     }
-    ARC_States::ARC_States(ARC_OPT *OPT) {
+    ARC_States::ARC_States(const ARC_OPT *OPT) {
         X=mat(1,NX(OPT));
         Nx=NX(OPT);
     }
-    ARC_States::~ARC_States() {}
+    ARC_States::~ARC_States() {
+        if (X) delete X;
+    }
 }
 
 

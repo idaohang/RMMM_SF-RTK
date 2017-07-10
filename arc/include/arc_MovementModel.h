@@ -20,6 +20,7 @@
 #ifndef ARC_ARC_MOVEMENTMODEL_H
 #define ARC_ARC_MOVEMENTMODEL_H
 #include <libPF/MovementModel.h>
+#include <libPF/CRandomNumberGenerator.h>
 #include <libPF/RandomNumberGenerationStrategy.h>
 #include "arc_States.h"
 #include "arc_PF.h"
@@ -34,11 +35,14 @@
  * @author sujinglan
  */
 namespace ARC {
-    class ARC_MovementModel : public libPF::MovementModel<ARC_States> {
+    class ARC_MovementModel :
+            public libPF::MovementModel<ARC_States> {
+    public:
         /**
          * Constructor
          */
         ARC_MovementModel();
+        ARC_MovementModel(const ARC_OPT* OPT,ARC_RTK* SRTK);
         /**
          * Destructor
          */
@@ -57,13 +61,37 @@ namespace ARC {
         void diffuse(ARC_States &state, double dt) const;
 
         /// \brief set the standard deviation of index-th states
-        void SetStdX(double Std,int Index){
+        inline void SetStdX(double Std,int Index){
             StdX[Index]=Std;
         }
         /// \brief get the standard deviation of index-th states
-        double getStdX(int Index) const {
+        inline double getStdX(int Index) const {
             return StdX[Index];
         }
+        /// \brief set the navigation data
+        inline void SetNav(const ARC_NAV* NAV){
+            m_NAV=NAV;
+        }
+        /// \brief set the observation data
+        inline void SetObs(const ARC_OBSD* OBS,int Nobs){
+            m_OBS=OBS; m_Nobs=Nobs;
+        }
+        /// \brief set the arc-srtk solution data
+        inline void SetSRTK(ARC_RTK* SRTK) {
+            m_SRTK=SRTK;
+        }
+        /// \brief set the numbers of common satellite
+        inline void SetComNum(int Num) {
+            Ns=Num;
+        }
+        /// \brief set the base and rover station satellite list
+        inline void SetComSatList(const int* rSat,const int* uSat,
+                             const int* Sat,int Num) {
+            Ns=Num;
+            for (int i=0;i<Num;i++) m_RoverSat[i]=uSat[i],
+                                    m_BaseSat[i]=rSat[i],SatList[i]=Sat[i];
+        }
+
     private:
         /// \brief standard deviation for the states
         double *StdX;
@@ -74,9 +102,11 @@ namespace ARC {
         /// \brief arc-srtk solution type
         ARC_RTK* m_SRTK;
         /// \brief observation data
-        ARC_OBSD* m_OBS;
+        const ARC_OBSD* m_OBS;
         /// \brief navigation data type
-        ARC_NAV* m_NAV;
+        const ARC_NAV* m_NAV;
+        /// \brief observation data numbers
+        int m_Nobs;
         /// \brief common sat numbers
         int Ns;
         /// \brief base and rover station satellite list

@@ -175,7 +175,9 @@ class ParticleFilter {
      * @param os ObservationModel to use for weightening particles
      * @param ms MovementModel to use for propagation of particles
      */
-    ParticleFilter<StateType>(unsigned int numParticles, ObservationModel<StateType>* os, MovementModel<StateType>* ms);
+    ParticleFilter<StateType>(unsigned int numParticles,
+                              ObservationModel<StateType>* os,
+                              MovementModel<StateType>* ms);
 
     /**
      * The destructor releases the particle lists.
@@ -299,7 +301,8 @@ class ParticleFilter {
     const StateType& getState(unsigned int particleNo) const;
   
     /**
-     * Returns the "mean" state, i.e. the sum of the weighted states. You can use this only if you implemented operator*(double) and
+     * Returns the "mean" state, i.e. the sum of the weighted states.
+     * You can use this only if you implemented operator*(double) and
      * operator+=(MyState) in your derived State MyState.
      * @return "mean" state. Best estimation.
      */
@@ -401,8 +404,6 @@ class ParticleFilter {
 
     // Stores which resampling mode is set, default is ResamplingMode::RESAMPLE_NEFF
     ResamplingMode m_ResamplingMode;
-
-
 };
 
 } // end of namespace
