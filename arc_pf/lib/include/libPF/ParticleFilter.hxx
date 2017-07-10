@@ -3,7 +3,9 @@ namespace libPF
 
 
 template <class StateType>
-ParticleFilter<StateType>::ParticleFilter(unsigned int numParticles, ObservationModel<StateType>* os, MovementModel<StateType>* ms) :
+ParticleFilter<StateType>::ParticleFilter(unsigned int numParticles,
+                                          ObservationModel<StateType>* os,
+                                          MovementModel<StateType>* ms) :
     m_NumParticles(numParticles),
     m_ObservationModel(os),
     m_MovementModel(ms),
@@ -97,7 +99,8 @@ void ParticleFilter<StateType>::setPriorState(const StateType& priorState) {
 }
 
 template <class StateType>
-void ParticleFilter<StateType>::drawAllFromDistribution(const StateDistribution<StateType>& distribution) {
+void ParticleFilter<StateType>::drawAllFromDistribution
+        (const StateDistribution<StateType>& distribution) {
     ConstParticleIterator iter;
     for (iter = m_CurrentList.begin(); iter != m_CurrentList.end(); ++iter)
     {
@@ -116,7 +119,8 @@ void ParticleFilter<StateType>::filter(double dt) {
         if (getNumEffectiveParticles() < m_NumParticles / 2) {
             resample();
         }
-    } else if (m_ResamplingMode == RESAMPLE_ALWAYS) {
+    }
+    else if (m_ResamplingMode == RESAMPLE_ALWAYS) {
         resample();
     } // else do not resample
 
@@ -174,8 +178,10 @@ void ParticleFilter<StateType>::normalize() {
             double newWeight = (*iter)->getWeight() * factor;
             (*iter)->setWeight(newWeight);
         }
-    } else {
-        std::cerr << "WARNING: ParticleFilter::normalize(): Particle weights *very* small!" << std::endl;
+    }
+    else {
+        std::cerr << "WARNING: ParticleFilter::normalize(): "
+                "Particle weights *very* small!" << std::endl;
     }
 }
 

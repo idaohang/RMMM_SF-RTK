@@ -302,6 +302,7 @@ namespace ARC {
     {
         ARC_ASSERT_TRUE(Exception,m_SRTK->nx>0,"states numbers is less "
                                                "zero,can check function:rtkinit()");
+        ARC_ASSERT_TRUE_DBG(Exception,NX>0,"states numbers must be lager zero");
         if (Ns<=0) return;
         arc_udstate(m_SRTK,m_OBS,SatList,m_RoverSat,m_BaseSat,Ns,m_NAV,dt);
         for (int i=0;i<state.getStatesNum();i++) {

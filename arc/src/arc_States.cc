@@ -24,12 +24,12 @@
  */
 
 #include "arc_States.h"
-#include "arc_assert_macros.hpp"
 
 /// \brief ARC Main namespace of this package.
 namespace ARC {
     /// The default constructor.
     ARC_States::ARC_States()  {
+
     }
     ARC_States::ARC_States(const ARC_OPT *OPT) {
         X=mat(1,NX(OPT));

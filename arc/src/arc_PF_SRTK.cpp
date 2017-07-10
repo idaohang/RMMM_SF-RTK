@@ -30,6 +30,7 @@
 #include "arc_ObservationModel.h"
 #include "arc_MovementModel.h"
 #include <iomanip>
+#include <fstream>
 using namespace std;
 /* constants/global variables ------------------------------------------------*/
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))
@@ -177,6 +178,7 @@ static int selcomsat(const obsd_t *obs, const rtk_t* rtk,int nu, int nr,
     return k;
 }
 /* process positioning -------------------------------------------------------*/
+ofstream fp_pf("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_pf_pos");
 static void procpos(const prcopt_t *popt, const solopt_t *sopt,
                     int mode)
 {
@@ -235,11 +237,13 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
         if (time.time!=0) rtk.tt=timediff(rtk.sol.time,time);
 
         /* to integrate a known prior state use */
-        for (i=0;i<rtk.nx;i++) States.SetStatesValue(rtk.x[i],i);
-        PF.setPriorState(States);
-
+        if (first) {
+            for (i=0;i<rtk.nx;i++) States.SetStatesValue(rtk.x[i],i);
+            PF.setPriorState(States);
+            first=0;
+        }
         /* inital the states standard deviation */
-        for (i=0;i<rtk.nx;i++) MoveModel.SetStdX(rtk.P[i],i);
+        for (i=0;i<rtk.nx;i++) MoveModel.SetStdX(SQRT(rtk.P[i]),i);
 #endif
         /* select common satellites between rover and reference station */
         if ((ns=selcomsat(obs,&rtk,nu,nr,popt,sat,usat,rsat))<=0) continue;
@@ -258,12 +262,16 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
         
         /* particle filter */
         PF.filter();
-        
-        LOG(WARNING)<<"Particle filter position is : "
-                    << setiosflags(ios::fixed) << setprecision(10)
+
+        LOG(INFO)<<"Particle filter position is : "
+                    <<setiosflags(ios::fixed)<<setprecision(10)
                     <<PF.getBestState().getStateValue(0)<<" , "
                     <<PF.getBestState().getStateValue(1)<<" , "
                     <<PF.getBestState().getStateValue(2);
+        double x1=PF.getBestState().getStateValue(0);
+        double x2=PF.getBestState().getStateValue(1);
+        double x3=PF.getBestState().getStateValue(2);
+        fp_pf<<setiosflags(ios::fixed)<<setprecision(10)<<x1<<" , "<<x2<<" , "<<x3<<std::endl;
     }
     rtkfree(&rtk);
 }

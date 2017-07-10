@@ -24,6 +24,7 @@
  * @author SuJingLan
  */
 
+#include <arc.h>
 #include "arc.h"
 #include "glog/logging.h"
 
@@ -156,6 +157,7 @@ static void corr_phase_bias_fcb(obsd_t *obs, int n, const nav_t *nav)
     }
 }
 /* process positioning -------------------------------------------------------*/
+FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/rtklib_pos","w");
 static void procpos(const prcopt_t *popt, const solopt_t *sopt,
                     int mode)
 {
@@ -188,6 +190,8 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
             corr_phase_bias_fcb(obs,n,&navs);
         }
         if (!rtkpos(&rtk,obs,n,&navs)) continue;
+
+        fprintf(fp,"%10.6lf  %10.6lf  %10.6lf \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2]);
         
         if (mode==0) { /* forward/backward */
             if (!solstatic) {
@@ -788,10 +792,7 @@ extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
                    const filopt_t *fopt, char **infile, int n, char *outfile,
                    const char *rov, const char *base)
 {
-    gtime_t tts,tte,ttte;
-    double tunit,tss;
-    int i,j,k,nf,stat=0,week,flag=1,index[MAXINFILE]={0};
-    char *ifile[MAXINFILE],ofile[1024],*ext;
+    int i,stat=0,index[MAXINFILE]={0};
     
     trace(ARC_INFO,"postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n",ti,tu,n,outfile);
     
