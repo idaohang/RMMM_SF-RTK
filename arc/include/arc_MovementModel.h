@@ -24,6 +24,7 @@
 #include <libPF/RandomNumberGenerationStrategy.h>
 #include "arc_States.h"
 #include "arc_PF.h"
+#include "arc_assert_macros.hpp"
 /**
  * @class ARC_MovementModel
  *
@@ -38,6 +39,7 @@ namespace ARC {
     class ARC_MovementModel :
             public libPF::MovementModel<ARC_States> {
     public:
+        ARC_DEFINE_EXCEPTION(Exception, std::runtime_error);
         /**
          * Constructor
          */

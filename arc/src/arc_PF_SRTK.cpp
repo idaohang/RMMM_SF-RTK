@@ -29,11 +29,13 @@
 #include "libPF/ParticleFilter.h"
 #include "arc_ObservationModel.h"
 #include "arc_MovementModel.h"
-
+#include <iomanip>
+using namespace std;
 /* constants/global variables ------------------------------------------------*/
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))
 
 #define MAXINFILE   1000        /* max number of input files */
+#define USEPNTINI   1           /* using the standard position to inital solution*/
 
 static pcvs_t pcvss={0};        /* receiver antenna parameters */
 static pcvs_t pcvsr={0};        /* satellite antenna parameters */
@@ -179,7 +181,8 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
                     int mode)
 {
     rtk_t rtk;
-    obsd_t obs[MAXOBS*2]; /* for rover and base */
+    obsd_t obs[MAXOBS*2];
+    gtime_t time={0};
     double rb[3]={0};
     int i,nobs,n,ns,rsat[MAXSAT],usat[MAXSAT],nu=0,nr=0,sat[MAXSAT],first=1;
     char msg[126];
@@ -197,6 +200,7 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
     /* set the observation settings and solution data */
     ObsModel.SetOpt(popt);
     ObsModel.SetNav(&navs);
+    ObsModel.SetSRTK(&rtk);
     MoveModel.SetNav(&navs);
     MoveModel.SetSRTK(&rtk);
 
@@ -204,45 +208,62 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
         /*abort */
         if (aborts) break;
 
+        /* precious epoch time */
+        time=rtk.sol.time;
+
         /* exclude satellites */
         for (i=n=0;i<nobs;i++) {
             if ((satsys(obs[i].sat,NULL)&popt->navsys)&&
                 popt->exsats[obs[i].sat-1]!=1) obs[n++]=obs[i];
         }
         if (n<=0) continue;
+        /* count rover/base station observations */
+        for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ;   /* rover */
+        for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
         
         /* carrier-phase bias correction */
         if (navs.nf>0) {
             corr_phase_bias_fcb(obs,n,&navs);
         }
-        if (first) {
-            /* rover position by single point positioning */
-            if (!pntpos(obs,nu,&navs,&rtk.opt,&rtk.sol,NULL,rtk.ssat,msg)) {
-                trace(ARC_WARNING, "arc-srtk point pos error (%s)\n",msg);
-                continue;
-            }
-            /* to integrate a known prior state use */
-            for (i=0;i<rtk.nx;i++) States.SetStatesValue(rtk.x[i],i);
-            PF.setPriorState(States);
-            /* inital the states standard deviation */
-            for (i=0;i<rtk.nx;i++) MoveModel.SetStdX(rtk.P[i],i);
-            /* set the flag of first compute ,this just for initialization*/
-            first=0;
+#if USEPNTINI
+        /* rover position by single point positioning */
+        if (!pntpos(obs,nu,&navs,&rtk.opt,&rtk.sol,NULL,rtk.ssat,msg)) {
+            trace(ARC_WARNING, "arc-srtk point pos error (%s)\n",msg);
+            continue;
         }
+        /* inital base station and rover station observation time difference */
+        if (time.time!=0) rtk.tt=timediff(rtk.sol.time,time);
+
+        /* to integrate a known prior state use */
+        for (i=0;i<rtk.nx;i++) States.SetStatesValue(rtk.x[i],i);
+        PF.setPriorState(States);
+
+        /* inital the states standard deviation */
+        for (i=0;i<rtk.nx;i++) MoveModel.SetStdX(rtk.P[i],i);
+#endif
         /* select common satellites between rover and reference station */
         if ((ns=selcomsat(obs,&rtk,nu,nr,popt,sat,usat,rsat))<=0) continue;
 
         /* asign common satellites to movement model */
         MoveModel.SetComSatList(rsat,usat,sat,ns);
-
+        /* set gps and bds observation of states movement */
+        MoveModel.SetObs(obs,nu+nr);
         /* states movement model for predicting the states */
         MoveModel.drift(States,rtk.tt);
+
         /* set the states of observation model */
         ObsModel.setStates(States);
         /* set the observations of gps and bds */
         ObsModel.SetObs(obs,n);
+        
         /* particle filter */
         PF.filter();
+        
+        LOG(WARNING)<<"Particle filter position is : "
+                    << setiosflags(ios::fixed) << setprecision(10)
+                    <<PF.getBestState().getStateValue(0)<<" , "
+                    <<PF.getBestState().getStateValue(1)<<" , "
+                    <<PF.getBestState().getStateValue(2);
     }
     rtkfree(&rtk);
 }

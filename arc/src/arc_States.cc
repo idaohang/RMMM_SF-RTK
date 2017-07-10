@@ -36,7 +36,7 @@ namespace ARC {
         Nx=NX(OPT);
     }
     ARC_States::~ARC_States() {
-        if (X) delete X;
+        
     }
 }
 

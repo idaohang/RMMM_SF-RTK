@@ -25,6 +25,7 @@
  */
 #include "arc.h"
 #include "arc_ObservationModel.h"
+#include "glog/logging.h"
 
 ///////////////////////////////////////////////////////////////////////////////////
 /* single-differenced observable ---------------------------------------------*/
@@ -85,7 +86,8 @@ static int selsat(const obsd_t *obs, double *azel, int nu, int nr,
     return k;
 }
 /* undifferenced phase/code residual for satellite ---------------------------*/
-static void zdres_sat(int base, double r, const obsd_t *obs, const nav_t *nav,
+static void zdres_sat(int base, double r, const obsd_t *obs,
+                      const nav_t *nav,
                       const double *azel, const double *dant,
                       const prcopt_t *opt, double *y)
 {
@@ -96,7 +98,8 @@ static void zdres_sat(int base, double r, const obsd_t *obs, const nav_t *nav,
         if (lam[i]==0.0) continue;
 
         /* check snr mask */
-        if (testsnr(base,i,azel[1],obs->SNR[i]*0.25,&opt->snrmask)) {
+        if (testsnr(base,i,azel[1],obs->SNR[i]*0.25,
+                    &opt->snrmask)) {
             continue;
         }
         /* residuals = observable - pseudorange */
@@ -122,7 +125,8 @@ static int zdres(int base, const obsd_t *obs, int n, const double *rs,
 
     /* earth tide correction */
     if (opt->tidecorr) {
-        tidedisp(gpst2utc(obs[0].time),rr_,opt->tidecorr,&nav->erp,
+        tidedisp(gpst2utc(obs[0].time),
+                 rr_,opt->tidecorr,&nav->erp,
                  opt->odisp[base],disp);
         for (i=0;i<3;i++) rr_[i]+=disp[i];
     }
@@ -166,10 +170,9 @@ static void ddcov(const int *nb, int n, const double *Ri, const double *Rj,
 
     for (i=0;i<nv*nv;i++) R[i]=0.0;
     for (b=0;b<n;k+=nb[b++]) {
-
         for (i=0;i<nb[b];i++) for (j=0;j<nb[b];j++) {
-                R[k+i+(k+j)*nv]=Ri[k+i]+(i==j?Rj[k+i]:0.0);
-            }
+            R[k+i+(k+j)*nv]=Ri[k+i]+(i==j?Rj[k+i]:0.0);
+        }
     }
 }
 /* precise tropspheric model -------------------------------------------------*/
@@ -222,11 +225,14 @@ static int ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
     int i,j,k,m,f,ff,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=NF(opt);
 
     bl=baseline(x,rtk->rb,dr);
-    ecef2pos(x,posu); ecef2pos(rtk->rb,posr);
+    ecef2pos(x,posu); ecef2pos(opt->rb,posr);
 
     Ri=mat(ns*nf*2+2,1); Rj=mat(ns*nf*2+2,1); im=mat(ns,1);
     tropu=mat(ns,1); tropr=mat(ns,1); dtdxu=mat(ns,3); dtdxr=mat(ns,3);
 
+    for (i=0;i<MAXSAT;i++) for (j=0;j<NFREQ;j++) {
+        rtk->ssat[i].resp[j]=rtk->ssat[i].resc[j]=0.0;
+    }
     /* compute factors of ionospheric and tropospheric delay */
     for (i=0;i<ns;i++) {
         if (opt->ionoopt>=IONOOPT_EST) {
@@ -237,7 +243,7 @@ static int ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
             tropr[i]=prectrop(rtk->sol.time,posr,1,azel+ir[i]*2,opt,x,dtdxr+i*3);
         }
     }
-    for (m=0;m<2;m++)
+    for (m=0;m<4;m++)
 
         for (f=0;f<nf*2;f++) {
 
@@ -336,7 +342,7 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     gtime_t time=obs[0].time;
     double *rs,*dts,*var,*y,*e,*azel,*v,*R,dt;
     int i,j,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT];
-    int vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
+    int svh[MAXOBS*2];
     int nf=1;
 
     dt=timediff(time,obs[nu].time);
@@ -344,9 +350,16 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     y=mat(nf*2,n); e=mat(3,n);
     azel=zeros(2,n);
 
+    /* initial satellite status informations */
+    for (i=0;i<MAXSAT;i++) {
+        rtk->ssat[i].sys=satsys(i+1,NULL);
+        for (j=0;j<NFREQ;j++) rtk->ssat[i].vsat[j]=0;
+        for (j=1;j<NFREQ;j++) rtk->ssat[i].snr [j]=0;
+    }
+    /* compute the satellite position and velecitys */
     satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
 
-    if (!zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,rtk->rb,opt,1,
+    if (!zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,opt->rb,opt,1,
                y+nu*nf*2,e+nu*3,azel+nu*2)) {
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
         return 0;
@@ -367,7 +380,7 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     for (i=0;i<n;i++) {
         for (j=0;j<2;j++) sdy[2*i+j]=y[i*2+j];
     }
-    for (i=0;i<nv;i++) DDR[i+i*nv]=R[i+nv*i];
+    for (i=0;i<nv;i++) DDR[i]=R[i+nv*i];
     *nsdy=n; *nddy=nv;
     free(rs); free(dts); free(var);
     free(y); free(e); free(azel); free(v); free(R);
@@ -382,6 +395,7 @@ static int arc_measure(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav,
     for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ;   /* rover */
     for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
 
+    /* compute relative positioning double-difference residuals,modified from rtklib */
     relpos(rtk,obs,nu,nr,nav,sdy,ddy,nsdy,nddy,DDR);
     return 1;
 }
@@ -410,6 +424,9 @@ namespace ARC {
         double Y[MAXSAT*2];
         double DDY[MAXSAT];
         double DDR[MAXSAT];
+
+        ARC_ASSERT_TRUE(Exception,m_RTK->nx>0,"the states'numbers is zero");
+        
         double *xb=mat(1,m_RTK->nx);
         int NY,NDDY;
         matcpy(xb,m_RTK->x,m_RTK->nx,1);
@@ -420,6 +437,8 @@ namespace ARC {
         matcpy(m_RTK->x,xb,m_RTK->nx,1);
         double sum=0.0;
         for (int i=0;i<NDDY;i++) sum+=SQR(DDY[i])/DDR[i];
+        ARC_ASSERT_TRUE(Exception,sum>0.0,"Warning : division by zero");
+        free(xb);
         return 1.0/SQRT(sum);
     }
 }

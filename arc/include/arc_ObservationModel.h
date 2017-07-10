@@ -30,6 +30,7 @@
 #include "libPF/ObservationModel.h"
 #include "arc_States.h"
 #include "arc_PF.h"
+#include "arc_assert_macros.hpp"
 
 namespace ARC {
 
@@ -39,6 +40,7 @@ namespace ARC {
          * Constructor
          */
     public:
+        ARC_DEFINE_EXCEPTION(Exception,std::runtime_error);
         ARC_ObservationModel();
         ARC_ObservationModel(const ARC_OPT *OPT,const ARC_OBSD* OBS,
                              const ARC_NAV *NAV,ARC_RTK * SRTK,
@@ -79,6 +81,8 @@ namespace ARC {
         void SetSRTK(ARC_RTK* SRTK) {
             m_RTK=SRTK;
         }
+        /// \brief compute the particel weight
+        double getWeight();
     private:
         /// \brief the true States of Observation Model
         ARC_States m_TrueArcState;

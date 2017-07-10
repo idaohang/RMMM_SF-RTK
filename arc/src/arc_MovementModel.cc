@@ -300,6 +300,8 @@ namespace ARC {
     }
     void ARC_MovementModel::drift(ARC_States &state, double dt) const
     {
+        ARC_ASSERT_TRUE(Exception,m_SRTK->nx>0,"states numbers is less "
+                                               "zero,can check function:rtkinit()");
         if (Ns<=0) return;
         arc_udstate(m_SRTK,m_OBS,SatList,m_RoverSat,m_BaseSat,Ns,m_NAV,dt);
         for (int i=0;i<state.getStatesNum();i++) {
@@ -309,6 +311,7 @@ namespace ARC {
     }
     void ARC_MovementModel::diffuse(ARC_States &state, double dt) const
     {
+        ARC_ASSERT_TRUE(Exception,m_SRTK->nx>0,"states numbers is less zero")
         for (int i=0;i<m_SRTK->nx;i++) {
             state.SetStatesValue(state.getStateValue(i)
                                  +m_RNG->getGaussian(StdX[i])*dt,i);
