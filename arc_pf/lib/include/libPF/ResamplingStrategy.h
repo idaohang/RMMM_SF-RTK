@@ -47,9 +47,6 @@ class ResamplingStrategy {
      * @param destination the destination list where to put the copies.
      */
     virtual void resample(const ParticleList& source, const ParticleList& destination) const = 0;
-
-  private:
-
 };
 
 template <class StateType>

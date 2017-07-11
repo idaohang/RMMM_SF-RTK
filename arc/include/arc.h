@@ -870,6 +870,7 @@ typedef struct {        /* RTK control/result type */
     double tt;          /* time difference between current and previous (s) */
     double *x, *P;      /* float states and their covariance */
     double *xa,*Pa;     /* fixed states and their covariance */
+    double *x_pf;       /* particle filter states */
     int nfix;           /* number of continuous fixes of ambiguity */
     ambc_t ambc[MAXSAT]; /* ambibuity control */
     ssat_t ssat[MAXSAT]; /* satellite status */

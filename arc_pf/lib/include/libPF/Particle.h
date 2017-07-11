@@ -72,7 +72,8 @@ namespace libPF
     };
 
     template <class StateType>
-    Particle<StateType>::Particle(const StateType& state, double weight) :
+    Particle<StateType>::Particle(const StateType& state,
+                                  double weight) :
         m_State(state),
         m_Weight(weight)
     {

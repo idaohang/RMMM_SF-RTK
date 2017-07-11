@@ -31,6 +31,8 @@
 #include "arc_MovementModel.h"
 #include <iomanip>
 #include <fstream>
+#include <arc.h>
+
 using namespace std;
 /* constants/global variables ------------------------------------------------*/
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))
@@ -198,13 +200,15 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
     ARC::ARC_ObservationModel ObsModel;
     ARC::ARC_MovementModel    MoveModel(popt,&rtk);
     ARC::ARC_States           States(popt);
-    ParticleFilterType        PF(500,&ObsModel,&MoveModel);
+    ParticleFilterType        PF(1000,&ObsModel,&MoveModel);
     /* set the observation settings and solution data */
     ObsModel.SetOpt(popt);
     ObsModel.SetNav(&navs);
     ObsModel.SetSRTK(&rtk);
     MoveModel.SetNav(&navs);
     MoveModel.SetSRTK(&rtk);
+    /* set the particle filter resample */
+    PF.setResamplingMode(libPF::RESAMPLE_ALWAYS);
 
     while ((nobs=inputobs(obs,rtk.sol.stat,popt,&nu,&nr))>=0) {
         /*abort */
@@ -222,11 +226,7 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
         /* count rover/base station observations */
         for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ;   /* rover */
         for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
-        
-        /* carrier-phase bias correction */
-        if (navs.nf>0) {
-            corr_phase_bias_fcb(obs,n,&navs);
-        }
+
 #if USEPNTINI
         /* rover position by single point positioning */
         if (!pntpos(obs,nu,&navs,&rtk.opt,&rtk.sol,NULL,rtk.ssat,msg)) {
@@ -238,12 +238,10 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
 
         /* to integrate a known prior state use */
         if (first) {
-            for (i=0;i<rtk.nx;i++) States.SetStatesValue(rtk.x[i],i);
+            for (i=0;i<6;i++) States.SetStatesValue(rtk.sol.rr[i],i);
             PF.setPriorState(States);
             first=0;
         }
-        /* inital the states standard deviation */
-        for (i=0;i<rtk.nx;i++) MoveModel.SetStdX(SQRT(rtk.P[i]),i);
 #endif
         /* select common satellites between rover and reference station */
         if ((ns=selcomsat(obs,&rtk,nu,nr,popt,sat,usat,rsat))<=0) continue;
@@ -258,20 +256,16 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
         /* set the states of observation model */
         ObsModel.setStates(States);
         /* set the observations of gps and bds */
-        ObsModel.SetObs(obs,n);
-        
+        ObsModel.SetObs(obs,nr+nu);
+
         /* particle filter */
         PF.filter();
+        /* save particle result to rtk_t type struct */
+        States=PF.getMmseEstimate();
 
-        LOG(INFO)<<"Particle filter position is : "
-                    <<setiosflags(ios::fixed)<<setprecision(10)
-                    <<PF.getBestState().getStateValue(0)<<" , "
-                    <<PF.getBestState().getStateValue(1)<<" , "
-                    <<PF.getBestState().getStateValue(2);
-        double x1=PF.getBestState().getStateValue(0);
-        double x2=PF.getBestState().getStateValue(1);
-        double x3=PF.getBestState().getStateValue(2);
-        fp_pf<<setiosflags(ios::fixed)<<setprecision(10)<<x1<<" , "<<x2<<" , "<<x3<<std::endl;
+        fp_pf<<setiosflags(ios::fixed)<<setprecision(10);
+        for (int i=0;i<6;i++) fp_pf<<PF.getMmseEstimate().getStateValue(i)<<"  ";
+        fp_pf<<std::endl;
     }
     rtkfree(&rtk);
 }

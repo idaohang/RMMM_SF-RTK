@@ -35,35 +35,6 @@ static double sdobs(const obsd_t *obs, int i, int j, int f)
     double pj=f<NFREQ?obs[j].L[f]:obs[j].P[f-NFREQ];
     return pi==0.0||pj==0.0?0.0:pi-pj;
 }
-/* single-differenced measurement error variance -----------------------------*/
-static double varerr(int sat, int sys, double el, double bl, double dt, int f,
-                     const prcopt_t *opt)
-{
-    double a,b,c=opt->err[3]*bl/1E4,d=CLIGHT*opt->sclkstab*dt,fact=1.0;
-    double sinel=sin(el);
-    int i=sys==SYS_GLO?1:(sys==SYS_GAL?2:0),nf=NF(opt);
-
-    /* extended error model */
-    if (f>=nf&&opt->exterr.ena[0]) { /* code */
-        a=opt->exterr.cerr[i][  (f-nf)*2];
-        b=opt->exterr.cerr[i][1+(f-nf)*2];
-        if (sys==SYS_SBS) {a*=EFACT_SBS; b*=EFACT_SBS;}
-    }
-    else if (f<nf&&opt->exterr.ena[1]) { /* phase */
-        a=opt->exterr.perr[i][  f*2];
-        b=opt->exterr.perr[i][1+f*2];
-        if (sys==SYS_SBS) {a*=EFACT_SBS; b*=EFACT_SBS;}
-    }
-    else { /* normal error model */
-        if (f>=nf) fact=opt->eratio[f-nf];
-        if (fact<=0.0)  fact=opt->eratio[0];
-        fact*=sys==SYS_GLO?EFACT_GLO:(sys==SYS_SBS?EFACT_SBS:EFACT_GPS);
-        a=fact*opt->err[1];
-        b=fact*opt->err[2];
-    }
-    return 2.0*(opt->ionoopt==IONOOPT_IFLC?3.0:1.0)*
-                   (a*a+b*b/sinel/sinel+c*c)+d*d;
-}
 /* baseline length -----------------------------------------------------------*/
 static double baseline(const double *ru, const double *rb, double *dr)
 {
@@ -92,20 +63,17 @@ static void zdres_sat(int base, double r, const obsd_t *obs,
                       const prcopt_t *opt, double *y)
 {
     const double *lam=nav->lam[obs->sat-1];
-    int i,nf=NF(opt);
+    int i=0,nf=1;
 
-    for (i=0;i<nf;i++) {
-        if (lam[i]==0.0) continue;
+    if (lam[i]==0.0) return;
 
-        /* check snr mask */
-        if (testsnr(base,i,azel[1],obs->SNR[i]*0.25,
-                    &opt->snrmask)) {
-            continue;
-        }
-        /* residuals = observable - pseudorange */
-        if (obs->L[i]!=0.0) y[i   ]=obs->L[i]*lam[i]-r-dant[i];
-        if (obs->P[i]!=0.0) y[i+nf]=obs->P[i]       -r-dant[i];
-    }
+    /* check snr mask */
+    if (testsnr(base,i,azel[1],obs->SNR[i]*0.25,
+                &opt->snrmask)) return;
+
+    /* residuals = observable - pseudorange */
+    if (obs->L[i]!=0.0) y[i   ]=obs->L[i]*lam[i]-r-dant[i];
+    if (obs->P[i]!=0.0) y[i+nf]=obs->P[i]       -r-dant[i];
 }
 /* undifferenced phase/code residuals ----------------------------------------*/
 static int zdres(int base, const obsd_t *obs, int n, const double *rs,
@@ -115,7 +83,7 @@ static int zdres(int base, const obsd_t *obs, int n, const double *rs,
 {
     double r,rr_[3],pos[3],dant[NFREQ]={0},disp[3];
     double zhd,zazel[]={0.0,90.0*D2R};
-    int i,nf=NF(opt);
+    int i=0,nf=1;
 
     for (i=0;i<n*nf*2;i++) y[i]=0.0;
 
@@ -162,44 +130,6 @@ static int validobs(int i, int j, int f, int nf, double *y)
     return y[f+i*nf*2]!=0.0&&y[f+j*nf*2]!=0.0&&
            (f<nf||(y[f-nf+i*nf*2]!=0.0&&y[f-nf+j*nf*2]!=0.0));
 }
-/* double-differenced measurement error covariance ---------------------------*/
-static void ddcov(const int *nb, int n, const double *Ri, const double *Rj,
-                  int nv, double *R)
-{
-    int i,j,k=0,b;
-
-    for (i=0;i<nv*nv;i++) R[i]=0.0;
-    for (b=0;b<n;k+=nb[b++]) {
-        for (i=0;i<nb[b];i++) for (j=0;j<nb[b];j++) {
-            R[k+i+(k+j)*nv]=Ri[k+i]+(i==j?Rj[k+i]:0.0);
-        }
-    }
-}
-/* precise tropspheric model -------------------------------------------------*/
- static double prectrop(gtime_t time, const double *pos, int r,
-                       const double *azel, const prcopt_t *opt, const double *x,
-                       double *dtdx)
-{
-    double m_w=0.0,cotz,grad_n,grad_e;
-    int i=IT(r,opt);
-
-    /* wet mapping function */
-    tropmapf(time,pos,azel,&m_w);
-
-    if (opt->tropopt>=TROPOPT_ESTG&&azel[1]>0.0) {
-
-        /* m_w=m_0+m_0*cot(el)*(Gn*cos(az)+Ge*sin(az)): ref [6] */
-        cotz=1.0/tan(azel[1]);
-        grad_n=m_w*cotz*cos(azel[0]);
-        grad_e=m_w*cotz*sin(azel[0]);
-        m_w+=grad_n*x[i+1]+grad_e*x[i+2];
-        dtdx[1]=grad_n*x[i];
-        dtdx[2]=grad_e*x[i];
-    }
-    else dtdx[1]=dtdx[2]=0.0;
-    dtdx[0]=m_w;
-    return m_w*x[i];
-}
 /* test navi system (m=0:gps/qzs/sbs,1:glo,2:gal,3:bds) ----------------------*/
 static int test_sys(int sys, int m)
 {
@@ -216,32 +146,17 @@ static int test_sys(int sys, int m)
 /* double-differenced phase/code residuals -----------------------------------*/
 static int ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
                  const int *sat, double *y,
-                 double *azel, const int *iu, const int *ir, int ns, double *v,
-                 double *R)
+                 double *azel, const int *iu, const int *ir, int ns, double *v)
 {
     prcopt_t *opt=&rtk->opt;
-    double bl,dr[3],posu[3],posr[3],didxi=0.0,didxj=0.0,*im;
-    double *tropr,*tropu,*dtdxr,*dtdxu,*Ri,*Rj,lami,lamj,fi,fj;
-    int i,j,k,m,f,ff,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=NF(opt);
+    double posu[3],posr[3];
+    double lami,lamj;
+    int i,j,m,f,ff,nv=0,sysi,sysj,nf=1;
 
-    bl=baseline(x,rtk->rb,dr);
     ecef2pos(x,posu); ecef2pos(opt->rb,posr);
-
-    Ri=mat(ns*nf*2+2,1); Rj=mat(ns*nf*2+2,1); im=mat(ns,1);
-    tropu=mat(ns,1); tropr=mat(ns,1); dtdxu=mat(ns,3); dtdxr=mat(ns,3);
 
     for (i=0;i<MAXSAT;i++) for (j=0;j<NFREQ;j++) {
         rtk->ssat[i].resp[j]=rtk->ssat[i].resc[j]=0.0;
-    }
-    /* compute factors of ionospheric and tropospheric delay */
-    for (i=0;i<ns;i++) {
-        if (opt->ionoopt>=IONOOPT_EST) {
-            im[i]=(ionmapf(posu,azel+iu[i]*2)+ionmapf(posr,azel+ir[i]*2))/2.0;
-        }
-        if (opt->tropopt>=TROPOPT_EST) {
-            tropu[i]=prectrop(rtk->sol.time,posu,0,azel+iu[i]*2,opt,x,dtdxu+i*3);
-            tropr[i]=prectrop(rtk->sol.time,posr,1,azel+ir[i]*2,opt,x,dtdxr+i*3);
-        }
     }
     for (m=0;m<4;m++)
 
@@ -259,7 +174,6 @@ static int ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
             /* make double difference */
             for (j=0;j<ns;j++) {
                 if (i==j) continue;
-                sysi=rtk->ssat[sat[i]-1].sys;
                 sysj=rtk->ssat[sat[j]-1].sys;
                 if (!test_sys(sysj,m)) continue;
                 if (!validobs(iu[j],ir[j],f,nf,y)) continue;
@@ -270,34 +184,15 @@ static int ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
                 if (lami<=0.0||lamj<=0.0) continue;
 
                 /* double-differenced residual */
-                v[nv]=(y[f+iu[i]*nf*2]-y[f+ir[i]*nf*2])-
-                      (y[f+iu[j]*nf*2]-y[f+ir[j]*nf*2]);
-                /* double-differenced ionospheric delay term */
-                if (opt->ionoopt==IONOOPT_EST) {
-                    fi=lami/lam_carr[0]; fj=lamj/lam_carr[0];
-                    didxi=(f<nf?-1.0:1.0)*fi*fi*im[i];
-                    didxj=(f<nf?-1.0:1.0)*fj*fj*im[j];
-                    v[nv]-=didxi*x[II(sat[i],opt)]-didxj*x[II(sat[j],opt)];
-                }
-                /* double-differenced tropospheric delay term */
-                if (opt->tropopt==TROPOPT_EST||opt->tropopt==TROPOPT_ESTG) {
-                    v[nv]-=(tropu[i]-tropu[j])-(tropr[i]-tropr[j]);
-                }
+                v[nv]=(y[f+iu[i]*nf*2]-y[f+ir[i]*nf*2])-(y[f+iu[j]*nf*2]-y[f+ir[j]*nf*2]);
+
                 /* double-differenced phase-bias term */
                 if (f<nf) {
                     v[nv]-=lami*x[IB(sat[i],f,opt)]-lamj*x[IB(sat[j],f,opt)];
                 }
-                /* single-differenced measurement error variances */
-                Ri[nv]=varerr(sat[i],sysi,azel[1+iu[i]*2],bl,dt,f,opt);
-                Rj[nv]=varerr(sat[j],sysj,azel[1+iu[j]*2],bl,dt,f,opt);
                 nv++;
-                nb[b]++;
             }
-            b++;
         }
-    ddcov(nb,b,Ri,Rj,nv,R);
-    free(Ri); free(Rj); free(im);
-    free(tropu); free(tropr); free(dtdxu); free(dtdxr);
     return nv;
 }
 /* time-interpolation of residuals (for post-mission) ------------------------*/
@@ -335,13 +230,12 @@ static double intpres(gtime_t time, const obsd_t *obs, int n, const nav_t *nav,
 }
 /* relative positioning ------------------------------------------------------*/
 static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
-                  const nav_t *nav,double *sdy,double *ddy,int *nsdy,int *nddy,
-                  double *DDR)
+                  const nav_t *nav,double *sdy,double *ddy,int *nsdy,int *nddy)
 {
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
     double *rs,*dts,*var,*y,*e,*azel,*v,*R,dt;
-    int i,j,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT];
+    int i=0,j=0,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT];
     int svh[MAXOBS*2];
     int nf=1;
 
@@ -353,8 +247,8 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* initial satellite status informations */
     for (i=0;i<MAXSAT;i++) {
         rtk->ssat[i].sys=satsys(i+1,NULL);
-        for (j=0;j<NFREQ;j++) rtk->ssat[i].vsat[j]=0;
-        for (j=1;j<NFREQ;j++) rtk->ssat[i].snr [j]=0;
+        rtk->ssat[i].vsat[0]=0;
+        rtk->ssat[i].snr [0]=0;
     }
     /* compute the satellite position and velecitys */
     satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
@@ -372,22 +266,21 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         return 0;
     }
     ny=ns*nf*2+2;
-    v=mat(ny,1); R=mat(ny,ny);
+    v=mat(ny,1);
 
     zdres(0,obs,nu,rs,dts,svh,nav,rtk->x,opt,0,y,e,azel);
-    nv=ddres(rtk,nav,dt,rtk->x,sat,y,azel,iu,ir,ns,v,R);
+    nv=ddres(rtk,nav,dt,rtk->x,sat,y,azel,iu,ir,ns,v);
     for (i=0;i<nv;i++) ddy[i]=v[i];
     for (i=0;i<n;i++) {
         for (j=0;j<2;j++) sdy[2*i+j]=y[i*2+j];
     }
-    for (i=0;i<nv;i++) DDR[i]=R[i+nv*i];
     *nsdy=n; *nddy=nv;
     free(rs); free(dts); free(var);
-    free(y); free(e); free(azel); free(v); free(R);
+    free(y); free(e); free(azel); free(v);
     return 1;
 }
 static int arc_measure(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav,
-                       double *sdy,double *ddy,int *nsdy,int *nddy,double *DDR)
+                       double *sdy,double *ddy,int *nsdy,int *nddy)
 {
     int nu,nr;
 
@@ -396,7 +289,7 @@ static int arc_measure(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav,
     for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
 
     /* compute relative positioning double-difference residuals,modified from rtklib */
-    relpos(rtk,obs,nu,nr,nav,sdy,ddy,nsdy,nddy,DDR);
+    relpos(rtk,obs,nu,nr,nav,sdy,ddy,nsdy,nddy);
     return 1;
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -421,23 +314,20 @@ namespace ARC {
     }
     double ARC_ObservationModel::measure(const ARC_States &state) const {
 
-        double Y[MAXSAT*2];
-        double DDY[MAXSAT];
-        double DDR[MAXSAT];
-
-        ARC_ASSERT_TRUE(Exception,m_RTK->nx>0,"the states'numbers is zero");
+        static double Y[MAXSAT*2];
+        static double DDY[MAXSAT];
         
         double *xb=mat(1,m_RTK->nx);
         int NY,NDDY;
         matcpy(xb,m_RTK->x,m_RTK->nx,1);
-        for (int i=0;i<state.getStatesNum();i++) {
+        for (int i=0;i<m_RTK->nx;i++) {
             m_RTK->x[i]=state.getStateValue(i);
         }
-        arc_measure(m_RTK,m_OBS,m_NObs,m_NAV,Y,DDY,&NY,&NDDY,DDR);
+        arc_measure(m_RTK,m_OBS,m_NObs,m_NAV,Y,DDY,&NY,&NDDY);
+
         matcpy(m_RTK->x,xb,m_RTK->nx,1);
         double sum=0.0;
-        for (int i=0;i<NDDY;i++) sum+=SQR(DDY[i])/DDR[i];
-        ARC_ASSERT_TRUE(Exception,sum>0.0,"Warning : division by zero");
+        for (int i=0;i<NDDY;i++) sum+=SQR(DDY[i]);
         free(xb);
         return 1.0/SQRT(sum);
     }

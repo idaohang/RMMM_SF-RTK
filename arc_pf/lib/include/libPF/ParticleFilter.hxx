@@ -27,8 +27,6 @@ ParticleFilter<StateType>::ParticleFilter(unsigned int numParticles,
     m_LastList[i] = new Particle<StateType>(StateType(), initialWeight);
   }
 }
-
-
 template <class StateType>
 ParticleFilter<StateType>::~ParticleFilter() {
     // release particles
@@ -161,7 +159,9 @@ double ParticleFilter<StateType>::getWeight(unsigned int particleNo) const {
 
 template <class StateType>
 void ParticleFilter<StateType>::sort() {
-  std::sort(m_CurrentList.begin(), m_CurrentList.end(), CompareParticleWeights<StateType>());
+  std::sort(m_CurrentList.begin(),
+            m_CurrentList.end(),
+            CompareParticleWeights<StateType>());
 }
 
 template <class StateType>

@@ -42,9 +42,6 @@ class StateDistribution {
      * @return Drawn state from the distribution.
      */
     virtual const StateType draw() const = 0;
-
-  private:
-
 };
 
 

@@ -26,15 +26,6 @@
 #include "arc.h"
 #include "arc_MovementModel.h"
 
-/* initialize state and covariance -------------------------------------------*/
-static void initx(rtk_t *rtk, double xi, double var, int i)
-{
-    int j;
-    rtk->x[i]=xi;
-    for (j=0;j<rtk->nx;j++) {
-        rtk->P[i+j*rtk->nx]=rtk->P[j+i*rtk->nx]=i==j?var:0.0;
-    }
-}
 /* single-differenced observable ---------------------------------------------*/
 static double sdobs(const obsd_t *obs, int i, int j, int f)
 {
@@ -43,106 +34,12 @@ static double sdobs(const obsd_t *obs, int i, int j, int f)
     return pi==0.0||pj==0.0?0.0:pi-pj;
 }
 /* temporal update of position/velocity/acceleration -------------------------*/
-static void arc_udpos(rtk_t *rtk, double tt)
+static void arc_udpos(int nx,double *X, double tt,const rtk_t *rtk)
 {
-    double *F,*FP,*xp,pos[3],Q[9]={0},Qv[9],var=0.0;
-    int i,j;
+    int i;
 
-    /* initialize position for first epoch */
-    if (norm(rtk->x,3)<=0.0) {
-        for (i=0;i<3;i++) initx(rtk,rtk->sol.rr[i],VAR_POS,i);
-        if (rtk->opt.dynamics) {
-            for (i=3;i<6;i++) initx(rtk,rtk->sol.rr[i],VAR_VEL,i);
-            for (i=6;i<9;i++) initx(rtk,1E-6,VAR_ACC,i);
-        }
-    }
-    /* kinmatic mode without dynamics */
-    if (!rtk->opt.dynamics) {
-        for (i=0;i<3;i++) initx(rtk,rtk->sol.rr[i],VAR_POS,i);
-        return;
-    }
-    /* check variance of estimated postion */
-    for (i=0;i<3;i++) var+=rtk->P[i+i*rtk->nx]; var/=3.0;
-
-    if (var>VAR_POS) {
-        /* reset position with large variance */
-        for (i=0;i<3;i++) initx(rtk,rtk->sol.rr[i],VAR_POS,i);
-        for (i=3;i<6;i++) initx(rtk,rtk->sol.rr[i],VAR_VEL,i);
-        for (i=6;i<9;i++) initx(rtk,1E-6,VAR_ACC,i);
-        return;
-    }
-    /* state transition of position/velocity/acceleration */
-    F=eye(rtk->nx); FP=mat(rtk->nx,rtk->nx); xp=mat(rtk->nx,1);
-
-    for (i=0;i<6;i++) {
-        F[i+(i+3)*rtk->nx]=tt;
-    }
-    /* x=F*x, P=F*P*F+Q */
-    matmul("NN",rtk->nx,1,rtk->nx,1.0,F,rtk->x,0.0,xp);
-    matcpy(rtk->x,xp,rtk->nx,1);
-    matmul("NN",rtk->nx,rtk->nx,rtk->nx,1.0,F,rtk->P,0.0,FP);
-    matmul("NT",rtk->nx,rtk->nx,rtk->nx,1.0,FP,F,0.0,rtk->P);
-
-    /* process noise added to only acceleration */
-    Q[0]=Q[4]=SQR(rtk->opt.prn[3]); Q[8]=SQR(rtk->opt.prn[4]);
-    ecef2pos(rtk->x,pos);
-    covecef(pos,Q,Qv);
-    for (i=0;i<3;i++) for (j=0;j<3;j++) {
-        rtk->P[i+6+(j+6)*rtk->nx]+=Qv[i+j*3];
-    }
-    free(F); free(FP); free(xp);
-}
-/* temporal update of ionospheric parameters ---------------------------------*/
-static void arc_udion(rtk_t *rtk, double tt, double bl, const int *sat, int ns)
-{
-    double el,fact;
-    int i,j;
-
-    for (i=1;i<=MAXSAT;i++) {
-        j=II(i,&rtk->opt);
-        if (rtk->x[j]!=0.0&&
-            rtk->ssat[i-1].outc[0]>GAP_RESION&&rtk->ssat[i-1].outc[1]>GAP_RESION)
-            rtk->x[j]=0.0;
-    }
-    for (i=0;i<ns;i++) {
-        j=II(sat[i],&rtk->opt);
-
-        if (rtk->x[j]==0.0) {
-            initx(rtk,1E-6,SQR(rtk->opt.std[1]*bl/1E4),j);
-        }
-        else {
-            /* elevation dependent factor of process noise */
-            el=rtk->ssat[sat[i]-1].azel[1];
-            fact=cos(el);
-            rtk->P[j+j*rtk->nx]+=SQR(rtk->opt.prn[1]*bl/1E4*fact)*tt;
-        }
-    }
-}
-/* temporal update of tropospheric parameters --------------------------------*/
-static void arc_udtrop(rtk_t *rtk, double tt, double bl)
-{
-    int i,j,k;
-
-    for (i=0;i<2;i++) {
-        j=IT(i,&rtk->opt);
-
-        if (rtk->x[j]==0.0) {
-            initx(rtk,INIT_ZWD,SQR(rtk->opt.std[2]),j); /* initial zwd */
-
-            if (rtk->opt.tropopt>=TROPOPT_ESTG) {
-                for (k=0;k<2;k++) initx(rtk,1E-6,VAR_GRA,++j);
-            }
-        }
-        else {
-            rtk->P[j+j*rtk->nx]+=SQR(rtk->opt.prn[2])*tt;
-
-            if (rtk->opt.tropopt>=TROPOPT_ESTG) {
-                for (k=0;k<2;k++) {
-                    rtk->P[++j*(1+rtk->nx)]+=SQR(rtk->opt.prn[2]*0.3)*fabs(rtk->tt);
-                }
-            }
-        }
-    }
+    /* initial states value from standard positioning*/
+    for (i=0;i<3;i++) rtk->sol.rr[i];
 }
 /* detect cycle slip by LLI --------------------------------------------------*/
 static void detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
@@ -180,10 +77,11 @@ static void detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
 }
 /* temporal update of phase biases -------------------------------------------*/
 static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
-                       const int *iu, const int *ir, int ns, const nav_t *nav)
+                       const int *iu, const int *ir, int ns, const nav_t *nav,
+                       double *X)
 {
     double cp,pr,*bias,offset,lami;
-    int i,j,f,slip,reset,nf=NF(&rtk->opt);
+    int i,j,f,slip,reset,nf=1;
 
     for (i=0;i<ns;i++) {
 
@@ -205,10 +103,10 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
             reset=++rtk->ssat[i-1].outc[f]>(unsigned int)rtk->opt.maxout;
 
             if (rtk->opt.modear==ARMODE_INST&&rtk->x[IB(i,f,&rtk->opt)]!=0.0) {
-                initx(rtk,0.0,0.0,IB(i,f,&rtk->opt));
+                X[IB(i,f,&rtk->opt)]=0.0;
             }
             else if (reset&&rtk->x[IB(i,f,&rtk->opt)]!=0.0) {
-                initx(rtk,0.0,0.0,IB(i,f,&rtk->opt));
+                X[IB(i,f,&rtk->opt)]=0.0;
             }
             if (rtk->opt.modear!=ARMODE_INST&&reset) {
                 rtk->ssat[i-1].lock[f]=-rtk->opt.minlock;
@@ -217,38 +115,36 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
         /* reset phase-bias if detecting cycle slip */
         for (i=0;i<ns;i++) {
             j=IB(sat[i],f,&rtk->opt);
-            rtk->P[j+j*rtk->nx]+=rtk->opt.prn[0]*rtk->opt.prn[0]*tt;
             slip=rtk->ssat[sat[i]-1].slip[f];
             if (rtk->opt.modear==ARMODE_INST||!(slip&1)) continue;
-            rtk->x[j]=0.0;
+            X[j]=0.0;
             rtk->ssat[sat[i]-1].lock[f]=-rtk->opt.minlock;
         }
         bias=zeros(ns,1);
 
         /* estimate approximate phase-bias by phase - code */
         for (i=j=0,offset=0.0;i<ns;i++) {
-            if (rtk->opt.ionoopt!=IONOOPT_IFLC) {
-                cp=sdobs(obs,iu[i],ir[i],f); /* cycle */
-                pr=sdobs(obs,iu[i],ir[i],f+NFREQ);
-                lami=nav->lam[sat[i]-1][f];
-                if (cp==0.0||pr==0.0||lami<=0.0) continue;
-                bias[i]=cp-pr/lami;
-            }
-            if (rtk->x[IB(sat[i],f,&rtk->opt)]!=0.0) {
-                offset+=bias[i]-rtk->x[IB(sat[i],f,&rtk->opt)];
+            cp=sdobs(obs,iu[i],ir[i],f); /* cycle */
+            pr=sdobs(obs,iu[i],ir[i],f+NFREQ);
+            lami=nav->lam[sat[i]-1][f];
+            if (cp==0.0||pr==0.0||lami<=0.0) continue;
+            bias[i]=cp-pr/lami;
+
+            if (X[IB(sat[i],f,&rtk->opt)]!=0.0) {
+                offset+=bias[i]-X[IB(sat[i],f,&rtk->opt)];
                 j++;
             }
         }
         /* correct phase-bias offset to enssure phase-code coherency */
         if (j>0) {
             for (i=1;i<=MAXSAT;i++) {
-                if (rtk->x[IB(i,f,&rtk->opt)]!=0.0) rtk->x[IB(i,f,&rtk->opt)]+=offset/j;
+                if (X[IB(i,f,&rtk->opt)]!=0.0) X[IB(i,f,&rtk->opt)]+=offset/j;
             }
         }
         /* set initial states of phase-bias */
         for (i=0;i<ns;i++) {
-            if (bias[i]==0.0||rtk->x[IB(sat[i],f,&rtk->opt)]!=0.0) continue;
-            initx(rtk,bias[i],SQR(rtk->opt.std[0]),IB(sat[i],f,&rtk->opt));
+            if (bias[i]==0.0||X[IB(sat[i],f,&rtk->opt)]!=0.0) continue;
+            X[IB(sat[i],f,&rtk->opt)]=bias[i];
         }
         free(bias);
     }
@@ -263,22 +159,13 @@ static double baseline(const double *ru, const double *rb, double *dr)
 /* temporal update of states --------------------------------------------------*/
 static void arc_udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,
                         const int *iu, const int *ir, int ns, const nav_t *nav,
-                        double tt)
+                        double tt,double *X)
 {
-    double dr[3]={0},bl;
     /* temporal update of position/velocity/acceleration */
-    arc_udpos(rtk,tt);
+    arc_udpos(rtk->nx,X,tt,rtk);
 
-    /* temporal update of ionospheric parameters */
-    if (rtk->opt.ionoopt>=IONOOPT_EST) {
-        bl=baseline(rtk->x,rtk->rb,dr);
-        arc_udion(rtk,tt,bl,sat,ns);
-    }
-    /* temporal update of tropospheric parameters */
-    if (rtk->opt.tropopt>=TROPOPT_EST) {
-        arc_udtrop(rtk,tt,bl);
-    }
-    arc_udbias(rtk,tt,obs,sat,iu,ir,ns,nav);
+    /* temporal update of phase-bias */
+    arc_udbias(rtk,tt,obs,sat,iu,ir,ns,nav,X);
 }
 /////////////////////////////////////////////////////////////////////////////////
 /// \brief ARC Main namespace of this package.
@@ -290,32 +177,23 @@ namespace ARC {
     }
     ARC_MovementModel::~ARC_MovementModel() {
         if (m_RNG) delete m_RNG;
-        if (StdX) delete StdX;
     }
     ARC_MovementModel::ARC_MovementModel(const ARC_OPT *OPT,ARC_RTK* SRTK):
             libPF::MovementModel<ARC_States>() {
-        NX=SRTK->nx;
-        StdX=mat(1,NX);
         m_RNG = new libPF::CRandomNumberGenerator();
     }
     void ARC_MovementModel::drift(ARC_States &state, double dt) const
     {
-        ARC_ASSERT_TRUE(Exception,m_SRTK->nx>0,"states numbers is less "
-                                               "zero,can check function:rtkinit()");
-        ARC_ASSERT_TRUE_DBG(Exception,NX>0,"states numbers must be lager zero");
         if (Ns<=0) return;
-        arc_udstate(m_SRTK,m_OBS,SatList,m_RoverSat,m_BaseSat,Ns,m_NAV,dt);
-        for (int i=0;i<state.getStatesNum();i++) {
-            state.SetStatesValue(m_SRTK->x[i],i);
-        }
-        for (int i=0;i<m_SRTK->nx;i++) StdX[i]=SQRT(m_SRTK->P[i+i*m_SRTK->nx]);
+        arc_udstate(m_SRTK,m_OBS,SatList,m_RoverSat,m_BaseSat,Ns,m_NAV,dt,state.getStatesVal());
     }
     void ARC_MovementModel::diffuse(ARC_States &state, double dt) const
     {
-        ARC_ASSERT_TRUE(Exception,m_SRTK->nx>0,"states numbers is less zero")
         for (int i=0;i<m_SRTK->nx;i++) {
-            state.SetStatesValue(state.getStateValue(i)
-                                 +m_RNG->getGaussian(StdX[i])*dt,i);
+            if (state.getStateValue(i)==0.0)
+                continue;
+            if (i<3) state.SetStatesValue(state.getStateValue(i)+m_RNG->getGaussian(2.0),i);
+            else     state.SetStatesValue(state.getStateValue(i)+m_RNG->getGaussian(0.001),i);
         }
     }
 }

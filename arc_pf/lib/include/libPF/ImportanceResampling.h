@@ -48,7 +48,8 @@ class ImportanceResampling : public ResamplingStrategy<StateType>{
     void resample(const ParticleList& source, const ParticleList& destination) const;
 
     /**
-     * Sets the Random Number Generator to use in resample() to generate uniformly distributed random numbers.
+     * Sets the Random Number Generator to use in resample() to
+     * generate uniformly distributed random numbers.
      */
     void setRNG(RandomNumberGenerationStrategy* rng);
 
@@ -75,7 +76,8 @@ ImportanceResampling<StateType>::~ImportanceResampling() {
 
 // resampling based on the cumulative distribution function (CDF)
 template <class StateType>
-void ImportanceResampling<StateType>::resample(const ParticleList& sourceList, const ParticleList& destinationList) const {
+void ImportanceResampling<StateType>::resample(const ParticleList& sourceList,
+                                               const ParticleList& destinationList) const {
 
   double inverseNum = 1.0f / sourceList.size();
   double start = m_RNG->getUniform() * inverseNum;  // random start in CDF

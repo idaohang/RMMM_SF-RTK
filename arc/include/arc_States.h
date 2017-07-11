@@ -50,6 +50,7 @@ namespace ARC {
          */
         ARC_States();
         ARC_States(const ARC_OPT* OPT);
+        ARC_States(int Num);
         /**
          * Destructor
          */
@@ -59,34 +60,31 @@ namespace ARC {
          */
         ARC_States operator*(double factor) const{
             ARC_States State;
-            for (int i=0;i<Nx;i++) State.X[i]=X[i]*factor;
+            for (int i=0;i<MAXPFSTETAS;i++) State.SetStatesValue(X[i]*factor,i);
             return State;
         };
         ARC_States &operator+=(const ARC_States &other){
-            ARC_States State;
-            for (int i=0;i<Nx;i++) State.X[i]=X[i]+other.X[i];
-        };
-        /// \brief set the numbers of sates
-        void SetStateNum(const int Num){
-            Nx=Num;
+            for (int i=0;i<MAXPFSTETAS;i++) X[i]=X[i]+other.getStateValue(i);
         };
         /// \brief set the value of states
-        void SetStatesValue(const double Val,int Index) {
+        inline void SetStatesValue(const double Val,int Index) {
             X[Index]=Val;
         };
         /// \brief get the value of states
-        double getStateValue(int Index) const{
+        inline double getStateValue(int Index) const{
             return X[Index];
         };
         /// \brief get the numbers of states
-        int getStatesNum() const {
-            return Nx;
+        inline int getStatesNum() const {
+            return MAXPFSTETAS;
         };
+        /// \brief get the states value
+        inline double *getStatesVal(){
+            return X;
+        }
     private:
         /// \brief need to estimate states,this is same to rtklib
-        double *X;
-        /// \brief the numbers of estimate states
-        int Nx;
+        double X[MAXPFSTETAS];
     };
 }
 #endif //ARC_ARC_STATES_H

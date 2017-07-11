@@ -32,11 +32,10 @@ namespace ARC {
 
     }
     ARC_States::ARC_States(const ARC_OPT *OPT) {
-        X=mat(1,NX(OPT));
-        Nx=NX(OPT);
+    }
+    ARC_States::ARC_States(int Num) {
     }
     ARC_States::~ARC_States() {
-        
     }
 }
 

@@ -178,7 +178,22 @@ class ParticleFilter {
     ParticleFilter<StateType>(unsigned int numParticles,
                               ObservationModel<StateType>* os,
                               MovementModel<StateType>* ms);
-
+    /**
+     * The constructor allocates the memory for the particle lists and saves
+     * <b>pointers</b> to ObservationModel and MovementModel in member variables.
+     * Be sure that these objects are valid through the lifetime of ParticleFilter!
+     * The default constructor of StateType will be used to create the
+     * initial particles.
+     * The particle lists will have @a numParticles elements of type StateType.
+     * @param numParticles Number of particles for the filter. Has to be greater
+     *        than zero.
+     * @param os ObservationModel to use for weightening particles
+     * @param ms MovementModel to use for propagation of particles
+     * @param Num the numbers of states list
+     */
+    ParticleFilter<StateType>(unsigned int numParticles,
+                              ObservationModel<StateType>* os,
+                              MovementModel<StateType>* ms,int Num);
     /**
      * The destructor releases the particle lists.
      */
@@ -359,16 +374,20 @@ class ParticleFilter {
   protected:
 
     /**
-     * This method sorts the particles according to their weight. STL's std::sort() is used together with the
+     * This method sorts the particles according to their weight.
+     * STL's std::sort() is used together with the
      * custom compare function CompareParticleWeights().
-     * The particle with the highest weight is at position 0 after calling this function.
+     * The particle with the highest weight is at
+     * position 0 after calling this function.
      */
     void sort();
 
     /**
-     * This method normalizes the weights of the particles. After calling this function, the sum of the weights of
+     * This method normalizes the weights of the particles.
+     * After calling this function, the sum of the weights of
      * all particles in the current particle list equals 1.0.
-     * In this function the sum of all weights of the particles of the current particle list is computed and each
+     * In this function the sum of all weights of the particles
+     * of the current particle list is computed and each
      * weight of each particle is devided through this sum.
      */
     void normalize();

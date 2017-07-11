@@ -96,9 +96,7 @@ namespace ARC {
 
     private:
         /// \brief standard deviation for the states
-        double *StdX;
-        /// \brief the numbers of estimate states
-        int NX;
+        double StdX[MAXPFSTETAS];
         /// \brief Stores the random number generator
         libPF::RandomNumberGenerationStrategy* m_RNG;
         /// \brief arc-srtk solution type

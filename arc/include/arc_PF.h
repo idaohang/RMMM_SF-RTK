@@ -66,6 +66,7 @@
 #define IT(r,opt)   (NP(opt)+NI(opt)+NT(opt)/2*(r))        /// tropos (r:0=rov,1:ref)
 #define IL(f,opt)   (NP(opt)+NI(opt)+NT(opt)+(f))          /// receiver h/w bias
 #define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1)             /// phase bias (s:satno,f:freq)
+#define MAXPFSTETAS                         80             /// max particle filter states
 typedef nav_t                               ARC_NAV;       /// arc-srtk navigation data type
 typedef obs_t                               ARC_OBS;       /// arc-srtk gnss observation data type
 typedef ssat_t                              ARC_SAT;       /// arc-srtk satellite status type

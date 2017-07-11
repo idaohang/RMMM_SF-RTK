@@ -1,3 +1,4 @@
+#include <arc.h>
 #include "glog/logging.h"
 #include "arc.h"
 #define NUMINFILE 10
@@ -31,6 +32,7 @@ int main()
     arc_opt.nf = 1;                                     // 解算频率
     arc_opt.elmin = 10.0 * D2R;
     arc_opt.navsys = SYS_GPS;
+    arc_opt.dynamics=0;
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
@@ -56,7 +58,7 @@ int main()
     tracelevel(ARC_INFO);
     tracebuf(10);
 
-    postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile, base, rover);
+    arc_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile, base, rover);
 
     return 0;
 }
