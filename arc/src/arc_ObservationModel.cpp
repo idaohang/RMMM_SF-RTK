@@ -23,7 +23,7 @@
  * @brief SRTK Observation Model source file
  * @author SuJingLan
  */
-#include <arc.h>
+
 #include "arc.h"
 #include "arc_ObservationModel.h"
 #include "glog/logging.h"
@@ -275,9 +275,9 @@ static int arc_sdres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
     return nv;
 }
 /* relative positioning ------------------------------------------------------*/
-static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
-                  const nav_t *nav,const double *rr,double *ddy,int *nddy,
-                  double *sdy,int* nsdy)
+static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
+                      const nav_t *nav,const double *rr,double *ddy,int *nddy,
+                      double *sdy,int* nsdy)
 {
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
@@ -330,7 +330,7 @@ static int arc_measure(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav,
     for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
 
     /* compute relative positioning double-difference residuals,modified from rtklib */
-    relpos(rtk,obs,nu,nr,nav,rr,ddy,nddy,sdy,nsdy);
+    arc_relpos(rtk,obs,nu,nr,nav,rr,ddy,nddy,sdy,nsdy);
     return 1;
 }
 ///////////////////////////////////////////////////////////////////////////////
