@@ -25,7 +25,6 @@
  */
 
 #include <arc.h>
-#include "arc.h"
 #include "glog/logging.h"
 
 /* constants/global variables ------------------------------------------------*/
@@ -140,7 +139,7 @@ static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int *nr)
     return n;
 }
 /* carrier-phase bias correction by fcb --------------------------------------*/
-static void corr_phase_bias_fcb(obsd_t *obs, int n, const nav_t *nav)
+static void corr_phase_bias_fcb(obsd_t *obs,int n,const nav_t *nav)
 {
     int i,j,k;
     
@@ -194,10 +193,7 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
         fprintf(fp,"%10.6lf  %10.6lf  %10.6lf \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2]);
         
         if (mode==0) { /* forward/backward */
-            if (!solstatic) {
-                
-            }
-            else if (time.time==0||pri[rtk.sol.stat]<=pri[sol.stat]) {
+            if (time.time==0||pri[rtk.sol.stat]<=pri[sol.stat]) {
                 sol=rtk.sol;
                 for (i=0;i<3;i++) rb[i]=rtk.rb[i];
                 if (time.time==0||timediff(rtk.sol.time,time)<0.0) {
@@ -316,10 +312,7 @@ static void combres(const prcopt_t *popt, const solopt_t *sopt)
             sols.qr[4]=(float)Qs[5];
             sols.qr[5]=(float)Qs[2];
         }
-        if (!solstatic) {
-
-        }
-        else if (time.time==0||pri[sols.stat]<=pri[sol.stat]) {
+        if (time.time==0||pri[sols.stat]<=pri[sol.stat]) {
             sol=sols;
             for (k=0;k<3;k++) rb[k]=rbs[k];
             if (time.time==0||timediff(sols.time,time)<0.0) {

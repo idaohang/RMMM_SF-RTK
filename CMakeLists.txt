@@ -65,8 +65,7 @@ add_library(${PROJECT_NAME}_rtk STATIC
     arc_srtk/src/arc_pnt.cc
     arc_cmn/src/arc_lambda.cc
     arc/src/arc_core.cc
-    arc_rinex/src/arc_preco.cc
-    arc/src/arc_States.cc
+        arc/src/arc_States.cc
     arc/src/arc_MovementModel.cc
     arc/src/arc_ObservationModel.cpp
     arc/src/arc_StatesDistribution.cpp
