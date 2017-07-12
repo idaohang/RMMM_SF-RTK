@@ -36,6 +36,8 @@
 #define ARC_PF_AMB_MAX                     (+2)
 #define ARC_PF_ITERS                       1
 #define ARC_PF_NUM                         5000            /// particle numbers
+#define ARC_PF_USE_SD                      0
+#define ARC_PF_USE_DD                      1
 
 #define SQR(x)      ((x)*(x))
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))

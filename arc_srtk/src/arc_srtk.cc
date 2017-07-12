@@ -1,5 +1,4 @@
 
-#include <stdarg.h>
 #include "arc.h"
 
 /* constants/macros ----------------------------------------------------------*/

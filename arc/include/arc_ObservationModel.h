@@ -83,6 +83,11 @@ namespace ARC {
         }
         /// \brief compute the particel weight
         double getWeight();
+        /// \brief set the flag of use single-difference or double-difference
+        inline void SetDDorSD(int flag){
+            if (flag!=0||flag!=1) return;
+            USE_SD_OR_DD=flag;
+        }
     private:
         /// \brief the true States of Observation Model
         mutable ARC_States m_TrueArcState;
@@ -96,6 +101,8 @@ namespace ARC {
         const ARC_OBSD* m_OBS;
         /// \brief arc-srtk navigation
         const ARC_NAV*  m_NAV;
+        /// \brief flag of use single-difference double-difference - 0:SD,1:DD
+        int USE_SD_OR_DD;
     };
 }
 #endif //ARC_ARC_OBSERVATIONMODEL_H

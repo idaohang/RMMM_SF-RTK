@@ -350,6 +350,7 @@ namespace ARC {
         m_OBS=OBS;
         m_NAV=NAV;
         m_NObs=NObs;
+        USE_SD_OR_DD=1;
     }
     ARC_ObservationModel::~ARC_ObservationModel() {
     }
@@ -369,8 +370,14 @@ namespace ARC {
         }
         arc_measure(m_RTK,m_OBS,m_NObs,m_NAV,Xp,DDY,&NDDY,SDY,&NSDY);
 
-        for (int i=0;i<NDDY;i++) sum+=SQR(DDY[i]);
-        return 1.0/SQRT(sum/double(NDDY));
+        if (USE_SD_OR_DD==1) {
+            for (int i=0; i<NDDY;i++) sum+=SQR(DDY[i]);
+            return 1.0/SQRT(sum/double(NDDY));
+        }
+        else if (USE_SD_OR_DD==0) {
+            for (int i=0; i<NSDY;i++) sum+=SQR(SDY[i]);
+            return 1.0/SQRT(sum/double(NDDY));
+        }
     }
 }
 

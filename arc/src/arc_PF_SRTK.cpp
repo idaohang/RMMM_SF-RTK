@@ -187,6 +187,7 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
     ObsModel.SetOpt(popt);
     ObsModel.SetNav(&navs);
     ObsModel.SetSRTK(&rtk);
+    ObsModel.SetDDorSD(ARC_PF_USE_DD);
     MoveModel.SetNav(&navs);
     MoveModel.SetSRTK(&rtk);
     /* set the particle filter resample */
