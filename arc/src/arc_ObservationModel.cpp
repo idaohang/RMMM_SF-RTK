@@ -45,7 +45,7 @@ static double baseline(const double *ru, const double *rb, double *dr)
 }
 /* select common satellites between rover and reference station --------------*/
 static int arc_selsat(const obsd_t *obs, double *azel, int nu, int nr,
-                  const prcopt_t *opt, int *sat, int *iu, int *ir)
+                      const prcopt_t *opt, int *sat, int *iu, int *ir)
 {
     int i,j,k=0;
     for (i=0,j=nu;i<nu&&j<nu+nr;i++,j++) {
@@ -59,8 +59,8 @@ static int arc_selsat(const obsd_t *obs, double *azel, int nu, int nr,
 }
 /* undifferenced phase/code residual for satellite ---------------------------*/
 static void arc_zdres_sat(int base, double r, const obsd_t *obs,const nav_t *nav,
-                      const double *azel, const double *dant,const prcopt_t *opt,
-                      double *y,double dion)
+                          const double *azel, const double *dant,const prcopt_t *opt,
+                          double *y,double dion)
 {
     const double *lam=nav->lam[obs->sat-1];
     int i=0,nf=1;
@@ -77,9 +77,9 @@ static void arc_zdres_sat(int base, double r, const obsd_t *obs,const nav_t *nav
 }
 /* undifferenced phase/code residuals ----------------------------------------*/
 static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
-                 const double *dts, const int *svh, const nav_t *nav,
-                 const double *rr, const prcopt_t *opt, int index, double *y,
-                 double *e, double *azel)
+                     const double *dts, const int *svh, const nav_t *nav,
+                     const double *rr, const prcopt_t *opt, int index, double *y,
+                     double *e, double *azel)
 {
     double r,rr_[3],pos[3],dant[NFREQ]={0},disp[3];
     double zhd,zazel[]={0.0,90.0*D2R},dion=0.0,vion=0.0;
@@ -149,8 +149,8 @@ static int test_sys(int sys, int m)
 }
 /* double-differenced phase/code residuals -----------------------------------*/
 static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
-                 const int *sat, double *y,double *azel, const int *iu,
-                 const int *ir, int ns, double *v)
+                     const int *sat, double *y,double *azel, const int *iu,
+                     const int *ir, int ns, double *v)
 {
     prcopt_t *opt=&rtk->opt;
     double posu[3],posr[3];
