@@ -55,3 +55,7 @@ double CRandomNumberGenerator::getUniform(double min, double max) const
     double range = max - min;
     return 1.0 * rand() / RAND_MAX * range + min;
 }
+double CRandomNumberGenerator::getRandInt(double min, double max) const {
+  double range=max-min;
+  return double(int(1.0*rand()/RAND_MAX*range+min));
+}

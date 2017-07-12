@@ -79,7 +79,7 @@ namespace ARC {
             return MAXPFSTETAS;
         };
         /// \brief get the states value
-        inline double *getStatesVal(){
+        inline double *getStatesVal() {
             return X;
         }
     private:

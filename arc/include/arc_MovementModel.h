@@ -93,7 +93,22 @@ namespace ARC {
             for (int i=0;i<Num;i++) m_RoverSat[i]=uSat[i],
                                     m_BaseSat[i]=rSat[i],SatList[i]=Sat[i];
         }
-
+        inline void SetRoverStd(double std) {
+            PF_ROVERPOS_STD=std;
+        }
+        inline double getRoverStd() {
+            return PF_ROVERPOS_STD;
+        }
+        inline double getAmbMin() {
+            return PF_AMB_MIN;
+        }
+        inline double getAmbMax() {
+            return PF_AMB_MAX;
+        }
+        inline void SetAmbStd(double Min,double Max) {
+            PF_AMB_MIN=Min;
+            PF_AMB_MAX=Max;
+        }
     private:
         /// \brief standard deviation for the states
         double StdX[MAXPFSTETAS];
@@ -114,6 +129,11 @@ namespace ARC {
         int m_BaseSat[MAXSAT];
         /// \brief All satellite list
         int SatList[MAXSAT];
+
+        /// \brief particle filter rover position std
+        double PF_ROVERPOS_STD;
+        /// \brief particle fiter ambguity min and max search
+        double PF_AMB_MIN,PF_AMB_MAX;
     };
 }
 #endif //ARC_ARC_MOVEMENTMODEL_H

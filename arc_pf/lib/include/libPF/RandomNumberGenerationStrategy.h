@@ -42,11 +42,13 @@ class RandomNumberGenerationStrategy {
      * @return random number between min and max, uniform distributed.
      */
     virtual double getUniform(double min = 0.0, double max = 1.0) const = 0;
-
-  protected:
-
-  private:
-
+    /**
+     * Generates a uniform distributed random integer number between min and max.
+     * @param min the minimum value, default is -1.0
+     * @param max the maximum value, default is  1.0
+     * @return random integer number between min and max, uniform distributed.
+     */
+    virtual double getRandInt(double min, double max) const =0;
 };
 
 } // end of namespace

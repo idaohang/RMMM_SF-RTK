@@ -31,7 +31,6 @@
 #include "arc_MovementModel.h"
 #include <iomanip>
 #include <fstream>
-#include <arc.h>
 
 using namespace std;
 /* constants/global variables ------------------------------------------------*/
@@ -144,23 +143,6 @@ static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int *nr)
     }
     return n;
 }
-/* carrier-phase bias correction by fcb --------------------------------------*/
-static void corr_phase_bias_fcb(obsd_t *obs, int n, const nav_t *nav)
-{
-    int i,j,k;
-
-    for (i=0;i<nav->nf;i++) {
-        if (timediff(nav->fcb[i].te,obs[0].time)<-1E-3) continue;
-        if (timediff(nav->fcb[i].ts,obs[0].time)> 1E-3) break;
-        for (j=0;j<n;j++) {
-            for (k=0;k<NFREQ;k++) {
-                if (obs[j].L[k]==0.0) continue;
-                obs[j].L[k]-=nav->fcb[i].bias[obs[j].sat-1][k];
-            }
-        }
-        return;
-    }
-}
 /* select common satellites between rover and reference station --------------*/
 static int selcomsat(const obsd_t *obs, const rtk_t* rtk,int nu, int nr,
                      const prcopt_t *opt, int *sat, int *iu, int *ir)
@@ -200,7 +182,7 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
     ARC::ARC_ObservationModel ObsModel;
     ARC::ARC_MovementModel    MoveModel(popt,&rtk);
     ARC::ARC_States           States(popt);
-    ParticleFilterType        PF(1000,&ObsModel,&MoveModel);
+    ParticleFilterType        PF(ARC_PF_NUM,&ObsModel,&MoveModel);
     /* set the observation settings and solution data */
     ObsModel.SetOpt(popt);
     ObsModel.SetNav(&navs);
@@ -246,26 +228,39 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
         /* select common satellites between rover and reference station */
         if ((ns=selcomsat(obs,&rtk,nu,nr,popt,sat,usat,rsat))<=0) continue;
 
-        /* asign common satellites to movement model */
-        MoveModel.SetComSatList(rsat,usat,sat,ns);
-        /* set gps and bds observation of states movement */
-        MoveModel.SetObs(obs,nu+nr);
-        /* states movement model for predicting the states */
-        MoveModel.drift(States,rtk.tt);
+        for (i=0;i<ARC_PF_ITERS;i++) {
+            if (i==0) {
+                /* asign common satellites to movement model */
+                MoveModel.SetComSatList(rsat,usat,sat,ns);
+                /* set gps and bds observation of states movement */
+                MoveModel.SetObs(obs,nu+nr);
+                /* states movement model for predicting the states */
+                MoveModel.drift(States,rtk.tt);
+                /* set the observations of gps and bds */
+                ObsModel.SetObs(obs,nr+nu);
+            } else {
+                MoveModel.SetRoverStd(MoveModel.getRoverStd()/2.0);
+                MoveModel.SetAmbStd(MoveModel.getAmbMin()/2.0,MoveModel.getAmbMax()/2.0);
+            }
+            /* set the states of observation model */
+            ObsModel.setStates(States);
 
-        /* set the states of observation model */
-        ObsModel.setStates(States);
-        /* set the observations of gps and bds */
-        ObsModel.SetObs(obs,nr+nu);
-
-        /* particle filter */
-        PF.filter();
-        /* save particle result to rtk_t type struct */
-        States=PF.getMmseEstimate();
+            /* particle filter */
+            PF.filter();
+            /* save particle result to rtk_t type struct */
+            States=PF.getMmseEstimate();
+        }
+        MoveModel.SetRoverStd(ARC_PF_ROVERPOS_STD);
+        MoveModel.SetAmbStd(ARC_PF_AMB_MIN,ARC_PF_AMB_MAX);
 
         fp_pf<<setiosflags(ios::fixed)<<setprecision(10);
         for (int i=0;i<6;i++) fp_pf<<PF.getMmseEstimate().getStateValue(i)<<"  ";
         fp_pf<<std::endl;
+        LOG(INFO)<<"Particle Filter is Running ... : "
+                 <<setiosflags(ios::fixed)<<setprecision(6)
+                 <<PF.getMmseEstimate().getStateValue(0)<<"   "
+                 <<PF.getMmseEstimate().getStateValue(1)<<"   "
+                 <<PF.getMmseEstimate().getStateValue(2);
     }
     rtkfree(&rtk);
 }
@@ -275,13 +270,11 @@ static void readpreceph(char **infile, int n, const prcopt_t *prcopt,
 {
     seph_t seph0={0};
     int i;
-    char *ext;
 
     trace(ARC_INFO,"readpreceph: n=%d\n",n);
 
     nav->ne=nav->nemax=0;
     nav->nc=nav->ncmax=0;
-    nav->nf=nav->nfmax=0;
 
     /* read precise ephemeris files */
     for (i=0;i<n;i++) {
@@ -292,14 +285,6 @@ static void readpreceph(char **infile, int n, const prcopt_t *prcopt,
     for (i=0;i<n;i++) {
         if (strstr(infile[i],"%r")||strstr(infile[i],"%b")) continue;
         readrnxc(infile[i],nav);
-    }
-    /* read satellite fcb files */
-    for (i=0;i<n;i++) {
-        if (strstr(infile[i],"%r")||strstr(infile[i],"%b")) continue;
-        if ((ext=strrchr(infile[i],'.'))&&
-            (!strcmp(ext,".fcb")||!strcmp(ext,".FCB"))) {
-            readfcb(infile[i],nav);
-        }
     }
     /* allocate sbas ephemeris */
     nav->ns=nav->nsmax=NSATSBS*2;
@@ -313,8 +298,6 @@ static void readpreceph(char **infile, int n, const prcopt_t *prcopt,
 /* free prec ephemeris and sbas data -----------------------------------------*/
 static void freepreceph(nav_t *nav)
 {
-    int i;
-
     trace(ARC_INFO,"freepreceph:\n");
 
     free(nav->peph); nav->peph=NULL; nav->ne=nav->nemax=0;
@@ -327,7 +310,7 @@ static int readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
                       const int *index, int n, const prcopt_t *prcopt,
                       obs_t *obs, nav_t *nav, sta_t *sta)
 {
-    int i,j,ind=0,nobs=0,rcv=1;
+    int i,ind=0,nobs=0,rcv=1;
 
     trace(ARC_INFO,"readobsnav: ts=%s n=%d\n",time_str(ts,0),n);
 
@@ -346,18 +329,16 @@ static int readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
         /* read rinex obs and nav file */
         if (readrnxt(infile[i],rcv,ts,te,ti,prcopt->rnxopt[rcv<=1?0:1],obs,nav,
                      rcv<=2?sta+rcv-1:NULL)<0) {
-            checkbrk("error : insufficient memory");
             trace(ARC_WARNING,"insufficient memory\n");
             return 0;
         }
     }
     if (obs->n<=0) {
-        checkbrk("readobsnav : error , no obs data");
+        trace(ARC_WARNING,"readobsnav : error , no obs data");
         return 0;
     }
     if (nav->n<=0&&nav->ng<=0&&nav->ns<=0) {
-        checkbrk("readobsnav : error , no nav data");
-        trace(ARC_WARNING,"\n");
+        trace(ARC_WARNING,"readobsnav : error , no nav data \n");
         return 0;
     }
     /* sort observation data */
@@ -610,8 +591,7 @@ static int execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
 /* execute processing session for each rover ---------------------------------*/
 static int execses_r(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
                      const solopt_t *sopt, const filopt_t *fopt, int flag,
-                     char **infile, const int *index, int n, char *outfile,
-                     const char *rov)
+                     char **infile, const int *index, int n, char *outfile)
 {
     int stat=0;
 
@@ -624,10 +604,9 @@ static int execses_r(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
 /* execute processing session for each base station --------------------------*/
 static int execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
                      const solopt_t *sopt, const filopt_t *fopt, int flag,
-                     char **infile, const int *index, int n, char *outfile,
-                     const char *rov, const char *base)
+                     char **infile, const int *index, int n, char *outfile)
 {
-    int i,stat=0;
+    int stat=0;
 
     trace(ARC_INFO,"execses_b: n=%d outfile=%s\n",n,outfile);
 
@@ -635,62 +614,17 @@ static int execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
     readpreceph(infile,n,popt,&navs);
 
     /* execute processing session */
-    stat=execses_r(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile,rov);
+    stat=execses_r(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile);
 
     /* free prec ephemeris and sbas data */
     freepreceph(&navs);
 
     return stat;
 }
-/* post-processing positioning -------------------------------------------------
-* post-processing positioning
-* args   : gtime_t ts       I   processing start time (ts.time==0: no limit)
-*        : gtime_t te       I   processing end time   (te.time==0: no limit)
-*          double ti        I   processing interval  (s) (0:all)
-*          double tu        I   processing unit time (s) (0:all)
-*          prcopt_t *popt   I   processing options
-*          solopt_t *sopt   I   solution options
-*          filopt_t *fopt   I   file options
-*          char   **infile  I   input files (see below)
-*          int    n         I   number of input files
-*          char   *outfile  I   output file ("":stdout, see below)
-*          char   *rov      I   rover id list        (separated by " ")
-*          char   *base     I   base station id list (separated by " ")
-* return : status (0:ok,0>:error,1:aborted)
-* notes  : input files should contain observation data, navigation data, precise
-*          ephemeris/clock (optional), sbas log file (optional), ssr message
-*          log file (optional) and tec grid file (optional). only the first
-*          observation data file in the input files is recognized as the rover
-*          data.
-*
-*          the type of an input file is recognized by the file extention as ]
-*          follows:
-*              .sp3,.SP3,.eph*,.EPH*: precise ephemeris (sp3c)
-*              .sbs,.SBS,.ems,.EMS  : sbas message log files (rtklib or ems)
-*              .lex,.LEX            : qzss lex message log files
-*              .rtcm3,.RTCM3        : ssr message log files (rtcm3)
-*              .*i,.*I              : tec grid files (ionex)
-*              .fcb,.FCB            : satellite fcb
-*              others               : rinex obs, nav, gnav, hnav, qnav or clock
-*
-*          inputs files can include wild-cards (*). if an file includes
-*          wild-cards, the wild-card expanded multiple files are used.
-*
-*          inputs files can include keywords. if an file includes keywords,
-*          the keywords are replaced by date, time, rover id and base station
-*          id and multiple session analyses run. refer reppath() for the
-*          keywords.
-*
-*          the output file can also include keywords. if the output file does
-*          not include keywords. the results of all multiple session analyses
-*          are output to a single output file.
-*
-*          ssr corrections are valid only for forward estimation.
-*-----------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------*/
 extern int arc_srtk(gtime_t ts, gtime_t te, double ti, double tu,
                     const prcopt_t *popt, const solopt_t *sopt,
-                    const filopt_t *fopt, char **infile, int n, char *outfile,
-                    const char *rov, const char *base)
+                    const filopt_t *fopt, char **infile, int n, char *outfile)
 {
     int i,stat=0,index[MAXINFILE]={0};
 
@@ -702,7 +636,7 @@ extern int arc_srtk(gtime_t ts, gtime_t te, double ti, double tu,
     for (i=0;i<n;i++) index[i]=i;
 
     /* execute processing session */
-    stat=execses_b(ts,te,ti,popt,sopt,fopt,1,infile,index,n,outfile,rov,base);
+    stat=execses_b(ts,te,ti,popt,sopt,fopt,1,infile,index,n,outfile);
 
     /* close processing session */
     closeses(&navs,&pcvss,&pcvsr);

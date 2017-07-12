@@ -1115,8 +1115,7 @@ extern int estpos(const obsd_t *obs, int n, const double *rs, const double *dts,
                   double *resp, char *msg);
 extern int arc_srtk(gtime_t ts, gtime_t te, double ti, double tu,
                     const prcopt_t *popt, const solopt_t *sopt,
-                    const filopt_t *fopt, char **infile, int n, char *outfile,
-                    const char *rov, const char *base);
+                    const filopt_t *fopt, char **infile, int n, char *outfile);
 
 /* application defined functions ---------------------------------------------*/
 extern int showmsg(char *format,...);

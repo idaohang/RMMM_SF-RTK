@@ -173,6 +173,9 @@ namespace ARC {
     
     ARC_MovementModel::ARC_MovementModel() :
             libPF::MovementModel<ARC_States>() {
+        PF_ROVERPOS_STD=ARC_PF_ROVERPOS_STD;
+        PF_AMB_MIN=ARC_PF_AMB_MIN;
+        PF_AMB_MAX=ARC_PF_AMB_MAX;
         m_RNG = new libPF::CRandomNumberGenerator();
     }
     ARC_MovementModel::~ARC_MovementModel() {
@@ -192,8 +195,8 @@ namespace ARC {
         for (int i=0;i<m_SRTK->nx;i++) {
             if (state.getStateValue(i)==0.0)
                 continue;
-            if (i<3) state.SetStatesValue(state.getStateValue(i)+m_RNG->getGaussian(2.0),i);
-            else     state.SetStatesValue(state.getStateValue(i)+m_RNG->getGaussian(0.001),i);
+            if (i<3) state.SetStatesValue(state.getStateValue(i)+m_RNG->getGaussian(PF_ROVERPOS_STD),i);
+            else     state.SetStatesValue(double(int(state.getStateValue(i)+m_RNG->getUniform(PF_AMB_MIN,PF_AMB_MAX))),i);
         }
     }
 }

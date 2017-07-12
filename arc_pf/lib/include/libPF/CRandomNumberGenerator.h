@@ -46,6 +46,13 @@ class CRandomNumberGenerator :
      * @return random number between min and max, uniform distributed.
      */
     double getUniform(double min = 0.0, double max = 1.0) const;
+    /**
+     * Generates a uniform distributed random integer number between min and max.
+     * @param min the minimum value, default is -1.0
+     * @param max the maximum value, default is  1.0
+     * @return random integer number between min and max, uniform distributed.
+     */
+    double getRandInt(double min=-1.0,double max=1.0) const;
 
   protected:
 

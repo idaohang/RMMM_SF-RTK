@@ -25,13 +25,17 @@
 #define ARC_ARC_PF_H
 
 #define ARC_PF_BASEPOS_STD                 (1.0)           /// initial standard deviation of base station position (m)
-#define ARC_PF_ROVERPOS_STD                (100.0)         /// initial standard deviation of rover station position (m)
+#define ARC_PF_ROVERPOS_STD                (5.0)           /// initial standard deviation of rover station position (m)
 #define ARC_PF_BASECLK_STD                 (200.0)         /// initial standard deviation of base station clock drift (m)
 #define ARC_PF_ROVERCLK_STD                (200.0)         /// initial standard deviation of rover station clock drift (m)
 #define ARC_PF_BASETROP_STD                (5.0)           /// initial standard deviation of base station trosphere delay (m)
 #define ARC_PF_ROVERTROP_STD               (5.0)           /// initial standard deviation of rover station trosphere delay (m)
-#define ARC_PF_AMB_STD                     (10.0)          /// initial standard deviation of single-difference ambguity (cycle)
+#define ARC_PF_AMB_STD                     (0.5)           /// initial standard deviation of single-difference ambguity (cycle)
 #define NF(opt) ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf) /// how many frequency of gnss data
+#define ARC_PF_AMB_MIN                     (-3)
+#define ARC_PF_AMB_MAX                     (+3)
+#define ARC_PF_ITERS                       1
+#define ARC_PF_NUM                         5000            /// particle numbers
 
 #define SQR(x)      ((x)*(x))
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))

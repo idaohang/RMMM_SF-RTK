@@ -15,7 +15,7 @@ int main()
     solopt_t arc_solopt = solopt_default;
 
     arc_opt.mode = PMODE_STATIC;
-    arc_opt.ionoopt = IONOOPT_OFF;
+    arc_opt.ionoopt = IONOOPT_SBAS;
     arc_opt.tropopt = TROPOPT_SAAS;
     arc_opt.modear = ARMODE_FIXHOLD;                    //AR mode(0:off, 1 : continuous, 2 : instantaneous（瞬时的）, 3 : fix and hold, 4 : ppp - ar) * /
     arc_opt.bdsmodear = 1;
@@ -30,7 +30,7 @@ int main()
     arc_opt.rb[2] = 2435512.0331;
 
     arc_opt.nf = 1;                                     // 解算频率
-    arc_opt.elmin = 10.0 * D2R;
+    arc_opt.elmin = 15.0 * D2R;
     arc_opt.navsys = SYS_GPS;
     arc_opt.dynamics=0;
 
@@ -55,10 +55,10 @@ int main()
     strcpy(infile[1], baseobsf);
     strcpy(infile[2], navf);
 
-    tracelevel(ARC_INFO);
+    tracelevel(ARC_NOLOG);
     tracebuf(10);
 
-    arc_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile, base, rover);
+    arc_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile);
 
     return 0;
 }

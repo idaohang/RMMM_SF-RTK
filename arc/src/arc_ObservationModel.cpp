@@ -23,6 +23,7 @@
  * @brief SRTK Observation Model source file
  * @author SuJingLan
  */
+#include <arc.h>
 #include "arc.h"
 #include "arc_ObservationModel.h"
 #include "glog/logging.h"
@@ -57,10 +58,9 @@ static int selsat(const obsd_t *obs, double *azel, int nu, int nr,
     return k;
 }
 /* undifferenced phase/code residual for satellite ---------------------------*/
-static void zdres_sat(int base, double r, const obsd_t *obs,
-                      const nav_t *nav,
-                      const double *azel, const double *dant,
-                      const prcopt_t *opt, double *y)
+static void zdres_sat(int base, double r, const obsd_t *obs,const nav_t *nav,
+                      const double *azel, const double *dant,const prcopt_t *opt,
+                      double *y,double dion)
 {
     const double *lam=nav->lam[obs->sat-1];
     int i=0,nf=1;
@@ -72,8 +72,8 @@ static void zdres_sat(int base, double r, const obsd_t *obs,
                 &opt->snrmask)) return;
 
     /* residuals = observable - pseudorange */
-    if (obs->L[i]!=0.0) y[i   ]=obs->L[i]*lam[i]-r-dant[i];
-    if (obs->P[i]!=0.0) y[i+nf]=obs->P[i]       -r-dant[i];
+    if (obs->L[i]!=0.0) y[i   ]=obs->L[i]*lam[i]-r-dant[i]+dion;
+    if (obs->P[i]!=0.0) y[i+nf]=obs->P[i]       -r-dant[i]-dion;
 }
 /* undifferenced phase/code residuals ----------------------------------------*/
 static int zdres(int base, const obsd_t *obs, int n, const double *rs,
@@ -82,7 +82,7 @@ static int zdres(int base, const obsd_t *obs, int n, const double *rs,
                  double *e, double *azel)
 {
     double r,rr_[3],pos[3],dant[NFREQ]={0},disp[3];
-    double zhd,zazel[]={0.0,90.0*D2R};
+    double zhd,zazel[]={0.0,90.0*D2R},dion=0.0,vion=0.0;
     int i=0,nf=1;
 
     for (i=0;i<n*nf*2;i++) y[i]=0.0;
@@ -115,11 +115,15 @@ static int zdres(int base, const obsd_t *obs, int n, const double *rs,
         zhd=tropmodel(obs[0].time,pos,zazel,0.0);
         r+=tropmapf(obs[i].time,pos,azel+i*2,NULL)*zhd;
 
+        /* ionospheric corrections */
+        if (!ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
+                      IONOOPT_BRDC,&dion,&vion)) continue;
+
         /* receiver antenna phase center correction */
         antmodel(opt->pcvr+index,opt->antdel[index],azel+i*2,opt->posopt[1],
                  dant);
         /* undifferenced phase/code residual for satellite */
-        zdres_sat(base,r,obs+i,nav,azel+i*2,dant,opt,y+i*nf*2);
+        zdres_sat(base,r,obs+i,nav,azel+i*2,dant,opt,y+i*nf*2,dion);
     }
     return 1;
 }
@@ -145,8 +149,8 @@ static int test_sys(int sys, int m)
 }
 /* double-differenced phase/code residuals -----------------------------------*/
 static int ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
-                 const int *sat, double *y,
-                 double *azel, const int *iu, const int *ir, int ns, double *v)
+                 const int *sat, double *y,double *azel, const int *iu,
+                 const int *ir, int ns, double *v)
 {
     prcopt_t *opt=&rtk->opt;
     double posu[3],posr[3];
@@ -160,7 +164,7 @@ static int ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
     }
     for (m=0;m<4;m++)
 
-        for (f=0;f<nf*2;f++) {
+        for (f=0;f<nf;f++) {
 
             /* search reference satellite with highest elevation */
             for (i=-1,j=0;j<ns;j++) {
@@ -223,19 +227,62 @@ static double intpres(gtime_t time, const obsd_t *obs, int n, const nav_t *nav,
         for (j=0;j<nb;j++) if (obsb[j].sat==obs[i].sat) break;
         if (j>=nb) continue;
         for (k=0,p=y+i*nf*2,q=yb+j*nf*2;k<nf*2;k++,p++,q++) {
-            if (*p==0.0||*q==0.0) *p=0.0; else *p=(ttb*(*p)-tt*(*q))/(ttb-tt);
+            if (*p==0.0||*q==0.0) *p=0.0;
+            else *p=(ttb*(*p)-tt*(*q))/(ttb-tt);
         }
     }
     return fabs(ttb)>fabs(tt)?ttb:tt;
 }
+/* single-difference residual ------------------------------------------------*/
+static int sdres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
+                 const int *sat, double *y,double *azel, const int *iu,
+                 const int *ir, int ns, double *v)
+{
+    prcopt_t *opt=&rtk->opt;
+    double posu[3],posr[3];
+    double lamj;
+    int i,j,m,f,ff,nv=0,sysj,nf=1;
+
+    ecef2pos(x,posu); ecef2pos(opt->rb,posr);
+
+    for (i=0;i<MAXSAT;i++) for (j=0;j<NFREQ;j++) {
+        rtk->ssat[i].resp[j]=rtk->ssat[i].resc[j]=0.0;
+    }
+    for (m=0;m<4;m++)
+
+        for (f=0;f<2*nf;f++) {
+
+            /* make double difference */
+            for (j=0;j<ns;j++) {
+                sysj=rtk->ssat[sat[j]-1].sys;
+                if (!test_sys(sysj,m)) continue;
+                if (!validobs(iu[j],ir[j],f,nf,y)) continue;
+
+                ff=f%nf;
+                lamj=nav->lam[sat[j]-1][ff];
+                if (lamj<=0.0) continue;
+
+                /* single-differenced residual */
+                v[nv]=y[f+iu[j]*nf*2]-y[f+ir[j]*nf*2];
+
+                /* double-differenced phase-bias term */
+                if (f<nf) {
+                    v[nv]-=lamj*x[IB(sat[j],f,opt)];
+                }
+                nv++;
+            }
+        }
+    return nv;
+}
 /* relative positioning ------------------------------------------------------*/
 static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
-                  const nav_t *nav,double *sdy,double *ddy,int *nsdy,int *nddy)
+                  const nav_t *nav,const double *rr,double *ddy,int *nddy,
+                  double *sdy,int* nsdy)
 {
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
-    double *rs,*dts,*var,*y,*e,*azel,*v,*R,dt;
-    int i=0,j=0,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT];
+    double *rs,*dts,*var,*y,*e,*azel,dt;
+    int i=0,n=nu+nr,ns,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT];
     int svh[MAXOBS*2];
     int nf=1;
 
@@ -265,22 +312,16 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
         return 0;
     }
-    ny=ns*nf*2+2;
-    v=mat(ny,1);
+    zdres(0,obs,nu,rs,dts,svh,nav,rr,opt,0,y,e,azel);
 
-    zdres(0,obs,nu,rs,dts,svh,nav,rtk->x,opt,0,y,e,azel);
-    nv=ddres(rtk,nav,dt,rtk->x,sat,y,azel,iu,ir,ns,v);
-    for (i=0;i<nv;i++) ddy[i]=v[i];
-    for (i=0;i<n;i++) {
-        for (j=0;j<2;j++) sdy[2*i+j]=y[i*2+j];
-    }
-    *nsdy=n; *nddy=nv;
+    *nddy=ddres(rtk,nav,dt,rr,sat,y,azel,iu,ir,ns,ddy);
+    *nsdy=sdres(rtk,nav,dt,rr,sat,y,azel,iu,ir,ns,sdy);
     free(rs); free(dts); free(var);
-    free(y); free(e); free(azel); free(v);
+    free(y); free(e); free(azel);
     return 1;
 }
 static int arc_measure(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav,
-                       double *sdy,double *ddy,int *nsdy,int *nddy)
+                       const double *rr,double *ddy,int *nddy, double* sdy,int *nsdy)
 {
     int nu,nr;
 
@@ -289,7 +330,7 @@ static int arc_measure(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav,
     for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
 
     /* compute relative positioning double-difference residuals,modified from rtklib */
-    relpos(rtk,obs,nu,nr,nav,sdy,ddy,nsdy,nddy);
+    relpos(rtk,obs,nu,nr,nav,rr,ddy,nddy,sdy,nsdy);
     return 1;
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -314,22 +355,25 @@ namespace ARC {
     }
     double ARC_ObservationModel::measure(const ARC_States &state) const {
 
-        static double Y[MAXSAT*2];
+        int NDDY,NSDY;
         static double DDY[MAXSAT];
-        
-        double *xb=mat(1,m_RTK->nx);
-        int NY,NDDY;
-        matcpy(xb,m_RTK->x,m_RTK->nx,1);
+        static double SDY[MAXSAT];
+        static double Xp[MAXPFSTETAS];
+        static double RefRes=0.0;
+        double sum=0.0,ave=0.0;
+
+        for (int i=0;i<m_RTK->nx;i++) Xp[i]=state.getStateValue(i);
         for (int i=0;i<m_RTK->nx;i++) {
             m_RTK->x[i]=state.getStateValue(i);
         }
-        arc_measure(m_RTK,m_OBS,m_NObs,m_NAV,Y,DDY,&NY,&NDDY);
+        arc_measure(m_RTK,m_OBS,m_NObs,m_NAV,Xp,DDY,&NDDY,SDY,&NSDY);
 
-        matcpy(m_RTK->x,xb,m_RTK->nx,1);
-        double sum=0.0;
-        for (int i=0;i<NDDY;i++) sum+=SQR(DDY[i]);
-        free(xb);
-        return 1.0/SQRT(sum);
+        if (RefRes==0.0) {
+            for (int i=0;i<NSDY;i++) ave+=SDY[i];
+            RefRes=ave/NSDY;
+        }
+        for (int i=0;i<NSDY;i++) sum+=SQR(SDY[i]-RefRes);
+        return 1.0/SQRT(sum/double(NSDY));
     }
 }
 
