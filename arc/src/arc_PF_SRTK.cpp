@@ -31,6 +31,7 @@
 #include "arc_MovementModel.h"
 #include <iomanip>
 #include <fstream>
+#include <arc.h>
 
 using namespace std;
 /* constants/global variables ------------------------------------------------*/
@@ -169,7 +170,6 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
     rtk_t rtk;
     obsd_t obs[MAXOBS*2];
     gtime_t time={0};
-    double rb[3]={0};
     int i,nobs,n,ns,rsat[MAXSAT],usat[MAXSAT],nu=0,nr=0,sat[MAXSAT],first=1;
     char msg[126];
 
@@ -382,7 +382,6 @@ static int avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
         if (j<=0||!screent(data[0].time,ts,ts,1.0)) continue; /* only 1 hz */
 
         if (!pntpos(data,j,nav,opt,&sol,NULL,NULL,msg)) continue;
-
         for (i=0;i<3;i++) ra[i]+=sol.rr[i];
         n++;
     }
@@ -411,7 +410,6 @@ static int antpos(prcopt_t *opt, int rcvno, const obs_t *obs, const nav_t *nav,
     }
     else if (postype==POSOPT_RINEX) { /* get from rinex header */
         if (norm(stas[rcvno==1?0:1].pos,3)<=0.0) {
-            showmsg("error : no position in rinex header");
             trace(ARC_WARNING,"no position position in rinex header\n");
             return 0;
         }
@@ -439,13 +437,11 @@ static int openses(const prcopt_t *popt, const solopt_t *sopt,
 
     /* read satellite antenna parameters */
     if (*fopt->satantp&&!(readpcv(fopt->satantp,pcvs))) {
-        showmsg("error : no sat ant pcv in %s",fopt->satantp);
         trace(ARC_WARNING,"sat antenna pcv read error: %s\n",fopt->satantp);
         return 0;
     }
     /* read receiver antenna parameters */
     if (*fopt->rcvantp&&!(readpcv(fopt->rcvantp,pcvr))) {
-        showmsg("error : no rec ant pcv in %s",fopt->rcvantp);
         trace(ARC_WARNING,"rec antenna pcv read error: %s\n",fopt->rcvantp);
         return 0;
     }

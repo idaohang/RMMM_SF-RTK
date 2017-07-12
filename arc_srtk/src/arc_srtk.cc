@@ -17,7 +17,6 @@
 
 #define PRN_HWBIAS  1E-6     /* process noise of h/w bias (m/MHz/sqrt(s)) */
 #define GAP_RESION  120      /* gap to reset ionosphere parameters (epochs) */
-#define MAXACC      30.0     /* max accel for doppler slip detection (m/s^2) */
 
 #define VAR_HOLDAMB 0.001    /* constraint to hold ambiguity (cycle^2) */
 
@@ -40,44 +39,11 @@
 #define IL(f,opt)   (NP(opt)+NI(opt)+NT(opt)+(f))   /* receiver h/w bias */
 #define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1) /* phase bias (s:satno,f:freq) */
 
-/* global variables ----------------------------------------------------------*/
-static int statlevel=0;          /* rtk status output level (0:off) */
-static FILE *fp_stat=NULL;       /* rtk status file pointer */
-static char file_stat[1024]="";  /* rtk status file original path */
-static gtime_t time_stat={0};    /* rtk status file time */
-
-/* save error message --------------------------------------------------------*/
-static void errmsg(rtk_t *rtk, const char *format, ...)
-{
-    char buff[256],tstr[32];
-    int n;
-    va_list ap;
-    time2str(rtk->sol.time,tstr,2);
-    n=sprintf(buff,"%s: ",tstr+11);
-    va_start(ap,format);
-    n+=vsprintf(buff+n,format,ap);
-    va_end(ap);
-    n=n<MAXERRMSG-rtk->neb?n:MAXERRMSG-rtk->neb;
-    memcpy(rtk->errbuf+rtk->neb,buff,n);
-    rtk->neb+=n;
-    trace(2,"%s",buff);
-}
 /* single-differenced observable ---------------------------------------------*/
 static double sdobs(const obsd_t *obs, int i, int j, int f)
 {
     double pi=f<NFREQ?obs[i].L[f]:obs[i].P[f-NFREQ];
     double pj=f<NFREQ?obs[j].L[f]:obs[j].P[f-NFREQ];
-    return pi==0.0||pj==0.0?0.0:pi-pj;
-}
-/* single-differenced geometry-free linear combination of phase --------------*/
-static double gfobs_L1L2(const obsd_t *obs, int i, int j, const double *lam)
-{
-    double pi=sdobs(obs,i,j,0)*lam[0],pj=sdobs(obs,i,j,1)*lam[1];
-    return pi==0.0||pj==0.0?0.0:pi-pj;
-}
-static double gfobs_L1L5(const obsd_t *obs, int i, int j, const double *lam)
-{
-    double pi=sdobs(obs,i,j,0)*lam[0],pj=sdobs(obs,i,j,2)*lam[2];
     return pi==0.0||pj==0.0?0.0:pi-pj;
 }
 /* single-differenced measurement error variance -----------------------------*/
@@ -297,21 +263,21 @@ static void detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
         /* detect slip by cycle slip flag in LLI */
         if (rtk->tt>=0.0) { /* forward */
             if (obs[i].LLI[f]&1) {
-                errmsg(rtk,"slip detected forward (sat=%2d rcv=%d F=%d LLI=%x)\n",
+                trace(ARC_WARNING,"slip detected forward (sat=%2d rcv=%d F=%d LLI=%x)\n",
                        sat,rcv,f+1,obs[i].LLI[f]);
             }
             slip=obs[i].LLI[f];
         }
         else { /* backward */
             if (LLI&1) {
-                errmsg(rtk,"slip detected backward (sat=%2d rcv=%d F=%d LLI=%x)\n",
+                trace(ARC_WARNING,"slip detected backward (sat=%2d rcv=%d F=%d LLI=%x)\n",
                        sat,rcv,f+1,LLI);
             }
             slip=LLI;
         }
         /* detect slip by parity unknown flag transition in LLI */
         if (((LLI&2)&&!(obs[i].LLI[f]&2))||(!(LLI&2)&&(obs[i].LLI[f]&2))) {
-            errmsg(rtk,"slip detected half-cyc (sat=%2d rcv=%d F=%d LLI=%x->%x)\n",
+            trace(ARC_WARNING,"slip detected half-cyc (sat=%2d rcv=%d F=%d LLI=%x->%x)\n",
                    sat,rcv,f+1,LLI,obs[i].LLI[f]);
             slip|=1;
         }
@@ -726,7 +692,7 @@ static int ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
                     rtk->ssat[sat[i]-1].rejc[f]++;
                     rtk->ssat[sat[j]-1].rejc[f]++;
                 }
-                errmsg(rtk,"outlier rejected (sat=%3d-%3d %s%d v=%.3f)\n",
+                trace(ARC_WARNING,"outlier rejected (sat=%3d-%3d %s%d v=%.3f)\n",
                        sat[i],sat[j],f<nf?"L":"P",f%nf+1,v[nv]);
                 continue;
             }
@@ -918,7 +884,7 @@ static void holdamb(rtk_t *rtk, const double *xa)
         
         /* update states with constraints */
         if ((info=filter(rtk->x,rtk->P,H,v,R,rtk->nx,nv))) {
-            errmsg(rtk,"filter error (info=%d)\n",info);
+            trace(ARC_WARNING,"filter error (info=%d)\n",info);
         }
         free(R);
     }
@@ -942,7 +908,7 @@ static int resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
     /* single to double-difference transformation matrix (D') */
     D=zeros(nx,nx);
     if ((nb=ddmat(rtk,D))<=0) {
-        errmsg(rtk,"no valid double-difference\n");
+        trace(ARC_WARNING,"no valid double-difference\n");
         free(D);
         return 0;
     }
@@ -998,13 +964,13 @@ static int resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
             else nb=0;
         }
         else { /* validation failed */
-            errmsg(rtk,"ambiguity validation failed (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
+            trace(ARC_WARNING,"ambiguity validation failed (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
                    nb,s[1]/s[0],s[0],s[1]);
             nb=0;
         }
     }
     else {
-        errmsg(rtk,"lambda error (info=%d)\n",info);
+        trace(ARC_WARNING,"lambda error (info=%d)\n",info);
     }
     free(D); free(y); free(Qy); free(DP);
     free(b); free(db); free(Qb); free(Qab); free(QQ);
@@ -1029,7 +995,7 @@ static int valpos(rtk_t *rtk, const double *v, const double *R, const int *vflg,
         type=(vflg[i]>> 4)&0xF;
         freq=vflg[i]&0xF;
         strcpy(stype,type==0?"L":(type==1?"L":"C"));
-        errmsg(rtk,"large residual (sat=%2d-%2d %s%d v=%6.3f sig=%.3f)\n",
+        trace(ARC_WARNING,"large residual (sat=%2d-%2d %s%d v=%6.3f sig=%.3f)\n",
               sat1,sat2,stype,freq+1,v[i],SQRT(R[i+i*nv]));
     }
     return stat;
@@ -1064,7 +1030,7 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* undifferenced residuals for base station */
     if (!zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,rtk->rb,opt,1,
                y+nu*nf*2,e+nu*3,azel+nu*2)) {
-        errmsg(rtk,"initial base station position error\n");
+        trace(ARC_WARNING,"initial base station position error\n");
         
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
         return 0;
@@ -1075,7 +1041,7 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     }
     /* select common satellites between rover and base-station */
     if ((ns=selsat(obs,azel,nu,nr,opt,sat,iu,ir))<=0) {
-        errmsg(rtk,"no common satellite\n");
+        trace(ARC_WARNING,"no common satellite\n");
         
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
         return 0;
@@ -1097,20 +1063,20 @@ static int relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     for (i=0;i<niter;i++) {
         /* undifferenced residuals for rover */
         if (!zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
-            errmsg(rtk,"rover initial position error\n");
+            trace(ARC_WARNING,"rover initial position error\n");
             stat=SOLQ_NONE;
             break;
         }
         /* double-differenced residuals and partial derivatives */
         if ((nv=ddres(rtk,nav,dt,xp,Pp,sat,y,e,azel,iu,ir,ns,v,H,R,vflg))<1) {
-            errmsg(rtk,"no double-differenced residual\n");
+            trace(ARC_WARNING,"no double-differenced residual\n");
             stat=SOLQ_NONE;
             break;
         }
         /* kalman filter measurement update */
         matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
         if ((info=filter(xp,Pp,H,v,R,rtk->nx,nv))) {
-            errmsg(rtk,"filter error (info=%d)\n",info);
+            trace(ARC_WARNING,"filter error (info=%d)\n",info);
             stat=SOLQ_NONE;
             break;
         }
@@ -1337,7 +1303,7 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     
     /* rover position by single point positioning */
     if (!pntpos(obs,nu,nav,&rtk->opt,&rtk->sol,NULL,rtk->ssat,msg)) {
-        errmsg(rtk,"point pos error (%s)\n",msg);
+        trace(ARC_WARNING,"point pos error (%s)\n",msg);
         if (!rtk->opt.dynamics) {
             return 0;
         }
@@ -1354,20 +1320,20 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     }
     /* check number of data of base station and age of differential */
     if (nr==0) {
-        errmsg(rtk,"no base station observation data for rtk\n");
+        trace(ARC_ERROR,"no base station observation data for rtk\n");
         return 1;
     }
     if (opt->mode==PMODE_MOVEB) { /*  moving baseline */
         
         /* estimate position/velocity of base station */
         if (!pntpos(obs+nu,nr,nav,&rtk->opt,&solb,NULL,NULL,msg)) {
-            errmsg(rtk,"base station position error (%s)\n",msg);
+            trace(ARC_WARNING,"base station position error (%s)\n",msg);
             return 0;
         }
         rtk->sol.age=(float)timediff(rtk->sol.time,solb.time);
         
         if (fabs(rtk->sol.age)>TTOL_MOVEB) {
-            errmsg(rtk,"time sync error for moving-base (age=%.1f)\n",rtk->sol.age);
+            trace(ARC_WARNING,"time sync error for moving-base (age=%.1f)\n",rtk->sol.age);
             return 0;
         }
         for (i=0;i<6;i++) rtk->rb[i]=solb.rr[i];
@@ -1379,7 +1345,7 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
         rtk->sol.age=(float)timediff(obs[0].time,obs[nu].time);
         
         if (fabs(rtk->sol.age)>opt->maxtdiff) {
-            errmsg(rtk,"age of differential error (age=%.1f)\n",rtk->sol.age);
+            trace(ARC_WARNING,"age of differential error (age=%.1f)\n",rtk->sol.age);
             return 1;
         }
     }

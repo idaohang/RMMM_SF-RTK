@@ -389,7 +389,7 @@ static int readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
                       const int *index, int n, const prcopt_t *prcopt,
                       obs_t *obs, nav_t *nav, sta_t *sta)
 {
-    int i,j,ind=0,nobs=0,rcv=1;
+    int i,ind=0,nobs=0,rcv=1;
     
     trace(ARC_INFO,"readobsnav: ts=%s n=%d\n",time_str(ts,0),n);
     
@@ -615,9 +615,8 @@ static int execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
                    const solopt_t *sopt, const filopt_t *fopt, int flag,
                    char **infile, const int *index, int n, char *outfile)
 {
-    FILE *fp;
     prcopt_t popt_=*popt;
-    char tracefile[1024],statfile[1024],path[1024],*ext;
+    char path[1024];
     
     trace(ARC_INFO,"execses : n=%d outfile=%s\n",n,outfile);
     
@@ -701,13 +700,9 @@ static int execses_r(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
                      char **infile, const int *index, int n, char *outfile,
                      const char *rov)
 {
-    gtime_t t0={0};
-    int i,stat=0;
-    char *ifile[MAXINFILE],ofile[1024],*rov_,*p,*q,s[64]="";
+    int stat=0;
     
     trace(ARC_INFO,"execses_r: n=%d outfile=%s\n",n,outfile);
-    
-    for (i=0;i<n;i++) if (strstr(infile[i],"%r")) break;
 
     /* execute processing session */
     stat=execses(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile);
@@ -720,24 +715,17 @@ static int execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
                      char **infile, const int *index, int n, char *outfile,
                      const char *rov, const char *base)
 {
-	LOG(INFO)<<"execute processing session for each base station";
-    gtime_t t0={0};
-    int i,stat=0;
-    char *ifile[MAXINFILE],ofile[1024],*base_,*p,*q,s[64];
+    int stat=0;
     
     trace(ARC_INFO,"execses_b: n=%d outfile=%s\n",n,outfile);
     
     /* read prec ephemeris and sbas data */
-	LOG(INFO)<<"read precise ephemeris ";
     readpreceph(infile,n,popt,&navs);
-    
-    for (i=0;i<n;i++) if (strstr(infile[i],"%b")) break;
 
     /* execute processing session */
     stat=execses_r(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile,rov);
     
     /* free prec ephemeris and sbas data */
-    LOG(INFO)<<"free precise ephemeris and sbas data";
     freepreceph(&navs);
     
     return stat;

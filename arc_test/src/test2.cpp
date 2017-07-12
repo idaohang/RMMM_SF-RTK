@@ -1,7 +1,7 @@
 #include <arc.h>
 #include "glog/logging.h"
-#include "arc.h"
 #define NUMINFILE 10
+
 int main()
 {
     gtime_t ts = { 0 };
@@ -25,9 +25,10 @@ int main()
     arc_opt.refpos = 0;                                 // 0:pos in prcopt
                                                         // (0:pos in prcopt,  1:average of single pos,
                                                         //  2:read from file, 3:rinex header, 4:rtcm pos) 
-    arc_opt.rb[0] = -2392060.4126;
-    arc_opt.rb[1] = 5383990.1051;
-    arc_opt.rb[2] = 2435512.0331;
+    arc_opt.rb[0] = -2405143.8990;
+    arc_opt.rb[1] = 5385195.2549;
+    arc_opt.rb[2] = 2420032.5440;
+    arc_opt.refpos=0;
 
     arc_opt.nf = 1;                                     // 解算频率
     arc_opt.elmin = 15.0 * D2R;
@@ -41,9 +42,10 @@ int main()
 
     filopt_t arc_fopt = fileopt_default;
 
-    const char *roverobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/CLP10160.16o";
-    const char *baseobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/JZD10160.16o";
-    const char *navf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/brdm0160.16p";
+    const char *roverobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hklt//hklt1910.17o";
+    const char *baseobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt//hkkt1910.17o";
+    const char *navf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17n";
+    const char *navf1 = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hklt1910.17n";
 
     for (int i = 0; i < NUMINFILE; i++) {
         if (!(infile[i] = (char *)malloc(1024))) {
@@ -54,11 +56,13 @@ int main()
     strcpy(infile[0], roverobsf);
     strcpy(infile[1], baseobsf);
     strcpy(infile[2], navf);
+    strcpy(infile[3],navf1);
 
     tracelevel(ARC_NOLOG);
     tracebuf(10);
 
     arc_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile);
+    //postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile,rover,base);
 
     return 0;
 }

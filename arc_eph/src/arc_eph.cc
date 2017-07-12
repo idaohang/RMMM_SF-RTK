@@ -355,7 +355,7 @@ static eph_t *seleph(gtime_t time, int sat, int iode, const nav_t *nav)
         if (t<=tmin) {j=i; tmin=t;} /* toe closest to time */
     }
     if (iode>=0||j<0) {
-        trace(3,"no broadcast ephemeris: %s sat=%2d iode=%3d\n",time_str(time,0),
+        trace(ARC_WARNING,"no broadcast ephemeris: %s sat=%2d iode=%3d\n",time_str(time,0),
               sat,iode);
         return NULL;
     }
@@ -685,7 +685,7 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         
         /* satellite clock bias by broadcast ephemeris */
         if (!ephclk(time[i],teph,obs[i].sat,nav,&dt)) {
-            trace(3,"no broadcast clock %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
+            trace(ARC_WARNING,"no broadcast clock %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
             continue;
         }
         time[i]=timeadd(time[i],-dt);

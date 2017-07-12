@@ -27,7 +27,7 @@
 #include "arc_MovementModel.h"
 
 /* single-differenced observable ---------------------------------------------*/
-static double sdobs(const obsd_t *obs, int i, int j, int f)
+static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
 {
     double pi=f<NFREQ?obs[i].L[f]:obs[i].P[f-NFREQ];
     double pj=f<NFREQ?obs[j].L[f]:obs[j].P[f-NFREQ];
@@ -101,7 +101,6 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
         for (i=1;i<=MAXSAT;i++) {
 
             reset=++rtk->ssat[i-1].outc[f]>(unsigned int)rtk->opt.maxout;
-
             if (rtk->opt.modear==ARMODE_INST&&rtk->x[IB(i,f,&rtk->opt)]!=0.0) {
                 X[IB(i,f,&rtk->opt)]=0.0;
             }
@@ -124,8 +123,8 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
 
         /* estimate approximate phase-bias by phase - code */
         for (i=j=0,offset=0.0;i<ns;i++) {
-            cp=sdobs(obs,iu[i],ir[i],f); /* cycle */
-            pr=sdobs(obs,iu[i],ir[i],f+NFREQ);
+            cp=arc_sdobs(obs,iu[i],ir[i],f); /* cycle */
+            pr=arc_sdobs(obs,iu[i],ir[i],f+NFREQ);
             lami=nav->lam[sat[i]-1][f];
             if (cp==0.0||pr==0.0||lami<=0.0) continue;
             bias[i]=cp-pr/lami;
@@ -188,10 +187,12 @@ namespace ARC {
     void ARC_MovementModel::drift(ARC_States &state, double dt) const
     {
         if (Ns<=0) return;
+        ARC_ASSERT_TRUE(Exception,m_SRTK->nx > 0,"Particle Filter States is Zero");
         arc_udstate(m_SRTK,m_OBS,SatList,m_RoverSat,m_BaseSat,Ns,m_NAV,dt,state.getStatesVal());
     }
     void ARC_MovementModel::diffuse(ARC_States &state, double dt) const
     {
+        ARC_ASSERT_TRUE(Exception,m_SRTK->nx > 0,"Particle Filter States is Zero");
         for (int i=0;i<m_SRTK->nx;i++) {
             if (state.getStateValue(i)==0.0)
                 continue;

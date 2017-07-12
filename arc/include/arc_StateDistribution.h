@@ -27,6 +27,7 @@
 #define ARC_ARC_STATEDISTRIBUTION_H
 
 #include "arc_States.h"
+#include "arc_assert_macros.hpp"
 #include <libPF/StateDistribution.h>
 
 namespace libPF {
@@ -38,6 +39,7 @@ namespace ARC {
             public libPF::StateDistribution<ARC_States>
     {
     public:
+        ARC_DEFINE_EXCEPTION(Exception, std::runtime_error);
         ARC_StateDistribution();
         ARC_StateDistribution(const ARC_OPT *OPT,const ARC_RTK* SRTK);
         ~ARC_StateDistribution();
@@ -57,7 +59,7 @@ namespace ARC {
         /// \brief the arc-srtk soliution type
         const ARC_RTK* m_SRTK;
         /// \brief the uniform distribution of states
-        double *m_UniState;
+        mutable double *m_UniState;
     };
 }
 #endif //ARC_ARC_STATEDISTRIBUTION_H

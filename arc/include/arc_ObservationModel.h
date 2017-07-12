@@ -85,9 +85,9 @@ namespace ARC {
         double getWeight();
     private:
         /// \brief the true States of Observation Model
-        ARC_States m_TrueArcState;
+        mutable ARC_States m_TrueArcState;
         /// \brief the numbers of observations
-        int m_NObs;
+        mutable int m_NObs;
         /// \brief arc-srtk solution type
         ARC_RTK* m_RTK;
         /// \brief arc-srtk settings

@@ -84,7 +84,7 @@ namespace ARC {
         }
     private:
         /// \brief need to estimate states,this is same to rtklib
-        double X[MAXPFSTETAS];
+        mutable double X[MAXPFSTETAS];
     };
 }
 #endif //ARC_ARC_STATES_H

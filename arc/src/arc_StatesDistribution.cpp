@@ -26,8 +26,6 @@
 #include <cmath>
 #include <libPF/CRandomNumberGenerator.h>
 #include <arc_StateDistribution.h>
-#include <arc.h>
-#include "arc_StateDistribution.h"
 namespace ARC {
     ARC_StateDistribution::ARC_StateDistribution() {
         m_RNG = new libPF::CRandomNumberGenerator();
@@ -53,6 +51,7 @@ namespace ARC {
     void ARC_StateDistribution::SetUniformofStates(double min,
                                                    double max,
                                                    int index) {
+        ARC_ASSERT_TRUE(Exception,m_SRTK->nx > 0,"Particle Filter States is Zero");
         if (index>=m_SRTK->nx)
             return;
         m_UniState[2*index  ]=min;

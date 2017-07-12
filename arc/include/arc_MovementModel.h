@@ -111,7 +111,7 @@ namespace ARC {
         }
     private:
         /// \brief standard deviation for the states
-        double StdX[MAXPFSTETAS];
+        mutable double StdX[MAXPFSTETAS];
         /// \brief Stores the random number generator
         libPF::RandomNumberGenerationStrategy* m_RNG;
         /// \brief arc-srtk solution type
@@ -121,19 +121,19 @@ namespace ARC {
         /// \brief navigation data type
         const ARC_NAV* m_NAV;
         /// \brief observation data numbers
-        int m_Nobs;
+        mutable int m_Nobs;
         /// \brief common sat numbers
-        int Ns;
+        mutable int Ns;
         /// \brief base and rover station satellite list
-        int m_RoverSat[MAXSAT];
-        int m_BaseSat[MAXSAT];
+        mutable int m_RoverSat[MAXSAT];
+        mutable int m_BaseSat[MAXSAT];
         /// \brief All satellite list
-        int SatList[MAXSAT];
+        mutable int SatList[MAXSAT];
 
         /// \brief particle filter rover position std
-        double PF_ROVERPOS_STD;
+        mutable double PF_ROVERPOS_STD;
         /// \brief particle fiter ambguity min and max search
-        double PF_AMB_MIN,PF_AMB_MAX;
+        mutable double PF_AMB_MIN,PF_AMB_MAX;
     };
 }
 #endif //ARC_ARC_MOVEMENTMODEL_H

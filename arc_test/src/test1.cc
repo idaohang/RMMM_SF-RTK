@@ -45,7 +45,7 @@ int main()
 	tracelevel(ARC_INFO);
 	tracebuf(10);
 
-	arc_srtk(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,6,outfile,base,rover);
+	postpos(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,6,outfile,base,rover);
 
     return 0;
 }
