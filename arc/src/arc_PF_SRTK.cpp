@@ -104,7 +104,8 @@ static int arc_inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int 
     gtime_t time={0};
     int i,n=0;
 
-    arc_log(ARC_INFO, "infunc  : revs=%d iobsu=%d iobsr=%d isbs=%d\n", revs, iobsu, iobsr, isbs);
+    arc_log(ARC_INFO, "arc_infunc  : revs=%d iobsu=%d iobsr=%d isbs=%d\n",
+            revs, iobsu, iobsr, isbs);
 
     if (0<=iobsu&&iobsu<obss.n) {
         settime((time=obss.data[iobsu].time));
@@ -150,7 +151,7 @@ static int arc_selcomsat(const obsd_t *obs, const rtk_t* rtk,int nu, int nr,
 {
     int i,j,k=0;
 
-    arc_log(ARC_INFO, "selsat  : nu=%d nr=%d\n", nu, nr);
+    arc_log(ARC_INFO, "arc_selsat  : nu=%d nr=%d\n", nu, nr);
 
     for (i=0,j=nu;i<nu&&j<nu+nr;i++,j++) {
         if      (obs[i].sat<obs[j].sat) j--;
@@ -173,7 +174,7 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
     int i,nobs,n,ns,rsat[MAXSAT],usat[MAXSAT],nu=0,nr=0,sat[MAXSAT],first=1;
     char msg[126];
 
-    arc_log(ARC_INFO, "procpos : mode=%d\n", mode);
+    arc_log(ARC_INFO, "arc_procpos : mode=%d\n", mode);
 
     /* rtk struct date type initial */
     rtkinit(&rtk,popt);
@@ -272,7 +273,7 @@ static void arc_readpreceph(char **infile, int n, const prcopt_t *prcopt,
     seph_t seph0={0};
     int i;
 
-    arc_log(ARC_INFO, "readpreceph: n=%d\n", n);
+    arc_log(ARC_INFO, "arc_readpreceph: n=%d\n", n);
 
     nav->ne=nav->nemax=0;
     nav->nc=nav->ncmax=0;
@@ -313,7 +314,7 @@ static int arc_readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
 {
     int i,ind=0,nobs=0,rcv=1;
 
-    arc_log(ARC_INFO, "readobsnav: ts=%s n=%d\n", time_str(ts, 0), n);
+    arc_log(ARC_INFO, "arc_readobsnav: ts=%s n=%d\n", time_str(ts, 0), n);
 
     obs->data=NULL; obs->n =obs->nmax =0;
     nav->eph =NULL; nav->n =nav->nmax =0;
@@ -369,7 +370,7 @@ static int arc_avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
     int i,j,n=0,m,iobs;
     char msg[128];
 
-    arc_log(ARC_INFO, "avepos: rcv=%d obs.n=%d\n", rcv, obs->n);
+    arc_log(ARC_INFO, "arc_avepos: rcv=%d obs.n=%d\n", rcv, obs->n);
 
     for (i=0;i<3;i++) ra[i]=0.0;
 
@@ -401,7 +402,7 @@ static int arc_antpos(prcopt_t *opt, int rcvno, const obs_t *obs, const nav_t *n
     int i,postype=rcvno==1?opt->rovpos:opt->refpos;
     char *name;
 
-    arc_log(ARC_INFO, "antpos  : rcvno=%d\n", rcvno);
+    arc_log(ARC_INFO, "arc_antpos  : rcvno=%d\n", rcvno);
 
     if (postype==POSOPT_SINGLE) { /* average of single position */
         if (!arc_avepos(rr,rcvno,obs,nav,opt)) {
@@ -434,7 +435,7 @@ static int arc_openses(const prcopt_t *popt, const solopt_t *sopt,
 {
     int i;
 
-    arc_log(ARC_INFO, "openses :\n");
+    arc_log(ARC_INFO, "arc_openses :\n");
 
     /* read satellite antenna parameters */
     if (*fopt->satantp&&!(readpcv(fopt->satantp,pcvs))) {
@@ -462,7 +463,7 @@ static int arc_openses(const prcopt_t *popt, const solopt_t *sopt,
 /* close procssing session ---------------------------------------------------*/
 static void arc_closeses(nav_t *nav, pcvs_t *pcvs, pcvs_t *pcvr)
 {
-    arc_log(ARC_INFO, "closeses:\n");
+    arc_log(ARC_INFO, "arc_closeses:\n");
 
     /* free antenna parameters */
     free(pcvs->pcv); pcvs->pcv=NULL; pcvs->n=pcvs->nmax=0;
@@ -530,7 +531,7 @@ static int arc_execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
     prcopt_t popt_=*popt;
     char path[1024];
 
-    arc_log(ARC_INFO, "execses : n=%d outfile=%s\n", n, outfile);
+    arc_log(ARC_INFO, "arc_execses : n=%d outfile=%s\n", n, outfile);
 
     /* read erp data */
     arc_log(ARC_INFO, "read erp data : %s \n", fopt->eop);
@@ -591,7 +592,7 @@ static int arc_execses_r(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt
 {
     int stat=0;
 
-    arc_log(ARC_INFO, "execses_r: n=%d outfile=%s\n", n, outfile);
+    arc_log(ARC_INFO, "arc_execses_r: n=%d outfile=%s\n", n, outfile);
     
     /* execute processing session */
     stat=arc_execses(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile);
@@ -604,7 +605,7 @@ static int execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
 {
     int stat=0;
 
-    arc_log(ARC_INFO, "execses_b: n=%d outfile=%s\n", n, outfile);
+    arc_log(ARC_INFO, "arc_execses_b: n=%d outfile=%s\n", n, outfile);
 
     /* read prec ephemeris and sbas data */
     arc_readpreceph(infile,n,popt,&navs);

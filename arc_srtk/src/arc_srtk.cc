@@ -11,13 +11,10 @@
 #define VAR_POS     SQR(30.0) /* initial variance of receiver pos (m^2) */
 #define VAR_VEL     SQR(10.0) /* initial variance of receiver vel ((m/s)^2) */
 #define VAR_ACC     SQR(10.0) /* initial variance of receiver acc ((m/ss)^2) */
-#define VAR_HWBIAS  SQR(1.0)  /* initial variance of h/w bias ((m/MHz)^2) */
 #define VAR_GRA     SQR(0.001) /* initial variance of gradient (m^2) */
 #define INIT_ZWD    0.15     /* initial zwd (m) */
 
-#define PRN_HWBIAS  1E-6     /* process noise of h/w bias (m/MHz/sqrt(s)) */
 #define GAP_RESION  120      /* gap to reset ionosphere parameters (epochs) */
-
 #define VAR_HOLDAMB 0.001    /* constraint to hold ambiguity (cycle^2) */
 
 #define TTOL_MOVEB  (1.0+2*DTTOL)
@@ -471,7 +468,8 @@ extern int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
                 obs[i].sat, rs[i * 6], rs[1 + i * 6], rs[2 + i * 6], dts[i * 2], azel[i * 2] * R2D,
                 azel[1 + i * 2] * R2D);
     }
-    arc_log(ARC_INFO, "arc_zdres : y=\n"); tracemat(4,y,nf*2,n,13,3);
+    arc_log(ARC_INFO, "arc_zdres : y=\n");
+    arc_tracemat(4, y, nf * 2, n, 13, 3);
     
     return 1;
 }
@@ -496,7 +494,8 @@ static void arc_ddcov(const int *nb, int n, const double *Ri, const double *Rj,
             R[k+i+(k+j)*nv]=Ri[k+i]+(i==j?Rj[k+i]:0.0);
         }
     }
-    arc_log(ARC_INFO, "R=\n"); tracemat(5,R,nv,nv,8,6);
+    arc_log(ARC_INFO, "R=\n");
+    arc_tracemat(5, R, nv, nv, 8, 6);
 }
 /* baseline length constraint ------------------------------------------------*/
 static int arc_constbl(rtk_t *rtk, const double *x, const double *P, double *v,
@@ -716,7 +715,8 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
         vflg[nv++]=3<<4;
         nb[b++]++;
     }
-    if (H) { arc_log(ARC_INFO, "arc_ddres : H=\n"); tracemat(5,H,rtk->nx,nv,7,4);}
+    if (H) { arc_log(ARC_INFO, "arc_ddres : H=\n");
+        arc_tracemat(5, H, rtk->nx, nv, 7, 4);}
     
     /* double-differenced measurement error covariance */
     arc_ddcov(nb,b,Ri,Rj,nv,R);
@@ -809,7 +809,8 @@ static int arc_ddmat(rtk_t *rtk, double *D)
             }
         }
     }
-    arc_log(ARC_INFO, "D=\n"); tracemat(5,D,nx,na+nb,2,0);
+    arc_log(ARC_INFO, "D=\n");
+    arc_tracemat(5, D, nx, na + nb, 2, 0);
     return nb;
 }
 /* restore single-differenced ambiguity --------------------------------------*/
@@ -917,13 +918,16 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
     for (i=0;i<nb;i++) for (j=0;j<nb;j++) Qb [i+j*nb]=Qy[na+i+(na+j)*ny];
     for (i=0;i<na;i++) for (j=0;j<nb;j++) Qab[i+j*na]=Qy[   i+(na+j)*ny];
 
-    arc_log(ARC_INFO, "arc_resamb_LAMBDA : N(0)="); tracemat(4,y+na,1,nb,10,3);
+    arc_log(ARC_INFO, "arc_resamb_LAMBDA : N(0)=");
+    arc_tracemat(4, y + na, 1, nb, 10, 3);
     
     /* lambda/mlambda integer least-square estimation */
     if (!(info=lambda(nb,2,y+na,Qb,b,s))) {
 
-        arc_log(ARC_INFO, "N(1)="); tracemat(4,b   ,1,nb,10,3);
-        arc_log(ARC_INFO, "N(2)="); tracemat(4,b+nb,1,nb,10,3);
+        arc_log(ARC_INFO, "N(1)=");
+        arc_tracemat(4, b, 1, nb, 10, 3);
+        arc_log(ARC_INFO, "N(2)=");
+        arc_tracemat(4, b + nb, 1, nb, 10, 3);
         
         rtk->sol.ratio=s[0]>0?(float)(s[1]/s[0]):0.0f;
         if (rtk->sol.ratio>999.9) rtk->sol.ratio=999.9f;
@@ -988,7 +992,8 @@ static int arc_valpos(rtk_t *rtk, const double *v, const double *R, const int *v
         type=(vflg[i]>> 4)&0xF;
         freq=vflg[i]&0xF;
         strcpy(stype,type==0?"L":(type==1?"L":"C"));
-        arc_log(ARC_WARNING, "arc_valpos : large residual (sat=%2d-%2d %s%d v=%6.3f sig=%.3f)\n",
+        arc_log(ARC_WARNING, "arc_valpos : "
+                        "large residual (sat=%2d-%2d %s%d v=%6.3f sig=%.3f)\n",
                 sat1, sat2, stype, freq + 1, v[i], SQRT(R[i + i * nv]));
     }
     return stat;
@@ -1003,7 +1008,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     int i,j,f,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter;
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
     int stat=rtk->opt.mode<=PMODE_DGPS?SOLQ_DGPS:SOLQ_FLOAT;
-    int nf=opt->ionoopt==IONOOPT_IFLC?1:opt->nf;
+    int nf=1;
 
     arc_log(ARC_INFO, "arc_relpos  : nx=%d nu=%d nr=%d\n", rtk->nx, nu, nr);
     
@@ -1042,7 +1047,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* temporal update of states */
     arc_udstate(rtk,obs,sat,iu,ir,ns,nav);
 
-    arc_log(ARC_INFO, "arc_relpos : x(0)="); tracemat(4,rtk->x,1,NR(opt),13,4);
+    arc_log(ARC_INFO, "arc_relpos : x(0)=");
+    arc_tracemat(4, rtk->x, 1, NR(opt), 13, 4);
     
     xp=mat(rtk->nx,1); Pp=zeros(rtk->nx,rtk->nx); xa=mat(rtk->nx,1);
     matcpy(xp,rtk->x,rtk->nx,1);
@@ -1073,7 +1079,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             stat=SOLQ_NONE;
             break;
         }
-        arc_log(ARC_INFO, "arc_relpos : x(%d)=", i + 1); tracemat(4,xp,1,NR(opt),13,4);
+        arc_log(ARC_INFO, "arc_relpos : x(%d)=", i + 1);
+        arc_tracemat(4, xp, 1, NR(opt), 13, 4);
     }
     if (stat!=SOLQ_NONE&&arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
         
@@ -1279,7 +1286,7 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     char msg[128]="";
 
     arc_log(ARC_INFO, "arc_srtkpos  : time=%s n=%d\n", time_str(obs[0].time, 3), n);
-    arc_log(ARC_WARNING, "arc_srtkpos : obs=\n"); traceobs(4,obs,n);
+    arc_log(ARC_WARNING, "arc_srtkpos : obs=\n"); arc_traceobs(4,obs,n);
     
     /* set base staion position */
     if (opt->refpos<=POSOPT_RINEX&&opt->mode!=PMODE_SINGLE&&

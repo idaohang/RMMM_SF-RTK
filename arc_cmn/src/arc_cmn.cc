@@ -1679,10 +1679,14 @@ extern void eci2ecef(gtime_t tutc, const double *erpv, double *U, double *gmst)
     if (gmst) *gmst=gmst_;
 
     arc_log(5, "gmst=%.12f gast=%.12f\n", gmst_, gast);
-    arc_log(5, "P=\n"); tracemat(5,P,3,3,15,12);
-    arc_log(5, "N=\n"); tracemat(5,N,3,3,15,12);
-    arc_log(5, "W=\n"); tracemat(5,W,3,3,15,12);
-    arc_log(5, "U=\n"); tracemat(5,U,3,3,15,12);
+    arc_log(5, "P=\n");
+    arc_tracemat(5, P, 3, 3, 15, 12);
+    arc_log(5, "N=\n");
+    arc_tracemat(5, N, 3, 3, 15, 12);
+    arc_log(5, "W=\n");
+    arc_tracemat(5, W, 3, 3, 15, 12);
+    arc_log(5, "U=\n");
+    arc_tracemat(5, U, 3, 3, 15, 12);
 }
 /* decode antenna parameter field --------------------------------------------*/
 static int decodef(char *p, int n, double *v)
@@ -2379,7 +2383,7 @@ extern void arc_tracelevel(int level)
 {
     level_trace=level;
 }
-extern void tracebuf(int count)
+extern void arc_tracebuf(int count)
 {
     buffcount=count;
 }
@@ -2426,7 +2430,7 @@ extern void arc_log(int level, const char *format, ...)
     va_start(ap,format); vfprintf(fp_trace,format,ap); va_end(ap);
     fflush(fp_trace);
 }
-extern void tracet(int level, const char *format, ...)
+extern void arc_tracet(int level, const char *format, ...)
 {
     va_list ap;
     
@@ -2436,12 +2440,12 @@ extern void tracet(int level, const char *format, ...)
     va_start(ap,format); vfprintf(fp_trace,format,ap); va_end(ap);
     fflush(fp_trace);
 }
-extern void tracemat(int level, const double *A, int n, int m, int p, int q)
+extern void arc_tracemat(int level, const double *A, int n, int m, int p, int q)
 {
     if (!fp_trace||level>level_trace) return;
     matfprint(A,n,m,p,q,fp_trace); fflush(fp_trace);
 }
-extern void traceobs(int level, const obsd_t *obs, int n)
+extern void arc_traceobs(int level, const obsd_t *obs, int n)
 {
     char str[64],id[16];
     int i;
@@ -2457,7 +2461,7 @@ extern void traceobs(int level, const obsd_t *obs, int n)
     }
     fflush(fp_trace);
 }
-extern void tracenav(int level, const nav_t *nav)
+extern void arc_tracenav(int level, const nav_t *nav)
 {
     char s1[64],s2[64],id[16];
     int i;
@@ -2477,7 +2481,7 @@ extern void tracenav(int level, const nav_t *nav)
     fprintf(fp_trace,"(ion) %9.4e %9.4e %9.4e %9.4e\n",nav->ion_gal[0],
             nav->ion_gal[1],nav->ion_gal[2],nav->ion_gal[3]);
 }
-extern void tracegnav(int level, const nav_t *nav)
+extern void arc_tracegnav(int level, const nav_t *nav)
 {
     char s1[64],s2[64],id[16];
     int i;
@@ -2491,7 +2495,7 @@ extern void tracegnav(int level, const nav_t *nav)
                 id,s1,s2,nav->geph[i].frq,nav->geph[i].svh,nav->geph[i].taun*1E6);
     }
 }
-extern void tracehnav(int level, const nav_t *nav)
+extern void arc_tracehnav(int level, const nav_t *nav)
 {
     char s1[64],s2[64],id[16];
     int i;
@@ -2505,7 +2509,7 @@ extern void tracehnav(int level, const nav_t *nav)
                 id,s1,s2,nav->seph[i].svh,nav->seph[i].sva);
     }
 }
-extern void tracepeph(int level, const nav_t *nav)
+extern void arc_tracepeph(int level, const nav_t *nav)
 {
     char s[64],id[16];
     int i,j;
@@ -2525,7 +2529,7 @@ extern void tracepeph(int level, const nav_t *nav)
         }
     }
 }
-extern void tracepclk(int level, const nav_t *nav)
+extern void arc_tracepclk(int level, const nav_t *nav)
 {
     char s[64],id[16];
     int i,j;
@@ -2542,7 +2546,7 @@ extern void tracepclk(int level, const nav_t *nav)
         }
     }
 }
-extern void traceb(int level, const unsigned char *p, int n)
+extern void arc_traceb(int level, const unsigned char *p, int n)
 {
     int i;
     if (!fp_trace||level>level_trace) return;

@@ -81,7 +81,6 @@ extern int ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
     arc_log(ARC_INFO, "ionocorr: time=%s opt=%d sat=%2d pos=%.3f %.3f azel=%.3f %.3f\n",
             time_str(time, 3), ionoopt, sat, pos[0] * R2D, pos[1] * R2D, azel[0] * R2D,
             azel[1] * R2D);
-    
     /* broadcast model */
     if (ionoopt==IONOOPT_BRDC) {
         *ion=ionmodel(time,nav->ion_gps,pos,azel);
@@ -392,7 +391,8 @@ static int arc_resdop(const obsd_t *obs, int n, const double *rs, const double *
         
         lam=nav->lam[obs[i].sat-1][0];
         
-        if (obs[i].D[0]==0.0||lam==0.0||!vsat[i]||norm(rs+3+i*6,3)<=0.0) {
+        if (obs[i].D[0]==0.0||lam==0.0
+            ||!vsat[i]||norm(rs+3+i*6,3)<=0.0) {
             continue;
         }
         /* line-of-sight vector in ecef */
@@ -478,7 +478,7 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
 
     arc_log(ARC_INFO, "pntpos  : tobs=%s n=%d\n", time_str(obs[0].time, 3), n);
     
-    sol->time=obs[0].time; msg[0]='\0';
+    sol->time=obs[0].time; if (msg) msg[0]='\0';
     
     rs=mat(6,n); dts=mat(2,n); var=mat(1,n); azel_=zeros(2,n); resp=mat(1,n);
     

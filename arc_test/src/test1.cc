@@ -43,7 +43,7 @@ int main()
 	strcpy(infile[5],base_bds_navf);
 
     arc_tracelevel(ARC_INFO);
-	tracebuf(10);
+	arc_tracebuf(10);
 
     arc_postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 6, outfile, base, rover);
 
