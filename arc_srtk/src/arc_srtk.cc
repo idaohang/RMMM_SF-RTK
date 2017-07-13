@@ -390,8 +390,8 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
     free(bias);
 }
 /* temporal update of states --------------------------------------------------*/
-static void udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,
-                    const int *iu, const int *ir, int ns, const nav_t *nav)
+static void arc_udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,
+                        const int *iu, const int *ir, int ns, const nav_t *nav)
 {
     double tt=fabs(rtk->tt),bl,dr[3];
 
@@ -1057,7 +1057,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         return 0;
     }
     /* temporal update of states */
-    udstate(rtk,obs,sat,iu,ir,ns,nav);
+    arc_udstate(rtk,obs,sat,iu,ir,ns,nav);
 
     arc_log(ARC_INFO, "x(0)="); tracemat(4,rtk->x,1,NR(opt),13,4);
     
@@ -1288,7 +1288,7 @@ extern void rtkfree(rtk_t *rtk)
 * notes  : before calling function, base station position rtk->sol.rb[] should
 *          be properly set for relative mode except for moving-baseline
 *-----------------------------------------------------------------------------*/
-extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
+extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
 {
     prcopt_t *opt=&rtk->opt;
     sol_t solb={{0}};
@@ -1296,7 +1296,7 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     int i,nu,nr;
     char msg[128]="";
 
-    arc_log(ARC_INFO, "rtkpos  : time=%s n=%d\n", time_str(obs[0].time, 3), n);
+    arc_log(ARC_INFO, "arc_srtkpos  : time=%s n=%d\n", time_str(obs[0].time, 3), n);
     arc_log(ARC_WARNING, "obs=\n"); traceobs(4,obs,n);
     /*arc_log(5,"nav=\n"); tracenav(5,nav);*/
     

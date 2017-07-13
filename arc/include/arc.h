@@ -1101,16 +1101,16 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
 /* precise positioning -------------------------------------------------------*/
 extern void rtkinit(rtk_t *rtk, const prcopt_t *opt);
 extern void rtkfree(rtk_t *rtk);
-extern int  rtkpos (rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
 
 /* post-processing positioning -----------------------------------------------*/
-extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
-                   const prcopt_t *popt, const solopt_t *sopt,
-                   const filopt_t *fopt, char **infile, int n, char *outfile,
-                   const char *rov, const char *base);
+extern int arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
+                       const prcopt_t *popt, const solopt_t *sopt,
+                       const filopt_t *fopt, char **infile, int n, char *outfile,
+                       const char *rov, const char *base);
 extern int arc_pf_srtk(gtime_t ts, gtime_t te, double ti, double tu,
                        const prcopt_t *popt, const solopt_t *sopt,
                        const filopt_t *fopt, char **infile, int n, char *outfile);
+extern int  arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
 
 /* application defined functions ---------------------------------------------*/
 extern int showmsg(char *format,...);

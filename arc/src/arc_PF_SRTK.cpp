@@ -624,7 +624,7 @@ extern int arc_pf_srtk(gtime_t ts, gtime_t te, double ti, double tu,
 {
     int i,stat=0,index[MAXINFILE]={0};
 
-    arc_log(ARC_INFO, "postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n", ti, tu, n, outfile);
+    arc_log(ARC_INFO, "arc_postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n", ti, tu, n, outfile);
 
     /* open processing session */
     if (!arc_openses(popt,sopt,fopt,&navs,&pcvss,&pcvsr)) return -1;

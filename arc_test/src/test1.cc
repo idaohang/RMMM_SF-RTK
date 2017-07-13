@@ -45,7 +45,7 @@ int main()
     arc_tracelevel(ARC_INFO);
 	tracebuf(10);
 
-	postpos(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,6,outfile,base,rover);
+    arc_postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 6, outfile, base, rover);
 
     return 0;
 }

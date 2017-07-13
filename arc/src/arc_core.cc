@@ -188,7 +188,7 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
         if (navs.nf>0) {
             arc_corr_phase_bias_fcb(obs,n,&navs);
         }
-        if (!rtkpos(&rtk,obs,n,&navs)) continue;
+        if (!arc_srtkpos(&rtk, obs, n, &navs)) continue;
 
         fprintf(fp,"%10.6lf  %10.6lf  %10.6lf \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2]);
         
@@ -763,14 +763,14 @@ static int arc_execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt
 *
 *          ssr corrections are valid only for forward estimation.
 *-----------------------------------------------------------------------------*/
-extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
-                   const prcopt_t *popt, const solopt_t *sopt,
-                   const filopt_t *fopt, char **infile, int n, char *outfile,
-                   const char *rov, const char *base)
+extern int arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
+                       const prcopt_t *popt, const solopt_t *sopt,
+                       const filopt_t *fopt, char **infile, int n, char *outfile,
+                       const char *rov, const char *base)
 {
     int i,stat=0,index[MAXINFILE]={0};
 
-    arc_log(ARC_INFO, "postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n", ti, tu, n, outfile);
+    arc_log(ARC_INFO, "arc_postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n", ti, tu, n, outfile);
     
     /* open processing session */
     if (!arc_openses(popt,sopt,fopt,&navs,&pcvss,&pcvsr)) return -1;

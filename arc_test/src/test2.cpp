@@ -62,7 +62,7 @@ int main()
     tracebuf(10);
 
     arc_pf_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile);
-    //postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile,rover,base);
+    //arc_postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile,rover,base);
 
     return 0;
 }
