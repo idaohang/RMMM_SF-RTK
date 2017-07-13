@@ -3413,7 +3413,7 @@ static void arc_iers_mean_pole(gtime_t tut, double *xp_bar, double *yp_bar)
 }
 /* displacement by pole tide (ref [7] eq.7.26) --------------------------------*/
 static void arc_tide_pole(gtime_t tut, const double *pos, const double *erpv,
-                      double *denu)
+                          double *denu)
 {
     double xp_bar,yp_bar,m1,m2,cosl,sinl;
 
@@ -3461,7 +3461,7 @@ static void arc_tide_pole(gtime_t tut, const double *pos, const double *erpv,
 *          ver.2.4.0 does not use ocean loading and pole tide corrections
 *-----------------------------------------------------------------------------*/
 extern void tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
-                         const double *odisp, double *dr)
+                     const double *odisp, double *dr)
 {
     gtime_t tut;
     double pos[2],E[9],drt[3],denu[3],rs[3],rm[3],gmst,erpv[5]={0};

@@ -417,7 +417,7 @@ extern int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
 {
     double r,rr_[3],pos[3],dant[NFREQ]={0},disp[3];
     double zhd,zazel[]={0.0,90.0*D2R},dion,vion;
-    int i,nf=NF(opt);
+    int i=0,nf=1;
 
     arc_log(ARC_INFO, "arc_zdres   : n=%d\n", n);
     
@@ -453,11 +453,9 @@ extern int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
         /* ionospheric corrections */
         if (!ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
                       IONOOPT_BRDC,&dion,&vion)) continue;
-        
         /* receiver antenna phase center correction */
         antmodel(opt->pcvr+index,opt->antdel[index],azel+i*2,opt->posopt[1],
                  dant);
-        
         /* undifferenced phase/code residual for satellite */
         arc_zdres_sat(base,r,obs+i,nav,azel+i*2,dant,dion,vion,opt,y+i*nf*2);
     }
@@ -484,7 +482,7 @@ static int arc_validobs(int i, int j, int f, int nf, double *y)
 static void arc_ddcov(const int *nb, int n, const double *Ri, const double *Rj,
                       int nv, double *R)
 {
-    int i,j,k=0,b;
+    int i,j,k=0,b=0;
 
     arc_log(ARC_INFO, "arc_ddcov   : n=%d\n", n);
     
@@ -919,15 +917,15 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
     for (i=0;i<na;i++) for (j=0;j<nb;j++) Qab[i+j*na]=Qy[   i+(na+j)*ny];
 
     arc_log(ARC_INFO, "arc_resamb_LAMBDA : N(0)=");
-    arc_tracemat(4, y + na, 1, nb, 10, 3);
+    arc_tracemat(4,y+na,1,nb,10,3);
     
     /* lambda/mlambda integer least-square estimation */
     if (!(info=lambda(nb,2,y+na,Qb,b,s))) {
 
         arc_log(ARC_INFO, "N(1)=");
-        arc_tracemat(4, b, 1, nb, 10, 3);
+        arc_tracemat(4,b,1,nb,10,3);
         arc_log(ARC_INFO, "N(2)=");
-        arc_tracemat(4, b + nb, 1, nb, 10, 3);
+        arc_tracemat(4,b+nb,1,nb,10,3);
         
         rtk->sol.ratio=s[0]>0?(float)(s[1]/s[0]):0.0f;
         if (rtk->sol.ratio>999.9) rtk->sol.ratio=999.9f;
@@ -953,7 +951,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
                 matmul("NT",na,na,nb,-1.0,QQ ,Qab,1.0,rtk->Pa);
 
                 arc_log(ARC_INFO, "arc_resamb : validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
-                        nb, s[0] == 0.0 ? 0.0 : s[1] / s[0], s[0], s[1]);
+                        nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
                 /* restore single-differenced ambiguity */
                 arc_restamb(rtk,bias,xa);
             }
@@ -962,7 +960,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
         else { /* validation failed */
             arc_log(ARC_WARNING, "arc_resamb_LAMBDA : ambiguity validation "
                             "failed (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
-                    nb, s[1] / s[0], s[0], s[1]);
+                    nb,s[1]/s[0],s[0],s[1]);
             nb=0;
         }
     }
@@ -994,7 +992,7 @@ static int arc_valpos(rtk_t *rtk, const double *v, const double *R, const int *v
         strcpy(stype,type==0?"L":(type==1?"L":"C"));
         arc_log(ARC_WARNING, "arc_valpos : "
                         "large residual (sat=%2d-%2d %s%d v=%6.3f sig=%.3f)\n",
-                sat1, sat2, stype, freq + 1, v[i], SQRT(R[i + i * nv]));
+                sat1,sat2,stype,freq+1,v[i],SQRT(R[i+i*nv]));
     }
     return stat;
 }
