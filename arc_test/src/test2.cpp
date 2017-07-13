@@ -61,7 +61,7 @@ int main()
     arc_tracelevel(ARC_NOLOG);
     arc_tracebuf(10);
 
-    arc_pf_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile);
+    //arc_pf_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile);
     //arc_postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile,rover,base);
 
     return 0;

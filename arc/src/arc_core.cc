@@ -26,11 +26,17 @@
 
 #include "arc.h"
 #include "glog/logging.h"
-
+#include "libPF/ParticleFilter.h"
+#include "arc_ObservationModel.h"
+#include "arc_MovementModel.h"
+#include <iomanip>
+#include <fstream>
+using namespace std;
 /* constants/global variables ------------------------------------------------*/
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))
 
 #define MAXINFILE   1000        /* max number of input files */
+#define USEPNTINI   1           /* using the standard position to inital solution*/
 
 static pcvs_t pcvss={0};        /* receiver antenna parameters */
 static pcvs_t pcvsr={0};        /* satellite antenna parameters */
@@ -52,6 +58,8 @@ static int isolf=0;             /* current forward solutions index */
 static int isolb=0;             /* current backward solutions index */
 static char proc_rov [64]="";   /* rover for current processing */
 static char proc_base[64]="";   /* base station for current processing */
+typedef libPF::ParticleFilter<ARC::ARC_States> ParticleFilterType;
+                                /* particle filter type */
 
 /* show message and check break ----------------------------------------------*/
 static int arc_checkbrk(const char *format, ...)
@@ -138,6 +146,24 @@ static int arc_inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int 
     }
     return n;
 }
+/* select common satellites between rover and reference station --------------*/
+static int arc_selcomsat(const obsd_t *obs, const rtk_t* rtk,int nu, int nr,
+                         const prcopt_t *opt, int *sat, int *iu, int *ir)
+{
+    int i,j,k=0;
+
+    arc_log(ARC_INFO, "arc_selsat  : nu=%d nr=%d\n", nu, nr);
+
+    for (i=0,j=nu;i<nu&&j<nu+nr;i++,j++) {
+        if      (obs[i].sat<obs[j].sat) j--;
+        else if (obs[i].sat>obs[j].sat) i--;
+        else if (rtk->ssat[obs[j].sat-1].azel[1]>=opt->elmin) {
+            sat[k]=obs[i].sat; iu[k]=i; ir[k++]=j;
+            arc_log(ARC_INFO, "(%2d) sat=%3d iu=%2d ir=%2d\n", k - 1, obs[i].sat, i, j);
+        }
+    }
+    return k;
+}
 /* carrier-phase bias correction by fcb --------------------------------------*/
 static void arc_corr_phase_bias_fcb(obsd_t *obs,int n,const nav_t *nav)
 {
@@ -154,6 +180,109 @@ static void arc_corr_phase_bias_fcb(obsd_t *obs,int n,const nav_t *nav)
         }
         return;
     }
+}
+/* particle process positioning ------------------------------------------------*/
+ofstream fp_pf("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_pf_pos");
+static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
+                           int mode)
+{
+    rtk_t rtk;
+    obsd_t obs[MAXOBS*2];
+    gtime_t time={0};
+    int i,nobs,n,ns,rsat[MAXSAT],usat[MAXSAT],nu=0,nr=0,sat[MAXSAT],first=1;
+    char msg[126];
+
+    arc_log(ARC_INFO, "arc_procpos : mode=%d\n", mode);
+
+    /* rtk struct date type initial */
+    rtkinit(&rtk,popt);
+
+    /* arc-srtk observation model and states movement model  */
+    ARC::ARC_ObservationModel ObsModel;
+    ARC::ARC_MovementModel    MoveModel(popt,&rtk);
+    ARC::ARC_States           States(popt);
+    ParticleFilterType        PF(ARC_PF_NUM,&ObsModel,&MoveModel);
+    /* set the observation settings and solution data */
+    ObsModel.SetOpt(popt);
+    ObsModel.SetNav(&navs);
+    ObsModel.SetSRTK(&rtk);
+    ObsModel.SetDDorSD(ARC_PF_USE_DD);
+    MoveModel.SetNav(&navs);
+    MoveModel.SetSRTK(&rtk);
+    /* set the particle filter resample */
+    PF.setResamplingMode(libPF::RESAMPLE_ALWAYS);
+
+    while ((nobs=arc_inputobs(obs,rtk.sol.stat,popt,&nu,&nr))>=0) {
+        /*abort */
+        if (aborts) break;
+
+        /* precious epoch time */
+        time=rtk.sol.time;
+
+        /* exclude satellites */
+        for (i=n=0;i<nobs;i++) {
+            if ((satsys(obs[i].sat,NULL)&popt->navsys)&&
+                popt->exsats[obs[i].sat-1]!=1) obs[n++]=obs[i];
+        }
+        if (n<=0) continue;
+        /* count rover/base station observations */
+        for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ;   /* rover */
+        for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
+
+#if USEPNTINI
+        /* rover position by single point positioning */
+        if (!pntpos(obs,nu,&navs,&rtk.opt,&rtk.sol,NULL,rtk.ssat,msg)) {
+            arc_log(ARC_WARNING, "arc-srtk point pos error (%s)\n", msg);
+            continue;
+        }
+        /* inital base station and rover station observation time difference */
+        if (time.time!=0) rtk.tt=timediff(rtk.sol.time,time);
+
+        /* to integrate a known prior state use */
+        if (first) {
+            for (i=0;i<6;i++) States.SetStatesValue(rtk.sol.rr[i],i);
+            PF.setPriorState(States);
+            first=0;
+        }
+#endif
+        /* select common satellites between rover and reference station */
+        if ((ns=arc_selcomsat(obs,&rtk,nu,nr,popt,sat,usat,rsat))<=0) continue;
+
+        for (i=0;i<ARC_PF_ITERS;i++) {
+            if (i==0) {
+                /* asign common satellites to movement model */
+                MoveModel.SetComSatList(rsat,usat,sat,ns);
+                /* set gps and bds observation of states movement */
+                MoveModel.SetObs(obs,nu+nr);
+                /* states movement model for predicting the states */
+                MoveModel.drift(States,rtk.tt);
+                /* set the observations of gps and bds */
+                ObsModel.SetObs(obs,nr+nu);
+            } else {
+                MoveModel.SetRoverStd(MoveModel.getRoverStd()/2.0);
+                MoveModel.SetAmbStd(MoveModel.getAmbMin()/2.0,MoveModel.getAmbMax()/2.0);
+            }
+            /* set the states of observation model */
+            ObsModel.setStates(States);
+
+            /* particle filter */
+            PF.filter();
+            /* save particle result to rtk_t type struct */
+            States=PF.getMmseEstimate();
+        }
+        MoveModel.SetRoverStd(ARC_PF_ROVERPOS_STD);
+        MoveModel.SetAmbStd(ARC_PF_AMB_MIN,ARC_PF_AMB_MAX);
+
+        fp_pf<<setiosflags(ios::fixed)<<setprecision(10);
+        for (int i=0;i<6;i++) fp_pf<<PF.getMmseEstimate().getStateValue(i)<<"  ";
+        fp_pf<<std::endl;
+        LOG(INFO)<<"Particle Filter is Running ... : "
+                 <<setiosflags(ios::fixed)<<setprecision(6)
+                 <<PF.getMmseEstimate().getStateValue(0)<<"   "
+                 <<PF.getMmseEstimate().getStateValue(1)<<"   "
+                 <<PF.getMmseEstimate().getStateValue(2);
+    }
+    rtkfree(&rtk);
 }
 /* process positioning -------------------------------------------------------*/
 FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/rtklib_pos","w");
@@ -646,11 +775,20 @@ static int arc_execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
     iobsu=iobsr=isbs=revs=aborts=0;
     
     if (popt_.mode==PMODE_SINGLE||popt_.soltype==0) {
+        
+#ifdef USE_PF_FILTER
+        arc_procpos_pf(&popt_,sopt,0);
+#else
         arc_procpos(&popt_,sopt,0); /* forward */
+#endif
     }
     else if (popt_.soltype==1) {      
-        revs=1; iobsu=iobsr=obss.n-1; 
+        revs=1; iobsu=iobsr=obss.n-1;
+#ifdef USE_PF_FILTER
+        arc_procpos_pf(&popt_,sopt,0);
+#else
         arc_procpos(&popt_,sopt,0); /* backward */
+#endif
     }
     else { /* combined */
         solf=(sol_t *)malloc(sizeof(sol_t)*nepoch);
@@ -659,13 +797,22 @@ static int arc_execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
         rbb=(double *)malloc(sizeof(double)*nepoch*3);
         
         if (solf&&solb) {
+#ifdef USE_PF_FILTER
+            isolf=isolb=0;
+            arc_procpos_pf(&popt_,sopt,1); /* forward */
+            revs=1; iobsu=iobsr=obss.n-1;
+            arc_procpos_pf(&popt_,sopt,1); /* backward */
+#else
             isolf=isolb=0;
             arc_procpos(&popt_,sopt,1); /* forward */
             revs=1; iobsu=iobsr=obss.n-1;
             arc_procpos(&popt_,sopt,1); /* backward */
-            
+#endif
             /* combine forward/backward solutions */
             if (!aborts) {
+#ifdef USE_PF_FILTER
+                return aborts?1:0;
+#endif
                 arc_combres(&popt_,sopt);
             }
         }

@@ -70,7 +70,7 @@ add_library(${PROJECT_NAME}_rtk STATIC
     arc/src/arc_MovementModel.cc
     arc/src/arc_ObservationModel.cpp
     arc/src/arc_StatesDistribution.cpp
-    arc/src/arc_PF_SRTK.cpp)
+        )
 
 target_link_libraries(${PROJECT_NAME}_rtk glog PF)
 add_executable(arc_test1 

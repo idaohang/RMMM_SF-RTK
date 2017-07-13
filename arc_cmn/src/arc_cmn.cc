@@ -3344,7 +3344,7 @@ static void arc_tide_solid(const double *rsun, const double *rmoon,
     arc_log(ARC_INFO, "tide_solid: dr=%.3f %.3f %.3f\n", dr[0], dr[1], dr[2]);
 }
 #endif /* !IERS_MODEL */
-}
+
 /* displacement by ocean tide loading (ref [2] 7) ----------------------------*/
 static void arc_tide_oload(gtime_t tut, const double *odisp, double *denu)
 {

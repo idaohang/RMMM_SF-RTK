@@ -24,6 +24,8 @@
 #ifndef ARC_ARC_PF_H
 #define ARC_ARC_PF_H
 
+#define USE_PF_FILTER                                      /// the flag of using particle filter
+
 #define ARC_PF_BASEPOS_STD                 (1.0)           /// initial standard deviation of base station position (m)
 #define ARC_PF_ROVERPOS_STD                (2.0)           /// initial standard deviation of rover station position (m)
 #define ARC_PF_BASECLK_STD                 (200.0)         /// initial standard deviation of base station clock drift (m)
