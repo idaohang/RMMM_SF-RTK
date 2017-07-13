@@ -31,15 +31,18 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+////////////////////////////////////////////////////////////////////////////////
 extern int  arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,
                         const filopt_t *fopt, char **infile, int n, char *outfile,
                         const char *rov, const char *base);
+////////////////////////////////////////////////////////////////////////////////
 extern int  arc_pf_srtk(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,
                         const filopt_t *fopt, char **infile, int n, char *outfile);
+////////////////////////////////////////////////////////////////////////////////
 extern int  arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
-
+////////////////////////////////////////////////////////////////////////////////
 extern void arc_traceopen(const char *file);
 extern void arc_traceclose(void);
 extern void arc_tracelevel(int level);
@@ -54,7 +57,7 @@ extern void arc_tracepeph(int level, const nav_t *nav);
 extern void arc_tracepclk(int level, const nav_t *nav);
 extern void arc_traceb(int level, const unsigned char *p, int n);
 extern void arc_tracebuf(int buffcount);
-
+////////////////////////////////////////////////////////////////////////////////
 #ifdef __cplusplus
 }
 #endif
