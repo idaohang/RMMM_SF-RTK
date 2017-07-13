@@ -54,7 +54,7 @@ static char proc_rov [64]="";   /* rover for current processing */
 static char proc_base[64]="";   /* base station for current processing */
 
 /* show message and check break ----------------------------------------------*/
-static int checkbrk(const char *format, ...)
+static int arc_checkbrk(const char *format, ...)
 {
     va_list arg;
     char buff[1024],*p=buff;
@@ -68,7 +68,7 @@ static int checkbrk(const char *format, ...)
     return showmsg(buff);
 }
 /* search next observation data index ----------------------------------------*/
-static int nextobsf(const obs_t *obs, int *i, int rcv)
+static int arc_nextobsf(const obs_t *obs, int *i, int rcv)
 {
     double tt;
     int n;
@@ -80,7 +80,7 @@ static int nextobsf(const obs_t *obs, int *i, int rcv)
     }
     return n;
 }
-static int nextobsb(const obs_t *obs, int *i, int rcv)
+static int arc_nextobsb(const obs_t *obs, int *i, int rcv)
 {
     double tt;
     int n;
@@ -93,7 +93,7 @@ static int nextobsb(const obs_t *obs, int *i, int rcv)
     return n;
 }
 /* input obs data, navigation messages and sbas correction -------------------*/
-static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int *nr)
+static int arc_inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int *nr)
 {
     gtime_t time={0};
     int i,n=0;
@@ -102,36 +102,36 @@ static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int *nr)
     
     if (0<=iobsu&&iobsu<obss.n) {
         settime((time=obss.data[iobsu].time));
-        if (checkbrk("processing : %s Q=%d",time_str(time,0),solq)) {
+        if (arc_checkbrk("processing : %s Q=%d",time_str(time,0),solq)) {
             aborts=1; showmsg("aborted"); return -1;
         }
     }
     if (!revs) { /* input forward data */
-        if ((*nu=nextobsf(&obss,&iobsu,1))<=0) return -1;
+        if ((*nu=arc_nextobsf(&obss,&iobsu,1))<=0) return -1;
         if (popt->intpref) {
-            for (;(*nr=nextobsf(&obss,&iobsr,2))>0;iobsr+=*nr)
+            for (;(*nr=arc_nextobsf(&obss,&iobsr,2))>0;iobsr+=*nr)
                 if (timediff(obss.data[iobsr].time,obss.data[iobsu].time)>-DTTOL) break;
         }
         else {
-            for (i=iobsr;(*nr=nextobsf(&obss,&i,2))>0;iobsr=i,i+=*nr)
+            for (i=iobsr;(*nr=arc_nextobsf(&obss,&i,2))>0;iobsr=i,i+=*nr)
                 if (timediff(obss.data[i].time,obss.data[iobsu].time)>DTTOL) break;
         }
-        *nr=nextobsf(&obss,&iobsr,2);
+        *nr=arc_nextobsf(&obss,&iobsr,2);
         for (i=0;i<*nu&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsu+i];
         for (i=0;i<*nr&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsr+i];
         iobsu+=*nu;
     }
     else { /* input backward data */
-        if ((*nu=nextobsb(&obss,&iobsu,1))<=0) return -1;
+        if ((*nu=arc_nextobsb(&obss,&iobsu,1))<=0) return -1;
         if (popt->intpref) {
-            for (;(*nr=nextobsb(&obss,&iobsr,2))>0;iobsr-=*nr)
+            for (;(*nr=arc_nextobsb(&obss,&iobsr,2))>0;iobsr-=*nr)
                 if (timediff(obss.data[iobsr].time,obss.data[iobsu].time)<DTTOL) break;
         }
         else {
-            for (i=iobsr;(*nr=nextobsb(&obss,&i,2))>0;iobsr=i,i-=*nr)
+            for (i=iobsr;(*nr=arc_nextobsb(&obss,&i,2))>0;iobsr=i,i-=*nr)
                 if (timediff(obss.data[i].time,obss.data[iobsu].time)<-DTTOL) break;
         }
-        *nr=nextobsb(&obss,&iobsr,2);
+        *nr=arc_nextobsb(&obss,&iobsr,2);
         for (i=0;i<*nu&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsu-*nu+1+i];
         for (i=0;i<*nr&&n<MAXOBS*2;i++) obs[n++]=obss.data[iobsr-*nr+1+i];
         iobsu-=*nu;
@@ -139,7 +139,7 @@ static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int *nr)
     return n;
 }
 /* carrier-phase bias correction by fcb --------------------------------------*/
-static void corr_phase_bias_fcb(obsd_t *obs,int n,const nav_t *nav)
+static void arc_corr_phase_bias_fcb(obsd_t *obs,int n,const nav_t *nav)
 {
     int i,j,k;
     
@@ -157,8 +157,8 @@ static void corr_phase_bias_fcb(obsd_t *obs,int n,const nav_t *nav)
 }
 /* process positioning -------------------------------------------------------*/
 FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/rtklib_pos","w");
-static void procpos(const prcopt_t *popt, const solopt_t *sopt,
-                    int mode)
+static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
+                        int mode)
 {
     gtime_t time={0};
     sol_t sol={{0}};
@@ -220,7 +220,7 @@ static void procpos(const prcopt_t *popt, const solopt_t *sopt,
     rtkfree(&rtk);
 }
 /* validation of combined solutions ------------------------------------------*/
-static int valcomb(const sol_t *solf, const sol_t *solb)
+static int arc_valcomb(const sol_t *solf, const sol_t *solb)
 {
     double dr[3],var[3];
     int i;
@@ -244,7 +244,7 @@ static int valcomb(const sol_t *solf, const sol_t *solb)
     return 1;
 }
 /* combine forward/backward solutions and output results ---------------------*/
-static void combres(const prcopt_t *popt, const solopt_t *sopt)
+static void arc_combres(const prcopt_t *popt, const solopt_t *sopt)
 {
     gtime_t time={0};
     sol_t sols={{0}},sol={{0}};
@@ -283,7 +283,7 @@ static void combres(const prcopt_t *popt, const solopt_t *sopt)
             if ((popt->mode==PMODE_KINEMA||popt->mode==PMODE_MOVEB)&&
                 sols.stat==SOLQ_FIX) {
                 /* degrade fix to float if validation failed */
-                if (!valcomb(solf+i,solb+j)) sols.stat=SOLQ_FLOAT;
+                if (!arc_valcomb(solf+i,solb+j)) sols.stat=SOLQ_FLOAT;
             }
             for (k=0;k<3;k++) {
                 Qf[k+k*3]=solf[i].qr[k];
@@ -325,8 +325,8 @@ static void combres(const prcopt_t *popt, const solopt_t *sopt)
     }
 }
 /* read prec ephemeris, sbas data, lex data, tec grid and open rtcm ----------*/
-static void readpreceph(char **infile, int n, const prcopt_t *prcopt,
-                        nav_t *nav)
+static void arc_readpreceph(char **infile, int n, const prcopt_t *prcopt,
+                            nav_t *nav)
 {
     seph_t seph0={0};
     int i;
@@ -359,14 +359,13 @@ static void readpreceph(char **infile, int n, const prcopt_t *prcopt,
     /* allocate sbas ephemeris */
     nav->ns=nav->nsmax=NSATSBS*2;
     if (!(nav->seph=(seph_t *)malloc(sizeof(seph_t)*nav->ns))) {
-         showmsg("error : sbas ephem memory allocation");
          trace(ARC_ERROR,"error : sbas ephem memory allocation");
          return;
     }
     for (i=0;i<nav->ns;i++) nav->seph[i]=seph0;
 }
 /* free prec ephemeris and sbas data -----------------------------------------*/
-static void freepreceph(nav_t *nav)
+static void arc_freepreceph(nav_t *nav)
 {
     int i;
     
@@ -378,9 +377,9 @@ static void freepreceph(nav_t *nav)
     free(nav->seph); nav->seph=NULL; nav->ns=nav->nsmax=0;
 }
 /* read obs and nav data -----------------------------------------------------*/
-static int readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
-                      const int *index, int n, const prcopt_t *prcopt,
-                      obs_t *obs, nav_t *nav, sta_t *sta)
+static int arc_readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
+                          const int *index, int n, const prcopt_t *prcopt,
+                          obs_t *obs, nav_t *nav, sta_t *sta)
 {
     int i,ind=0,nobs=0,rcv=1;
     
@@ -392,7 +391,7 @@ static int readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
     nepoch=0;
     
     for (i=0;i<n;i++) {
-        if (checkbrk("")) return 0;
+        if (arc_checkbrk("")) return 0;
         
         if (index[i]!=ind) {
             if (obs->n>nobs) rcv++;
@@ -401,17 +400,17 @@ static int readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
         /* read rinex obs and nav file */
         if (readrnxt(infile[i],rcv,ts,te,ti,prcopt->rnxopt[rcv<=1?0:1],obs,nav,
                      rcv<=2?sta+rcv-1:NULL)<0) {
-            checkbrk("error : insufficient memory");
+            arc_checkbrk("error : insufficient memory");
             trace(ARC_WARNING,"insufficient memory\n");
             return 0;
         }
     }
     if (obs->n<=0) {
-        checkbrk("readobsnav : error , no obs data");
+        arc_checkbrk("readobsnav : error , no obs data");
         return 0;
     }
     if (nav->n<=0&&nav->ng<=0&&nav->ns<=0) {
-        checkbrk("readobsnav : error , no nav data");
+        arc_checkbrk("readobsnav : error , no nav data");
         trace(ARC_WARNING,"\n");
         return 0;
     }
@@ -423,7 +422,7 @@ static int readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
     return 1;
 }
 /* free obs and nav data -----------------------------------------------------*/
-static void freeobsnav(obs_t *obs, nav_t *nav)
+static void arc_freeobsnav(obs_t *obs, nav_t *nav)
 {
     trace(ARC_INFO,"freeobsnav:\n");
     
@@ -433,8 +432,8 @@ static void freeobsnav(obs_t *obs, nav_t *nav)
     free(nav->seph); nav->seph=NULL; nav->ns=nav->nsmax=0;
 }
 /* average of single position ------------------------------------------------*/
-static int avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
-                  const prcopt_t *opt)
+static int arc_avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
+                      const prcopt_t *opt)
 {
     obsd_t data[MAXOBS];
     gtime_t ts={0};
@@ -446,7 +445,7 @@ static int avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
     
     for (i=0;i<3;i++) ra[i]=0.0;
     
-    for (iobs=0;(m=nextobsf(obs,&iobs,rcv))>0;iobs+=m) {
+    for (iobs=0;(m=arc_nextobsf(obs,&iobs,rcv))>0;iobs+=m) {
         
         for (i=j=0;i<m&&i<MAXOBS;i++) {
             data[j]=obs->data[iobs+i];
@@ -468,8 +467,8 @@ static int avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
     return 1;
 }
 /* antenna phase center position ---------------------------------------------*/
-static int antpos(prcopt_t *opt, int rcvno, const obs_t *obs, const nav_t *nav,
-                  const sta_t *sta, const char *posfile)
+static int arc_antpos(prcopt_t *opt, int rcvno, const obs_t *obs, const nav_t *nav,
+                      const sta_t *sta, const char *posfile)
 {
     double *rr=rcvno==1?opt->ru:opt->rb,del[3],pos[3],dr[3]={0};
     int i,postype=rcvno==1?opt->rovpos:opt->refpos;
@@ -478,14 +477,13 @@ static int antpos(prcopt_t *opt, int rcvno, const obs_t *obs, const nav_t *nav,
     trace(ARC_INFO,"antpos  : rcvno=%d\n",rcvno);
     
     if (postype==POSOPT_SINGLE) { /* average of single position */
-        if (!avepos(rr,rcvno,obs,nav,opt)) {
+        if (!arc_avepos(rr,rcvno,obs,nav,opt)) {
             trace(ARC_ERROR,"error : station pos computation");
             return 0;
         }
     }
     else if (postype==POSOPT_RINEX) { /* get from rinex header */
         if (norm(stas[rcvno==1?0:1].pos,3)<=0.0) {
-            showmsg("error : no position in rinex header");
             trace(ARC_WARNING,"no position position in rinex header\n");
             return 0;
         }
@@ -504,8 +502,8 @@ static int antpos(prcopt_t *opt, int rcvno, const obs_t *obs, const nav_t *nav,
     return 1;
 }
 /* open procssing session ----------------------------------------------------*/
-static int openses(const prcopt_t *popt, const solopt_t *sopt,
-                   const filopt_t *fopt, nav_t *nav, pcvs_t *pcvs, pcvs_t *pcvr)
+static int arc_openses(const prcopt_t *popt, const solopt_t *sopt,
+                       const filopt_t *fopt, nav_t *nav, pcvs_t *pcvs, pcvs_t *pcvr)
 {
     int i;
     
@@ -513,13 +511,11 @@ static int openses(const prcopt_t *popt, const solopt_t *sopt,
     
     /* read satellite antenna parameters */
     if (*fopt->satantp&&!(readpcv(fopt->satantp,pcvs))) {
-        showmsg("error : no sat ant pcv in %s",fopt->satantp);
         trace(ARC_WARNING,"sat antenna pcv read error: %s\n",fopt->satantp);
         return 0;
     }
     /* read receiver antenna parameters */
     if (*fopt->rcvantp&&!(readpcv(fopt->rcvantp,pcvr))) {
-        showmsg("error : no rec ant pcv in %s",fopt->rcvantp);
         trace(ARC_WARNING,"rec antenna pcv read error: %s\n",fopt->rcvantp);
         return 0;
     }
@@ -537,7 +533,7 @@ static int openses(const prcopt_t *popt, const solopt_t *sopt,
     return 1;
 }
 /* close procssing session ---------------------------------------------------*/
-static void closeses(nav_t *nav, pcvs_t *pcvs, pcvs_t *pcvr)
+static void arc_closeses(nav_t *nav, pcvs_t *pcvs, pcvs_t *pcvr)
 {
     trace(ARC_INFO,"closeses:\n");
     
@@ -553,8 +549,8 @@ static void closeses(nav_t *nav, pcvs_t *pcvs, pcvs_t *pcvr)
     traceclose();
 }
 /* set antenna parameters ----------------------------------------------------*/
-static void setpcv(gtime_t time, prcopt_t *popt, nav_t *nav, const pcvs_t *pcvs,
-                   const pcvs_t *pcvr, const sta_t *sta)
+static void arc_setpcv(gtime_t time, prcopt_t *popt, nav_t *nav, const pcvs_t *pcvs,
+                       const pcvs_t *pcvr, const sta_t *sta)
 {
     pcv_t *pcv;
     double pos[3],del[3];
@@ -595,7 +591,7 @@ static void setpcv(gtime_t time, prcopt_t *popt, nav_t *nav, const pcvs_t *pcvs,
     }
 }
 /* read ocean tide loading parameters ----------------------------------------*/
-static void readotl(prcopt_t *popt, const char *file, const sta_t *sta)
+static void arc_readotl(prcopt_t *popt, const char *file, const sta_t *sta)
 {
     int i,mode=PMODE_DGPS<=popt->mode&&popt->mode<=PMODE_FIXED;
     
@@ -604,9 +600,9 @@ static void readotl(prcopt_t *popt, const char *file, const sta_t *sta)
     }
 }
 /* execute processing session ------------------------------------------------*/
-static int execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
-                   const solopt_t *sopt, const filopt_t *fopt, int flag,
-                   char **infile, const int *index, int n, char *outfile)
+static int arc_execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
+                       const solopt_t *sopt, const filopt_t *fopt, int flag,
+                       char **infile, const int *index, int n, char *outfile)
 {
     prcopt_t popt_=*popt;
     char path[1024];
@@ -619,13 +615,12 @@ static int execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
         free(navs.erp.data); navs.erp.data=NULL; navs.erp.n=navs.erp.nmax=0;
         reppath(fopt->eop,path,ts,"","");
         if (!readerp(path,&navs.erp)) {
-            showmsg("error : no erp data %s",path);
             trace(ARC_WARNING,"no erp data %s\n",path);
         }
     }
     /* read obs and nav data */
 	trace(ARC_INFO,"read obs and nav data \n");
-    if (!readobsnav(ts,te,ti,infile,index,n,&popt_,&obss,&navs,stas)) return 0;
+    if (!arc_readobsnav(ts,te,ti,infile,index,n,&popt_,&obss,&navs,stas)) return 0;
     
     /* read dcb parameters */
 	trace(ARC_INFO,"read dcb parameters : %s \n",fopt->dcb);
@@ -636,28 +631,28 @@ static int execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
     /* set antenna paramters */
 	trace(ARC_INFO,"set antenna paramters \n");
     if (popt_.mode!=PMODE_SINGLE) {
-        setpcv(obss.n>0?obss.data[0].time:timeget(),&popt_,&navs,&pcvss,&pcvsr,
-               stas);
+        arc_setpcv(obss.n>0?obss.data[0].time:timeget(),&popt_,&navs,&pcvss,&pcvsr,
+                   stas);
     }
     /* read ocean tide loading parameters */
 	trace(ARC_INFO,"read ocean tide loading parameters \n");
     if (popt_.mode>PMODE_SINGLE&&*fopt->blq) {
-        readotl(&popt_,fopt->blq,stas);
+        arc_readotl(&popt_,fopt->blq,stas);
     }
     if (PMODE_DGPS<=popt_.mode&&popt_.mode<=PMODE_STATIC) {
-        if (!antpos(&popt_,2,&obss,&navs,stas,fopt->stapos)) {
-            freeobsnav(&obss,&navs);
+        if (!arc_antpos(&popt_,2,&obss,&navs,stas,fopt->stapos)) {
+            arc_freeobsnav(&obss,&navs);
             return 0;
         }
     }
     iobsu=iobsr=isbs=revs=aborts=0;
     
     if (popt_.mode==PMODE_SINGLE||popt_.soltype==0) {
-        procpos(&popt_,sopt,0); /* forward */
+        arc_procpos(&popt_,sopt,0); /* forward */
     }
     else if (popt_.soltype==1) {      
         revs=1; iobsu=iobsr=obss.n-1; 
-        procpos(&popt_,sopt,0); /* backward */  
+        arc_procpos(&popt_,sopt,0); /* backward */
     }
     else { /* combined */
         solf=(sol_t *)malloc(sizeof(sol_t)*nepoch);
@@ -667,59 +662,59 @@ static int execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
         
         if (solf&&solb) {
             isolf=isolb=0;
-            procpos(&popt_,sopt,1); /* forward */
+            arc_procpos(&popt_,sopt,1); /* forward */
             revs=1; iobsu=iobsr=obss.n-1;
-            procpos(&popt_,sopt,1); /* backward */
+            arc_procpos(&popt_,sopt,1); /* backward */
             
             /* combine forward/backward solutions */
             if (!aborts) {
-                combres(&popt_,sopt);
+                arc_combres(&popt_,sopt);
             }
         }
-        else showmsg("error : memory allocation");
+        else trace(ARC_ERROR,"error : memory allocation \n");
         free(solf);
         free(solb);
         free(rbf);
         free(rbb);
     }
     /* free obs and nav data */
-    freeobsnav(&obss,&navs);
+    arc_freeobsnav(&obss,&navs);
     
     return aborts?1:0;
 }
 /* execute processing session for each rover ---------------------------------*/
-static int execses_r(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
-                     const solopt_t *sopt, const filopt_t *fopt, int flag,
-                     char **infile, const int *index, int n, char *outfile,
-                     const char *rov)
+static int arc_execses_r(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
+                         const solopt_t *sopt, const filopt_t *fopt, int flag,
+                         char **infile, const int *index, int n, char *outfile,
+                         const char *rov)
 {
     int stat=0;
     
     trace(ARC_INFO,"execses_r: n=%d outfile=%s\n",n,outfile);
 
     /* execute processing session */
-    stat=execses(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile);
+    stat=arc_execses(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile);
     
     return stat;
 }
 /* execute processing session for each base station --------------------------*/
-static int execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
-                     const solopt_t *sopt, const filopt_t *fopt, int flag,
-                     char **infile, const int *index, int n, char *outfile,
-                     const char *rov, const char *base)
+static int arc_execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
+                         const solopt_t *sopt, const filopt_t *fopt, int flag,
+                         char **infile, const int *index, int n, char *outfile,
+                         const char *rov, const char *base)
 {
     int stat=0;
     
     trace(ARC_INFO,"execses_b: n=%d outfile=%s\n",n,outfile);
     
     /* read prec ephemeris and sbas data */
-    readpreceph(infile,n,popt,&navs);
+    arc_readpreceph(infile,n,popt,&navs);
 
     /* execute processing session */
-    stat=execses_r(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile,rov);
+    stat=arc_execses_r(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile,rov);
     
     /* free prec ephemeris and sbas data */
-    freepreceph(&navs);
+    arc_freepreceph(&navs);
     
     return stat;
 }
@@ -778,15 +773,15 @@ extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
     trace(ARC_INFO,"postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n",ti,tu,n,outfile);
     
     /* open processing session */
-    if (!openses(popt,sopt,fopt,&navs,&pcvss,&pcvsr)) return -1;
+    if (!arc_openses(popt,sopt,fopt,&navs,&pcvss,&pcvsr)) return -1;
 
     for (i=0;i<n;i++) index[i]=i;
     
     /* execute processing session */
-    stat=execses_b(ts,te,ti,popt,sopt,fopt,1,infile,index,n,outfile,rov,base);
+    stat=arc_execses_b(ts,te,ti,popt,sopt,fopt,1,infile,index,n,outfile,rov,base);
     
     /* close processing session */
-    closeses(&navs,&pcvss,&pcvsr);
+    arc_closeses(&navs,&pcvss,&pcvsr);
     return stat;
 }
 

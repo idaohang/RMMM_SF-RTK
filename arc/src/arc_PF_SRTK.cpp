@@ -539,7 +539,6 @@ static int arc_execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
         navs.erp.data=NULL; navs.erp.n=navs.erp.nmax=0;
         reppath(fopt->eop,path,ts,"","");
         if (!readerp(path,&navs.erp)) {
-            showmsg("error : no erp data %s",path);
             trace(ARC_WARNING,"no erp data %s\n",path);
         }
     }
