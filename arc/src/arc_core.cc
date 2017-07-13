@@ -173,7 +173,7 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
               (popt->mode==PMODE_STATIC||popt->mode==PMODE_PPP_STATIC);
     rtkinit(&rtk,popt);
 
-    while ((nobs=inputobs(obs,rtk.sol.stat,popt,&nu,&nr))>=0) {
+    while ((nobs=arc_inputobs(obs,rtk.sol.stat,popt,&nu,&nr))>=0) {
         /*abort */
         if (aborts) break;
 
@@ -186,7 +186,7 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
 
         /* carrier-phase bias correction */
         if (navs.nf>0) {
-            corr_phase_bias_fcb(obs,n,&navs);
+            arc_corr_phase_bias_fcb(obs,n,&navs);
         }
         if (!rtkpos(&rtk,obs,n,&navs)) continue;
 

@@ -418,9 +418,9 @@ static int arc_resdop(const obsd_t *obs, int n, const double *rs, const double *
     return nv;
 }
 /* estimate receiver velocity ------------------------------------------------*/
-static void estvel(const obsd_t *obs, int n, const double *rs, const double *dts,
-                   const nav_t *nav, const prcopt_t *opt, sol_t *sol,
-                   const double *azel, const int *vsat)
+static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double *dts,
+                       const nav_t *nav, const prcopt_t *opt, sol_t *sol,
+                       const double *azel, const int *vsat)
 {
     double x[4]={0},dx[4],Q[16],*v,*H;
     int i,j,nv;
@@ -501,7 +501,7 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
         stat=arc_raim_fde(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);
     }
     /* estimate receiver velocity with doppler */
-    if (stat) estvel(obs,n,rs,dts,nav,&opt_,sol,azel_,vsat);
+    if (stat) arc_estvel(obs,n,rs,dts,nav,&opt_,sol,azel_,vsat);
     
     if (azel) {
         for (i=0;i<n*2;i++) azel[i]=azel_[i];

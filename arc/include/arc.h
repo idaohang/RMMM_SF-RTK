@@ -1108,9 +1108,9 @@ extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
                    const prcopt_t *popt, const solopt_t *sopt,
                    const filopt_t *fopt, char **infile, int n, char *outfile,
                    const char *rov, const char *base);
-extern int arc_srtk(gtime_t ts, gtime_t te, double ti, double tu,
-                    const prcopt_t *popt, const solopt_t *sopt,
-                    const filopt_t *fopt, char **infile, int n, char *outfile);
+extern int arc_pf_srtk(gtime_t ts, gtime_t te, double ti, double tu,
+                       const prcopt_t *popt, const solopt_t *sopt,
+                       const filopt_t *fopt, char **infile, int n, char *outfile);
 
 /* application defined functions ---------------------------------------------*/
 extern int showmsg(char *format,...);
