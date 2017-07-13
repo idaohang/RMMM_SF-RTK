@@ -58,7 +58,7 @@ int main()
     strcpy(infile[2], navf);
     strcpy(infile[3],navf1);
 
-    tracelevel(ARC_NOLOG);
+    arc_tracelevel(ARC_NOLOG);
     tracebuf(10);
 
     arc_pf_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile);

@@ -1435,7 +1435,7 @@ void LogMessage::SendToLog() EXCLUSIVE_LOCKS_REQUIRED(log_mutex) {
     log_mutex.Unlock();
     LogDestination::WaitForSinks(data_);
 
-    const char* message = "*** Check failure stack trace: ***\n";
+    const char* message = "*** Check failure stack arc_log: ***\n";
     if (write(STDERR_FILENO, message, strlen(message)) < 0) {
       // Ignore errors.
     }
@@ -1450,7 +1450,7 @@ void LogMessage::RecordCrashReason(
   reason->message = fatal_msg_data_exclusive.message_text_ +
                     fatal_msg_data_exclusive.num_prefix_chars_;
 #ifdef HAVE_STACKTRACE
-  // Retrieve the stack trace, omitting the logging frames that got us here.
+  // Retrieve the stack arc_log, omitting the logging frames that got us here.
   reason->depth = GetStackTrace(reason->stack, ARRAYSIZE(reason->stack), 4);
 #else
   reason->depth = 0;
@@ -1687,7 +1687,7 @@ bool GetExitOnDFatal() {
 // This can have some effects on LOG(FATAL) as well.  Failure messages
 // are always allocated (rather than sharing a buffer), the crash
 // reason is not recorded, the "gwq" status message is not updated,
-// and the stack trace is not recorded.  The LOG(FATAL) *will* still
+// and the stack arc_log is not recorded.  The LOG(FATAL) *will* still
 // exit the program.  Since this function is used only in testing,
 // these differences are acceptable.
 void SetExitOnDFatal(bool value) {

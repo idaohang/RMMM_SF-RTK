@@ -56,6 +56,7 @@ include_directories(
 add_subdirectory(arc_plot)
 add_subdirectory(arc_log)
 add_subdirectory(arc_pf)
+add_subdirectory(arc_ceres)
 
 add_library(${PROJECT_NAME}_rtk STATIC
     arc_cmn/src/arc_cmn.cc

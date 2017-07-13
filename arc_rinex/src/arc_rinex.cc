@@ -207,7 +207,7 @@ static void convcode(double ver, int sys, const char *str, char *type)
     else if (str[1]=='8') {
         if      (sys==SYS_GAL) sprintf(type,"%c8X",str[0]);
     }
-    trace(ARC_INFO,"convcode: ver=%.2f sys=%2d type= %s -> %s\n",ver,sys,str,type);
+    arc_log(ARC_INFO, "convcode: ver=%.2f sys=%2d type= %s -> %s\n", ver, sys, str, type);
 }
 /* decode obs header ---------------------------------------------------------*/
 static void decode_obsh(FILE *fp, char *buff, double ver, int *tsys,
@@ -227,8 +227,8 @@ static void decode_obsh(FILE *fp, char *buff, double ver, int *tsys,
     int i,j,k,n,nt,prn,fcn;
     const char *p;
     char *label=buff+60,str[4];
-    
-    trace(ARC_INFO,"decode_obsh: ver=%.2f\n",ver);
+
+    arc_log(ARC_INFO, "decode_obsh: ver=%.2f\n", ver);
     
     if      (strstr(label,"MARKER NAME"         )) {
         if (sta) setstr(sta->name,buff,60);
@@ -272,7 +272,7 @@ static void decode_obsh(FILE *fp, char *buff, double ver, int *tsys,
     else if (strstr(label,"CENTER OF MASS: XYZ" )) ; /* opt ver.3 */
     else if (strstr(label,"SYS / # / OBS TYPES" )) { /* ver.3 */
         if (!(p=strchr(syscodes,buff[0]))) {
-            trace(ARC_WARNING,"invalid system code: sys=%c\n",buff[0]);
+            arc_log(ARC_WARNING, "invalid system code: sys=%c\n", buff[0]);
             return;
         }
         i=(int)(p-syscodes);
@@ -295,8 +295,8 @@ static void decode_obsh(FILE *fp, char *buff, double ver, int *tsys,
             if (tobs[i][j][2]) continue;
             if (!(p=strchr(frqcodes,tobs[i][j][1]))) continue;
             tobs[i][j][2]=defcodes[i][(int)(p-frqcodes)];
-            trace(ARC_WARNING,"set default for unknown code: sys=%c code=%s\n",buff[0],
-                  tobs[i][j]);
+            arc_log(ARC_WARNING, "set default for unknown code: sys=%c code=%s\n", buff[0],
+                    tobs[i][j]);
         }
     }
     else if (strstr(label,"WAVELENGTH FACT L1/2")) ; /* opt ver.2 */
@@ -370,8 +370,8 @@ static void decode_navh(char *buff, nav_t *nav)
 {
     int i,j;
     char *label=buff+60;
-    
-    trace(ARC_INFO,"decode_navh:\n");
+
+    arc_log(ARC_INFO, "decode_navh:\n");
     
     if      (strstr(label,"ION ALPHA"           )) { /* opt ver.2 */
         if (nav) {
@@ -472,8 +472,8 @@ static void decode_navh(char *buff, nav_t *nav)
 static void decode_gnavh(char *buff, nav_t *nav)
 {
     char *label=buff+60;
-    
-    trace(ARC_INFO,"decode_gnavh:\n");
+
+    arc_log(ARC_INFO, "decode_gnavh:\n");
     
     if      (strstr(label,"CORR TO SYTEM TIME"  )) ; /* opt */
     else if (strstr(label,"LEAP SECONDS"        )) { /* opt */
@@ -484,8 +484,8 @@ static void decode_gnavh(char *buff, nav_t *nav)
 static void decode_hnavh(char *buff, nav_t *nav)
 {
     char *label=buff+60;
-    
-    trace(ARC_INFO,"decode_hnavh:\n");
+
+    arc_log(ARC_INFO, "decode_hnavh:\n");
     
     if      (strstr(label,"CORR TO SYTEM TIME"  )) ; /* opt */
     else if (strstr(label,"D-UTC A0,A1,T,W,S,U" )) ; /* opt */
@@ -500,8 +500,8 @@ static int readrnxh(FILE *fp, double *ver, char *type, int *sys, int *tsys,
     double bias;
     char buff[MAXRNXLEN],*label=buff+60;
     int i=0,block=0,sat;
-    
-    trace(ARC_INFO,"readrnxh:\n");
+
+    arc_log(ARC_INFO, "readrnxh:\n");
     
     *ver=2.10; *type=' '; *sys=SYS_GPS; *tsys=TSYS_GPS;
     
@@ -525,7 +525,7 @@ static int readrnxh(FILE *fp, double *ver, char *type, int *sys, int *tsys,
                 case 'I': *sys=SYS_IRN;  *tsys=TSYS_IRN; break; /* v.3.03 */
                 case 'M': *sys=SYS_NONE; *tsys=TSYS_GPS; break; /* mixed */
                 default :
-                    trace(ARC_WARNING,"not supported satellite system: %c\n",*(buff+40));
+                    arc_log(ARC_WARNING, "not supported satellite system: %c\n", *(buff + 40));
                     break;
             }
             continue;
@@ -572,8 +572,8 @@ static int decode_obsepoch(FILE *fp, char *buff, double ver, gtime_t *time,
 {
     int i,j,n;
     char satid[8]="";
-    
-    trace(ARC_INFO,"decode_obsepoch: ver=%.2f\n",ver);
+
+    arc_log(ARC_INFO, "decode_obsepoch: ver=%.2f\n", ver);
     
     if (ver<=2.99) { /* ver.2 */
         if ((n=(int)str2num(buff,29,3))<=0) return 0;
@@ -584,7 +584,7 @@ static int decode_obsepoch(FILE *fp, char *buff, double ver, gtime_t *time,
         if (3<=*flag&&*flag<=5) return n;
         
         if (str2time(buff,0,26,time)) {
-            trace(ARC_WARNING,"rinex obs invalid epoch: epoch=%26.26s\n",buff);
+            arc_log(ARC_WARNING, "rinex obs invalid epoch: epoch=%26.26s\n", buff);
             return 0;
         }
         for (i=0,j=32;i<n;i++,j+=3) {
@@ -606,11 +606,11 @@ static int decode_obsepoch(FILE *fp, char *buff, double ver, gtime_t *time,
         if (3<=*flag&&*flag<=5) return n;
         
         if (buff[0]!='>'||str2time(buff,1,28,time)) {
-            trace(ARC_WARNING,"rinex obs invalid epoch: epoch=%29.29s\n",buff);
+            arc_log(ARC_WARNING, "rinex obs invalid epoch: epoch=%29.29s\n", buff);
             return 0;
         }
     }
-    trace(ARC_INFO,"decode_obsepoch: time=%s flag=%d\n",time_str(*time,3),*flag);
+    arc_log(ARC_INFO, "decode_obsepoch: time=%s flag=%d\n", time_str(*time, 3), *flag);
     return n;
 }
 /* decode obs data -----------------------------------------------------------*/
@@ -622,15 +622,15 @@ static int decode_obsdata(FILE *fp, char *buff, double ver, int mask,
     unsigned char lli[MAXOBSTYPE]={0};
     char satid[8]="";
     int i,j,n,m,stat=1,p[MAXOBSTYPE],k[16],l[16];
-    
-    trace(ARC_INFO,"decode_obsdata: ver=%.2f\n",ver);
+
+    arc_log(ARC_INFO, "decode_obsdata: ver=%.2f\n", ver);
     
     if (ver>2.99) { /* ver.3 */
         strncpy(satid,buff,3);
         obs->sat=(unsigned char)satid2no(satid);
     }
     if (!obs->sat) {
-        trace(ARC_WARNING,"decode_obsdata: unsupported sat sat=%s\n",satid);
+        arc_log(ARC_WARNING, "decode_obsdata: unsupported sat sat=%s\n", satid);
         stat=0;
     }
     else if (!(satsys(obs->sat,NULL)&mask)) {
@@ -718,7 +718,7 @@ static int decode_obsdata(FILE *fp, char *buff, double ver, int mask,
             case 3: obs->SNR[p[i]]=(unsigned char)(val[i]*4.0+0.5);    break;
         }
     }
-    trace(ARC_INFO,"decode_obsdata: time=%s sat=%2d\n",time_str(obs->time,0),obs->sat);
+    arc_log(ARC_INFO, "decode_obsdata: time=%s sat=%2d\n", time_str(obs->time, 0), obs->sat);
     return 1;
 }
 /* save slips ----------------------------------------------------------------*/
@@ -746,8 +746,8 @@ static int addobsdata(obs_t *obs, const obsd_t *data)
     if (obs->nmax<=obs->n) {
         if (obs->nmax<=0) obs->nmax=NINCOBS; else obs->nmax*=2;
         if (!(obs_data=(obsd_t *)realloc(obs->data,sizeof(obsd_t)*obs->nmax))) {
-            trace(ARC_FATAL,"addobsdata: memalloc error n=%dx%d\n",
-				sizeof(obsd_t),obs->nmax);
+            arc_log(ARC_FATAL, "addobsdata: memalloc error n=%dx%d\n",
+                    sizeof(obsd_t), obs->nmax);
             free(obs->data); obs->data=NULL; obs->n=obs->nmax=0;
             return -1;
         }
@@ -813,8 +813,8 @@ static void set_index(double ver, int sys, const char *opt,
         for (i=0;i<n;i++) {
             if (strcmp(code2obs(ind->code[i],NULL),str)) continue;
             ind->shift[i]=shift;
-            trace(ARC_WARNING,"phase shift: sys=%2d tobs=%s shift=%.3f\n",sys,
-                  tobs[i],shift);
+            arc_log(ARC_WARNING, "phase shift: sys=%2d tobs=%s shift=%.3f\n", sys,
+                    tobs[i], shift);
         }
     }
     /* assign index for highest priority code */
@@ -843,7 +843,7 @@ static void set_index(double ver, int sys, const char *opt,
     }
     for (i=0;i<n;i++) {
         if (!ind->code[i]||!ind->pri[i]||ind->pos[i]>=0) continue;
-        trace(ARC_WARNING,"reject obs type: sys=%2d, obs=%s\n",sys,tobs[i]);
+        arc_log(ARC_WARNING, "reject obs type: sys=%2d, obs=%s\n", sys, tobs[i]);
     }
     ind->n=n;
     
@@ -905,8 +905,8 @@ static int readrnxobs(FILE *fp, gtime_t ts, gtime_t te, double tint,
     obsd_t *data;
     unsigned char slips[MAXSAT][NFREQ]={{0}};
     int i,n,flag=0,stat=0;
-    
-    trace(ARC_INFO,"readrnxobs: rcv=%d ver=%.2f tsys=%d\n",rcv,ver,tsys);
+
+    arc_log(ARC_INFO, "readrnxobs: rcv=%d ver=%.2f tsys=%d\n", rcv, ver, tsys);
     
     if (!obs||rcv>MAXRCV) return 0;
     
@@ -937,7 +937,7 @@ static int readrnxobs(FILE *fp, gtime_t ts, gtime_t te, double tint,
             if ((stat=addobsdata(obs,data+i))<0) break;
         }
     }
-    trace(ARC_INFO,"readrnxobs: nobs=%d stat=%d\n",obs->n,stat);
+    arc_log(ARC_INFO, "readrnxobs: nobs=%d stat=%d\n", obs->n, stat);
     
     free(data);
     
@@ -949,13 +949,13 @@ static int decode_eph(double ver, int sat, gtime_t toc, const double *data,
 {
     eph_t eph0={0};
     int sys;
-    
-    trace(ARC_INFO,"decode_eph: ver=%.2f sat=%2d\n",ver,sat);
+
+    arc_log(ARC_INFO, "decode_eph: ver=%.2f sat=%2d\n", ver, sat);
     
     sys=satsys(sat,NULL);
     
     if (!(sys&(SYS_GPS|SYS_GAL|SYS_QZS|SYS_CMP|SYS_IRN))) {
-        trace(ARC_ERROR,"ephemeris error: invalid satellite sat=%2d\n",sat);
+        arc_log(ARC_ERROR, "ephemeris error: invalid satellite sat=%2d\n", sat);
         return 0;
     }
     *eph=eph0;
@@ -1046,10 +1046,10 @@ static int decode_eph(double ver, int sat, gtime_t toc, const double *data,
         eph->tgd[0]=   data[25];      /* TGD */
     }
     if (eph->iode<0||1023<eph->iode) {
-        trace(ARC_WARNING,"rinex nav invalid: sat=%2d iode=%d\n",sat,eph->iode);
+        arc_log(ARC_WARNING, "rinex nav invalid: sat=%2d iode=%d\n", sat, eph->iode);
     }
     if (eph->iodc<0||1023<eph->iodc) {
-        trace(ARC_WARNING,"rinex nav invalid: sat=%2d iodc=%d\n",sat,eph->iodc);
+        arc_log(ARC_WARNING, "rinex nav invalid: sat=%2d iodc=%d\n", sat, eph->iodc);
     }
     return 1;
 }
@@ -1061,11 +1061,11 @@ static int decode_geph(double ver, int sat, gtime_t toc, double *data,
     gtime_t tof;
     double tow,tod;
     int week,dow;
-    
-    trace(ARC_INFO,"decode_geph: ver=%.2f sat=%2d\n",ver,sat);
+
+    arc_log(ARC_INFO, "decode_geph: ver=%.2f sat=%2d\n", ver, sat);
     
     if (satsys(sat,NULL)!=SYS_GLO) {
-        trace(ARC_ERROR,"glonass ephemeris error: invalid satellite sat=%2d\n",sat);
+        arc_log(ARC_ERROR, "glonass ephemeris error: invalid satellite sat=%2d\n", sat);
         return 0;
     }
     *geph=geph0;
@@ -1103,7 +1103,7 @@ static int decode_geph(double ver, int sat, gtime_t toc, double *data,
     if (geph->frq>128) geph->frq-=256;
     
     if (geph->frq<MINFREQ_GLO||MAXFREQ_GLO<geph->frq) {
-        trace(ARC_WARNING,"rinex gnav invalid freq: sat=%2d fn=%d\n",sat,geph->frq);
+        arc_log(ARC_WARNING, "rinex gnav invalid freq: sat=%2d fn=%d\n", sat, geph->frq);
     }
     return 1;
 }
@@ -1113,11 +1113,11 @@ static int decode_seph(double ver, int sat, gtime_t toc, double *data,
 {
     seph_t seph0={0};
     int week;
-    
-    trace(ARC_INFO,"decode_seph: ver=%.2f sat=%2d\n",ver,sat);
+
+    arc_log(ARC_INFO, "decode_seph: ver=%.2f sat=%2d\n", ver, sat);
     
     if (satsys(sat,NULL)!=SYS_SBS) {
-        trace(ARC_ERROR,"geo ephemeris error: invalid satellite sat=%2d\n",sat);
+        arc_log(ARC_ERROR, "geo ephemeris error: invalid satellite sat=%2d\n", sat);
         return 0;
     }
     *seph=seph0;
@@ -1148,8 +1148,8 @@ static int readrnxnavb(FILE *fp, const char *opt, double ver, int sys,
     double data[64];
     int i=0,j,prn,sat=0,sp=3,mask;
     char buff[MAXRNXLEN],id[8]="",*p;
-    
-    trace(ARC_INFO,"readrnxnavb: ver=%.2f sys=%d\n",ver,sys);
+
+    arc_log(ARC_INFO, "readrnxnavb: ver=%.2f sys=%d\n", ver, sys);
     
     /* set system mask */
     mask=set_sysmask(opt);
@@ -1181,7 +1181,7 @@ static int readrnxnavb(FILE *fp, const char *opt, double ver, int sys,
             }
             /* decode toc field */
             if (str2time(buff+sp,0,19,&toc)) {
-                trace(ARC_ERROR,"rinex nav toc error: %23.23s\n",buff);
+                arc_log(ARC_ERROR, "rinex nav toc error: %23.23s\n", buff);
                 return 0;
             }
             /* decode data fields */
@@ -1222,7 +1222,7 @@ static int add_eph(nav_t *nav, const eph_t *eph)
     if (nav->nmax<=nav->n) {
         nav->nmax+=1024;
         if (!(nav_eph=(eph_t *)realloc(nav->eph,sizeof(eph_t)*nav->nmax))) {
-            trace(ARC_FATAL,"decode_eph malloc error: n=%d\n",nav->nmax);
+            arc_log(ARC_FATAL, "decode_eph malloc error: n=%d\n", nav->nmax);
             free(nav->eph); nav->eph=NULL; nav->n=nav->nmax=0;
             return 0;
         }
@@ -1238,7 +1238,7 @@ static int add_geph(nav_t *nav, const geph_t *geph)
     if (nav->ngmax<=nav->ng) {
         nav->ngmax+=1024;
         if (!(nav_geph=(geph_t *)realloc(nav->geph,sizeof(geph_t)*nav->ngmax))) {
-            trace(ARC_FATAL,"decode_geph malloc error: n=%d\n",nav->ngmax);
+            arc_log(ARC_FATAL, "decode_geph malloc error: n=%d\n", nav->ngmax);
             free(nav->geph); nav->geph=NULL; nav->ng=nav->ngmax=0;
             return 0;
         }
@@ -1254,7 +1254,7 @@ static int add_seph(nav_t *nav, const seph_t *seph)
     if (nav->nsmax<=nav->ns) {
         nav->nsmax+=1024;
         if (!(nav_seph=(seph_t *)realloc(nav->seph,sizeof(seph_t)*nav->nsmax))) {
-            trace(ARC_FATAL,"decode_seph malloc error: n=%d\n",nav->nsmax);
+            arc_log(ARC_FATAL, "decode_seph malloc error: n=%d\n", nav->nsmax);
             free(nav->seph); nav->seph=NULL; nav->ns=nav->nsmax=0;
             return 0;
         }
@@ -1271,8 +1271,8 @@ static int readrnxnav(FILE *fp, const char *opt, double ver, int sys,
     geph_t geph;
     seph_t seph;
     int stat,type;
-    
-    trace(ARC_INFO,"readrnxnav: ver=%.2f sys=%d\n",ver,sys);
+
+    arc_log(ARC_INFO, "readrnxnav: ver=%.2f sys=%d\n", ver, sys);
     
     if (!nav) return 0;
     
@@ -1299,8 +1299,8 @@ static int readrnxclk(FILE *fp, const char *opt, int index, nav_t *nav)
     double data[2];
     int i,j,sat,mask;
     char buff[MAXRNXLEN],satid[8]="";
-    
-    trace(ARC_INFO,"readrnxclk: index=%d\n", index);
+
+    arc_log(ARC_INFO, "readrnxclk: index=%d\n", index);
     
     if (!nav) return 0;
     
@@ -1310,7 +1310,7 @@ static int readrnxclk(FILE *fp, const char *opt, int index, nav_t *nav)
     while (fgets(buff,sizeof(buff),fp)) {
         
         if (str2time(buff,8,26,&time)) {
-            trace(ARC_ERROR,"rinex clk invalid epoch: %34.34s\n",buff);
+            arc_log(ARC_ERROR, "rinex clk invalid epoch: %34.34s\n", buff);
             continue;
         }
         strncpy(satid,buff+3,4);
@@ -1325,7 +1325,7 @@ static int readrnxclk(FILE *fp, const char *opt, int index, nav_t *nav)
         if (nav->nc>=nav->ncmax) {
             nav->ncmax+=1024;
             if (!(nav_pclk=(pclk_t *)realloc(nav->pclk,sizeof(pclk_t)*(nav->ncmax)))) {
-                trace(ARC_FATAL,"readrnxclk malloc error: nmax=%d\n",nav->ncmax);
+                arc_log(ARC_FATAL, "readrnxclk malloc error: nmax=%d\n", nav->ncmax);
                 free(nav->pclk); nav->pclk=NULL; nav->nc=nav->ncmax=0;
                 return -1;
             }
@@ -1353,8 +1353,8 @@ static int readrnxfp(FILE *fp, gtime_t ts, gtime_t te, double tint,
     double ver;
     int sys,tsys;
     char tobs[NUMSYS][MAXOBSTYPE][4]={{""}};
-    
-    trace(ARC_INFO,"readrnxfp: flag=%d index=%d\n",flag,index);
+
+    arc_log(ARC_INFO, "readrnxfp: flag=%d index=%d\n", flag, index);
     
     /* read rinex header */
     if (!readrnxh(fp,&ver,type,&sys,&tsys,tobs,nav,sta)) return 0;
@@ -1372,7 +1372,7 @@ static int readrnxfp(FILE *fp, gtime_t ts, gtime_t te, double tint,
         case 'L': return readrnxnav(fp,opt,ver,SYS_GAL,nav); /* extension */
         case 'C': return readrnxclk(fp,opt,index,nav);
     }
-    trace(ARC_WARNING,"unsupported rinex type ver=%.2f type=%c\n",ver,*type);
+    arc_log(ARC_WARNING, "unsupported rinex type ver=%.2f type=%c\n", ver, *type);
     return 0;
 }
 /* uncompress and read rinex file --------------------------------------------*/
@@ -1383,18 +1383,18 @@ static int readrnxfile(const char *file, gtime_t ts, gtime_t te, double tint,
     FILE *fp;
     int cstat,stat;
     char tmpfile[1024];
-    
-    trace(ARC_INFO,"readrnxfile: file=%s flag=%d index=%d\n",file,flag,index);
+
+    arc_log(ARC_INFO, "readrnxfile: file=%s flag=%d index=%d\n", file, flag, index);
     
     if (sta) init_sta(sta);
     
     /* uncompress file */
     if ((cstat=rtk_uncompress(file,tmpfile))<0) {
-        trace(ARC_WARNING,"rinex file uncompact error: %s\n",file);
+        arc_log(ARC_WARNING, "rinex file uncompact error: %s\n", file);
         return 0;
     }
     if (!(fp=fopen(cstat?tmpfile:file,"r"))) {
-        trace(ARC_WARNING,"rinex file open error: %s\n",cstat?tmpfile:file);
+        arc_log(ARC_WARNING, "rinex file open error: %s\n", cstat ? tmpfile : file);
         return 0;
     }
     /* read rinex file */
@@ -1448,8 +1448,8 @@ extern int readrnxt(const char *file, int rcv, gtime_t ts, gtime_t te,
     int i,n,stat=0;
     const char *p;
     char type=' ',*files[MAXEXFILE]={0};
-    
-    trace(ARC_INFO,"readrnxt: file=%s rcv=%d\n",file,rcv);
+
+    arc_log(ARC_INFO, "readrnxt: file=%s rcv=%d\n", file, rcv);
     
     if (!*file) {
         return readrnxfp(stdin,ts,te,tint,opt,0,1,&type,obs,nav,sta);
@@ -1482,8 +1482,8 @@ extern int readrnx(const char *file, int rcv, const char *opt, obs_t *obs,
                    nav_t *nav, sta_t *sta)
 {
     gtime_t t={0};
-    
-    trace(ARC_INFO,"readrnx : file=%s rcv=%d\n",file,rcv);
+
+    arc_log(ARC_INFO, "readrnx : file=%s rcv=%d\n", file, rcv);
     
     return readrnxt(file,rcv,t,t,0.0,opt,obs,nav,sta);
 }
@@ -1499,8 +1499,8 @@ static void combpclk(nav_t *nav)
 {
     pclk_t *nav_pclk;
     int i,j,k;
-    
-    trace(ARC_INFO,"combpclk: nc=%d\n",nav->nc);
+
+    arc_log(ARC_INFO, "combpclk: nc=%d\n", nav->nc);
     
     if (nav->nc<=0) return;
     
@@ -1520,13 +1520,13 @@ static void combpclk(nav_t *nav)
     
     if (!(nav_pclk=(pclk_t *)realloc(nav->pclk,sizeof(pclk_t)*nav->nc))) {
         free(nav->pclk); nav->pclk=NULL; nav->nc=nav->ncmax=0;
-        trace(ARC_FATAL,"combpclk malloc error nc=%d\n",nav->nc);
+        arc_log(ARC_FATAL, "combpclk malloc error nc=%d\n", nav->nc);
         return;
     }
     nav->pclk=nav_pclk;
     nav->ncmax=nav->nc;
-    
-    trace(ARC_INFO,"combpclk: nc=%d\n",nav->nc);
+
+    arc_log(ARC_INFO, "combpclk: nc=%d\n", nav->nc);
 }
 /* read rinex clock files ------------------------------------------------------
 * read rinex clock files
@@ -1539,8 +1539,8 @@ extern int readrnxc(const char *file, nav_t *nav)
     gtime_t t={0};
     int i,n,index=0,stat=1;
     char *files[MAXEXFILE]={0},type;
-    
-    trace(ARC_INFO,"readrnxc: file=%s\n",file);
+
+    arc_log(ARC_INFO, "readrnxc: file=%s\n", file);
     
     for (i=0;i<MAXEXFILE;i++) {
         if (!(files[i]=(char *)malloc(1024))) {
@@ -1584,8 +1584,8 @@ static int readsp3h(FILE *fp, gtime_t *time, char *type, int *sats,
 {
     int i,j,k=0,ns=0,sys,prn;
     char buff[1024];
-    
-    trace(ARC_INFO,"readsp3h:\n");
+
+    arc_log(ARC_INFO, "readsp3h:\n");
     
     for (i=0;i<22;i++) {
         if (!fgets(buff,sizeof(buff),fp)) break;
@@ -1622,7 +1622,7 @@ static int addpeph(nav_t *nav, peph_t *peph)
     if (nav->ne>=nav->nemax) {
         nav->nemax+=256;
         if (!(nav_peph=(peph_t *)realloc(nav->peph,sizeof(peph_t)*nav->nemax))) {
-            trace(ARC_FATAL,"readsp3b malloc error n=%d\n",nav->nemax);
+            arc_log(ARC_FATAL, "readsp3b malloc error n=%d\n", nav->nemax);
             free(nav->peph); nav->peph=NULL; nav->ne=nav->nemax=0;
             return 0;
         }
@@ -1640,15 +1640,15 @@ static void readsp3b(FILE *fp, char type, int *sats, int ns, double *bfact,
     double val,std,base;
     int i,j,sat,sys,prn,n=ns*(type=='P'?1:2),pred_o,pred_c,v;
     char buff[1024];
-    
-    trace(ARC_INFO,"readsp3b: type=%c ns=%d index=%d opt=%d\n",type,ns,index,opt);
+
+    arc_log(ARC_INFO, "readsp3b: type=%c ns=%d index=%d opt=%d\n", type, ns, index, opt);
     
     while (fgets(buff,sizeof(buff),fp)) {
         
         if (!strncmp(buff,"EOF",3)) break;
         
         if (buff[0]!='*'||str2time(buff,3,28,&time)) {
-            trace(ARC_WARNING,"sp3 invalid epoch %31.31s\n",buff);
+            arc_log(ARC_WARNING, "sp3 invalid epoch %31.31s\n", buff);
             continue;
         }
         if (!strcmp(tsys,"UTC")) time=utc2gpst(time); /* utc->gpst */
@@ -1728,8 +1728,8 @@ static int cmppeph(const void *p1, const void *p2)
 static void combpeph(nav_t *nav, int opt)
 {
     int i,j,k,m;
-    
-    trace(ARC_INFO,"combpeph: ne=%d\n",nav->ne);
+
+    arc_log(ARC_INFO, "combpeph: ne=%d\n", nav->ne);
     
     qsort(nav->peph,nav->ne,sizeof(peph_t),cmppeph);
     
@@ -1750,8 +1750,8 @@ static void combpeph(nav_t *nav, int opt)
         else if (++i<j) nav->peph[i]=nav->peph[j];
     }
     nav->ne=i+1;
-    
-    trace(4,"combpeph: ne=%d\n",nav->ne);
+
+    arc_log(4, "combpeph: ne=%d\n", nav->ne);
 }
 /* read sp3 precise ephemeris file ---------------------------------------------
 * read sp3 precise ephemeris/clock files and set them to navigation data
@@ -1774,8 +1774,8 @@ extern void readsp3(const char *file, nav_t *nav, int opt)
     double bfact[2]={0};
     int i,j,n,ns,sats[MAXSAT]={0};
     char *efiles[MAXEXFILE],*ext,type=' ',tsys[4]="";
-    
-    trace(ARC_INFO,"readpephs: file=%s\n",file);
+
+    arc_log(ARC_INFO, "readpephs: file=%s\n", file);
     
     for (i=0;i<MAXEXFILE;i++) {
         if (!(efiles[i]=(char *)malloc(1024))) {
@@ -1793,7 +1793,7 @@ extern void readsp3(const char *file, nav_t *nav, int opt)
             !strstr(ext+1,"eph")&&!strstr(ext+1,".EPH")) continue;
         
         if (!(fp=fopen(efiles[i],"r"))) {
-            trace(ARC_WARNING,"sp3 file open error %s\n",efiles[i]);
+            arc_log(ARC_WARNING, "sp3 file open error %s\n", efiles[i]);
             continue;
         }
         /* read sp3 header */
@@ -1822,8 +1822,8 @@ extern int readsap(const char *file, gtime_t time, nav_t *nav)
     pcvs_t pcvs={0};
     pcv_t pcv0={0},*pcv;
     int i;
-    
-    trace(ARC_INFO,"readsap : file=%s time=%s\n",file,time_str(time,0));
+
+    arc_log(ARC_INFO, "readsap : file=%s time=%s\n", file, time_str(time, 0));
     
     if (!readpcv(file,&pcvs)) return 0;
     
@@ -1841,11 +1841,11 @@ static int readdcbf(const char *file, nav_t *nav, const sta_t *sta)
     double cbias;
     char buff[256],str1[32],str2[32]="";
     int i,j,sat,type=0;
-    
-    trace(ARC_INFO,"readdcbf: file=%s\n",file);
+
+    arc_log(ARC_INFO, "readdcbf: file=%s\n", file);
     
     if (!(fp=fopen(file,"r"))) {
-        trace(ARC_WARNING,"dcb parameters file open error: %s\n",file);
+        arc_log(ARC_WARNING, "dcb parameters file open error: %s\n", file);
         return 0;
     }
     while (fgets(buff,sizeof(buff),fp)) {
@@ -1888,8 +1888,8 @@ extern int readdcb(const char *file, nav_t *nav, const sta_t *sta)
 {
     int i,j,n;
     char *efiles[MAXEXFILE]={0};
-    
-    trace(ARC_INFO,"readdcb : file=%s\n",file);
+
+    arc_log(ARC_INFO, "readdcb : file=%s\n", file);
     
     for (i=0;i<MAXSAT;i++) for (j=0;j<3;j++) {
         nav->cbias[i][j]=0.0;
@@ -1950,11 +1950,11 @@ static int readfcbf(const char *file, nav_t *nav)
     double ep1[6],ep2[6],bias[3]={0},std[3]={0};
     char buff[1024],str[32],*p;
     int sat;
-    
-    trace(ARC_INFO,"readfcbf: file=%s\n",file);
+
+    arc_log(ARC_INFO, "readfcbf: file=%s\n", file);
     
     if (!(fp=fopen(file,"r"))) {
-        trace(ARC_WARNING,"fcb parameters file open error: %s\n",file);
+        arc_log(ARC_WARNING, "fcb parameters file open error: %s\n", file);
         return 0;
     }
     while (fgets(buff,sizeof(buff),fp)) {
@@ -1989,8 +1989,8 @@ extern int readfcb(const char *file, nav_t *nav)
 {
     char *efiles[MAXEXFILE]={0};
     int i,n;
-    
-    trace(ARC_INFO,"readfcb : file=%s\n",file);
+
+    arc_log(ARC_INFO, "readfcb : file=%s\n", file);
     
     for (i=0;i<MAXEXFILE;i++) {
         if (!(efiles[i]=(char *)malloc(1024))) {

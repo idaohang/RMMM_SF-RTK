@@ -45,8 +45,8 @@ static double arc_prange(const obsd_t *obs, const nav_t *nav, const double *azel
     /* test snr mask */
     if (iter>0) {
         if (testsnr(0,i,azel[1],obs->SNR[i]*0.25,&opt->snrmask)) {
-            trace(ARC_WARNING,"snr mask: %s sat=%2d el=%.1f snr=%.1f\n",
-                  time_str(obs->time,0),obs->sat,azel[1]*R2D,obs->SNR[i]*0.25);
+            arc_log(ARC_WARNING, "snr mask: %s sat=%2d el=%.1f snr=%.1f\n",
+                    time_str(obs->time, 0), obs->sat, azel[1] * R2D, obs->SNR[i] * 0.25);
             return 0.0;
         }
     }
@@ -78,9 +78,9 @@ static double arc_prange(const obsd_t *obs, const nav_t *nav, const double *azel
 extern int ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
                     const double *azel, int ionoopt, double *ion, double *var)
 {
-    trace(ARC_INFO,"ionocorr: time=%s opt=%d sat=%2d pos=%.3f %.3f azel=%.3f %.3f\n",
-          time_str(time,3),ionoopt,sat,pos[0]*R2D,pos[1]*R2D,azel[0]*R2D,
-          azel[1]*R2D);
+    arc_log(ARC_INFO, "ionocorr: time=%s opt=%d sat=%2d pos=%.3f %.3f azel=%.3f %.3f\n",
+            time_str(time, 3), ionoopt, sat, pos[0] * R2D, pos[1] * R2D, azel[0] * R2D,
+            azel[1] * R2D);
     
     /* broadcast model */
     if (ionoopt==IONOOPT_BRDC) {
@@ -112,9 +112,9 @@ extern int ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
 extern int tropcorr(gtime_t time, const nav_t *nav, const double *pos,
                     const double *azel, int tropopt, double *trp, double *var)
 {
-    trace(ARC_INFO,"tropcorr: time=%s opt=%d pos=%.3f %.3f azel=%.3f %.3f\n",
-          time_str(time,3),tropopt,pos[0]*R2D,pos[1]*R2D,azel[0]*R2D,
-          azel[1]*R2D);
+    arc_log(ARC_INFO, "tropcorr: time=%s opt=%d pos=%.3f %.3f azel=%.3f %.3f\n",
+            time_str(time, 3), tropopt, pos[0] * R2D, pos[1] * R2D, azel[0] * R2D,
+            azel[1] * R2D);
     
     /* saastamoinen model */
     if (tropopt==TROPOPT_SAAS||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
@@ -136,8 +136,8 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
 {
     double r,dion,dtrp,vmeas,vion,vtrp,rr[3],pos[3],dtr,e[3],P,lam_L1;
     int i,j,nv=0,sys,mask[4]={0};
-    
-    trace(ARC_INFO,"resprng : n=%d\n",n);
+
+    arc_log(ARC_INFO, "resprng : n=%d\n", n);
     
     for (i=0;i<3;i++) rr[i]=x[i]; dtr=x[3];
     
@@ -150,8 +150,8 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
         
         /* reject duplicated observation data */
         if (i<n-1&&i<MAXOBS-1&&obs[i].sat==obs[i+1].sat) {
-            trace(ARC_WARNING,"duplicated observation data %s sat=%2d\n",
-                  time_str(obs[i].time,3),obs[i].sat);
+            arc_log(ARC_WARNING, "duplicated observation data %s sat=%2d\n",
+                    time_str(obs[i].time, 3), obs[i].sat);
             i++;
             continue;
         }
@@ -194,9 +194,9 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
         
         /* error variance */
         var[nv++]=arc_varerr(opt,azel[1+i*2],sys)+vare[i]+vmeas+vion+vtrp;
-        
-        trace(ARC_INFO,"sat=%2d azel=%5.1f %4.1f res=%7.3f sig=%5.3f\n",obs[i].sat,
-              azel[i*2]*R2D,azel[1+i*2]*R2D,resp[i],sqrt(var[nv-1]));
+
+        arc_log(ARC_INFO, "sat=%2d azel=%5.1f %4.1f res=%7.3f sig=%5.3f\n", obs[i].sat,
+                azel[i * 2] * R2D, azel[1 + i * 2] * R2D, resp[i], sqrt(var[nv - 1]));
     }
     /* constraint to avoid rank-deficient */
     for (i=0;i<4;i++) {
@@ -214,8 +214,8 @@ static int arc_valsol(const double *azel, const int *vsat, int n,
 {
     double azels[MAXOBS*2],dop[4],vv;
     int i,ns;
-    
-    trace(ARC_INFO,"valsol  : n=%d nv=%d\n",n,nv);
+
+    arc_log(ARC_INFO, "valsol  : n=%d nv=%d\n", n, nv);
     
     /* chi-square validation of residuals */
     vv=dot(v,v,nv);
@@ -246,8 +246,8 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
 {
     double x[NX]={0},dx[NX],Q[NX*NX],*v,*H,*var,sig;
     int i,j,k,info,stat,nv,ns;
-    
-    trace(ARC_INFO,"estpos  : n=%d\n",n);
+
+    arc_log(ARC_INFO, "estpos  : n=%d\n", n);
     
     v=mat(n+4,1); H=mat(NX,n+4); var=mat(n+4,1);
     
@@ -314,8 +314,8 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
     char tstr[32],name[16],msg_e[128];
     double *rs_e,*dts_e,*vare_e,*azel_e,*resp_e,rms_e,rms=100.0;
     int i,j,k,nvsat,stat=0,*svh_e,*vsat_e,sat=0;
-    
-    trace(ARC_INFO,"raim_fde: %s n=%2d\n",time_str(obs[0].time,0),n);
+
+    arc_log(ARC_INFO, "raim_fde: %s n=%2d\n", time_str(obs[0].time, 0), n);
     
     if (!(obs_e=(obsd_t *)malloc(sizeof(obsd_t)*n))) return 0;
     rs_e=mat(6,n); dts_e=mat(2,n); vare_e=mat(1,n); azel_e=zeros(2,n);
@@ -335,7 +335,7 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
         /* estimate receiver position without a satellite */
         if (!arc_estpos(obs_e,n-1,rs_e,dts_e,vare_e,svh_e,nav,opt,&sol_e,azel_e,
                         vsat_e,resp_e,msg_e)) {
-            trace(ARC_ERROR,"raim_fde: exsat=%2d (%s)\n",obs[i].sat,msg);
+            arc_log(ARC_ERROR, "raim_fde: exsat=%2d (%s)\n", obs[i].sat, msg);
             continue;
         }
         for (j=nvsat=0,rms_e=0.0;j<n-1;j++) {
@@ -344,13 +344,13 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
             nvsat++;
         }
         if (nvsat<5) {
-            trace(ARC_ERROR,"raim_fde: exsat=%2d lack of satellites nvsat=%2d\n",
-                  obs[i].sat,nvsat);
+            arc_log(ARC_ERROR, "raim_fde: exsat=%2d lack of satellites nvsat=%2d\n",
+                    obs[i].sat, nvsat);
             continue;
         }
         rms_e=sqrt(rms_e/nvsat);
-        
-        trace(ARC_INFO,"raim_fde: exsat=%2d rms=%8.3f\n",obs[i].sat,rms_e);
+
+        arc_log(ARC_INFO, "raim_fde: exsat=%2d rms=%8.3f\n", obs[i].sat, rms_e);
         if (rms_e>rms) continue;
         
         /* save result */
@@ -369,7 +369,7 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
     }
     if (stat) {
         time2str(obs[0].time,tstr,2); satno2id(sat,name);
-        trace(ARC_WARNING,"%s: %s excluded by raim\n",tstr+11,name);
+        arc_log(ARC_WARNING, "%s: %s excluded by raim\n", tstr + 11, name);
     }
     free(obs_e);
     free(rs_e ); free(dts_e ); free(vare_e); free(azel_e);
@@ -383,8 +383,8 @@ static int arc_resdop(const obsd_t *obs, int n, const double *rs, const double *
 {
     double lam,rate,pos[3],E[9],a[3],e[3],vs[3],cosel;
     int i,j,nv=0;
-    
-    trace(ARC_INFO,"resdop  : n=%d\n",n);
+
+    arc_log(ARC_INFO, "resdop  : n=%d\n", n);
     
     ecef2pos(rr,pos); xyz2enu(pos,E);
     
@@ -424,8 +424,8 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
 {
     double x[4]={0},dx[4],Q[16],*v,*H;
     int i,j,nv;
-    
-    trace(ARC_INFO,"estvel  : n=%d\n",n);
+
+    arc_log(ARC_INFO, "estvel  : n=%d\n", n);
     
     v=mat(n,1); H=mat(4,n);
     
@@ -476,8 +476,8 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
     sol->stat=SOLQ_NONE;
     
     if (n<=0) {strcpy(msg,"no observation data"); return 0;}
-    
-    trace(ARC_INFO,"pntpos  : tobs=%s n=%d\n",time_str(obs[0].time,3),n);
+
+    arc_log(ARC_INFO, "pntpos  : tobs=%s n=%d\n", time_str(obs[0].time, 3), n);
     
     sol->time=obs[0].time; msg[0]='\0';
     

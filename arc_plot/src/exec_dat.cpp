@@ -1605,7 +1605,7 @@ mglCommand mgls_dat_cmd[] = {
 	{"subto",_("Subtract data or number"),"subto Var Dat|Var num", mgls_subto ,3},
 	{"sum",_("Find summation over direction"),"sum Res Dat 'dir'", mgls_sum ,4},
 	{"swap",_("Swap data (useful after Fourier transform)"),"swap Dat 'dir'", mgls_swap ,16},
-	{"trace",_("Get trace of array"),"trace Res Dat", mgls_trace ,4},
+	{"arc_log",_("Get arc_log of array"),"arc_log Res Dat", mgls_trace ,4},
 	{"transform",_("Do integral transform of data"),"transform Res 'how' Rdat Idat", mgls_transform ,4},
 	{"transforma",_("Do integral transform of data"),"transforma Res 'how' Adat Pdat", mgls_transforma ,4},
 	{"transpose",_("Transpose data array"),"transpose Dat ['dir']", mgls_transpose ,16},

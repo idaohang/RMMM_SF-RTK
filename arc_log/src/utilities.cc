@@ -67,7 +67,7 @@ _END_GOOGLE_NAMESPACE_
 #include "base/commandlineflags.h"
 
 GLOG_DEFINE_bool(symbolize_stacktrace, true,
-                 "Symbolize the stack trace in the tombstone");
+                 "Symbolize the stack arc_log in the tombstone");
 
 _START_GOOGLE_NAMESPACE_
 
@@ -115,9 +115,9 @@ static void DumpPC(DebugWriter *writerfn, void *arg, void *pc,
   writerfn(buf, arg);
 }
 
-// Dump current stack trace as directed by writerfn
+// Dump current stack arc_log as directed by writerfn
 static void DumpStackTrace(int skip_count, DebugWriter *writerfn, void *arg) {
-  // Print stack trace
+  // Print stack arc_log
   void* stack[32];
   int depth = GetStackTrace(stack, ARRAYSIZE(stack), skip_count+1);
   for (int i = 0; i < depth; i++) {

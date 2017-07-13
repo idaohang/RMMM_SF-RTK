@@ -213,7 +213,7 @@ void DumpSignalInfo(int signal_number, siginfo_t *siginfo) {
   formatter.AppendUint64(siginfo->si_pid, 10);
   formatter.AppendString("; ");
 #endif
-  formatter.AppendString("stack trace: ***\n");
+  formatter.AppendString("stack arc_log: ***\n");
   g_failure_writer(buf, formatter.num_bytes_written());
 }
 

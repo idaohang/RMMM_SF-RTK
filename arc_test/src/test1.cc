@@ -42,7 +42,7 @@ int main()
 	strcpy(infile[4],rover_bds_navf);
 	strcpy(infile[5],base_bds_navf);
 
-	tracelevel(ARC_INFO);
+    arc_tracelevel(ARC_INFO);
 	tracebuf(10);
 
 	postpos(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,6,outfile,base,rover);

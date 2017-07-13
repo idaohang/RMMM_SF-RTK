@@ -786,7 +786,7 @@ _LT_EOF
 # ---------------------
 # Trace this macro to discover what tags are supported by the libtool
 # --tag option, using:
-#    autoconf --trace 'LT_SUPPORTED_TAG:$1'
+#    autoconf --arc_log 'LT_SUPPORTED_TAG:$1'
 AC_DEFUN([LT_SUPPORTED_TAG], [])
 
 

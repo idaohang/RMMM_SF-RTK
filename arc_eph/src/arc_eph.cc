@@ -63,8 +63,8 @@ extern void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts)
 {
     double tk,M,E,Ek,sinE,cosE,u,r,i,O,x,y,sinO,cosO,cosi,mu;
     int n;
-    
-    trace(ARC_WARNING,"alm2pos : time=%s sat=%2d\n",time_str(time,3),alm->sat);
+
+    arc_log(ARC_WARNING, "alm2pos : time=%s sat=%2d\n", time_str(time, 3), alm->sat);
     
     tk=timediff(time,alm->toa);
     
@@ -79,7 +79,7 @@ extern void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts)
         Ek=E; E-=(E-alm->e*sin(E)-M)/(1.0-alm->e*cos(E));
     }
     if (n>=MAX_ITER_KEPLER) {
-        trace(ARC_WARNING,"alm2pos: kepler iteration overflow sat=%2d\n",alm->sat);
+        arc_log(ARC_WARNING, "alm2pos: kepler iteration overflow sat=%2d\n", alm->sat);
         return;
     }
     sinE=sin(E); cosE=cos(E);
@@ -105,8 +105,8 @@ extern double eph2clk(gtime_t time, const eph_t *eph)
 {
     double t;
     int i;
-    
-    trace(ARC_INFO,"eph2clk : time=%s sat=%2d\n",time_str(time,3),eph->sat);
+
+    arc_log(ARC_INFO, "eph2clk : time=%s sat=%2d\n", time_str(time, 3), eph->sat);
     
     t=timediff(time,eph->toc);
     
@@ -134,8 +134,8 @@ extern void eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
     double tk,M,E,Ek,sinE,cosE,u,r,i,O,sin2u,cos2u,x,y,sinO,cosO,cosi,mu,omge;
     double xg,yg,zg,sino,coso;
     int n,sys,prn;
-    
-    trace(ARC_INFO,"eph2pos : time=%s sat=%2d\n",time_str(time,3),eph->sat);
+
+    arc_log(ARC_INFO, "eph2pos : time=%s sat=%2d\n", time_str(time, 3), eph->sat);
     
     if (eph->A<=0.0) {
         rs[0]=rs[1]=rs[2]=*dts=*var=0.0;
@@ -154,12 +154,12 @@ extern void eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
         Ek=E; E-=(E-eph->e*sin(E)-M)/(1.0-eph->e*cos(E));
     }
     if (n>=MAX_ITER_KEPLER) {
-        trace(ARC_ERROR,"eph2pos: kepler iteration overflow sat=%2d\n",eph->sat);
+        arc_log(ARC_ERROR, "eph2pos: kepler iteration overflow sat=%2d\n", eph->sat);
         return;
     }
     sinE=sin(E); cosE=cos(E);
-    
-    trace(ARC_INFO,"kepler: sat=%2d e=%8.5f n=%2d del=%10.3e\n",eph->sat,eph->e,n,E-Ek);
+
+    arc_log(ARC_INFO, "kepler: sat=%2d e=%8.5f n=%2d del=%10.3e\n", eph->sat, eph->e, n, E - Ek);
     
     u=atan2(sqrt(1.0-eph->e*eph->e)*sinE,cosE-eph->e)+eph->omg;
     r=eph->A*(1.0-eph->e*cosE);
@@ -239,8 +239,8 @@ extern double geph2clk(gtime_t time, const geph_t *geph)
 {
     double t;
     int i;
-    
-    trace(ARC_INFO,"geph2clk: time=%s sat=%2d\n",time_str(time,3),geph->sat);
+
+    arc_log(ARC_INFO, "geph2clk: time=%s sat=%2d\n", time_str(time, 3), geph->sat);
     
     t=timediff(time,geph->toe);
     
@@ -264,8 +264,8 @@ extern void geph2pos(gtime_t time, const geph_t *geph, double *rs, double *dts,
 {
     double t,tt,x[6];
     int i;
-    
-    trace(ARC_INFO,"geph2pos: time=%s sat=%2d\n",time_str(time,3),geph->sat);
+
+    arc_log(ARC_INFO, "geph2pos: time=%s sat=%2d\n", time_str(time, 3), geph->sat);
     
     t=timediff(time,geph->toe);
     
@@ -294,8 +294,8 @@ extern double seph2clk(gtime_t time, const seph_t *seph)
 {
     double t;
     int i;
-    
-    trace(ARC_INFO,"seph2clk: time=%s sat=%2d\n",time_str(time,3),seph->sat);
+
+    arc_log(ARC_INFO, "seph2clk: time=%s sat=%2d\n", time_str(time, 3), seph->sat);
     
     t=timediff(time,seph->t0);
     
@@ -319,8 +319,8 @@ extern void seph2pos(gtime_t time, const seph_t *seph, double *rs, double *dts,
 {
     double t;
     int i;
-    
-    trace(ARC_INFO,"seph2pos: time=%s sat=%2d\n",time_str(time,3),seph->sat);
+
+    arc_log(ARC_INFO, "seph2pos: time=%s sat=%2d\n", time_str(time, 3), seph->sat);
     
     t=timediff(time,seph->t0);
     
@@ -336,8 +336,8 @@ static eph_t *seleph(gtime_t time, int sat, int iode, const nav_t *nav)
 {
     double t,tmax,tmin;
     int i,j=-1;
-    
-    trace(ARC_INFO,"seleph  : time=%s sat=%2d iode=%d\n",time_str(time,3),sat,iode);
+
+    arc_log(ARC_INFO, "seleph  : time=%s sat=%2d iode=%d\n", time_str(time, 3), sat, iode);
     
     switch (satsys(sat,NULL)) {
         case SYS_QZS: tmax=MAXDTOE_QZS+1.0; break;
@@ -355,8 +355,8 @@ static eph_t *seleph(gtime_t time, int sat, int iode, const nav_t *nav)
         if (t<=tmin) {j=i; tmin=t;} /* toe closest to time */
     }
     if (iode>=0||j<0) {
-        trace(ARC_WARNING,"no broadcast ephemeris: %s sat=%2d iode=%3d\n",time_str(time,0),
-              sat,iode);
+        arc_log(ARC_WARNING, "no broadcast ephemeris: %s sat=%2d iode=%3d\n", time_str(time, 0),
+                sat, iode);
         return NULL;
     }
     return nav->eph+j;
@@ -366,8 +366,8 @@ static geph_t *selgeph(gtime_t time, int sat, int iode, const nav_t *nav)
 {
     double t,tmax=MAXDTOE_GLO,tmin=tmax+1.0;
     int i,j=-1;
-    
-    trace(ARC_INFO,"selgeph : time=%s sat=%2d iode=%2d\n",time_str(time,3),sat,iode);
+
+    arc_log(ARC_INFO, "selgeph : time=%s sat=%2d iode=%2d\n", time_str(time, 3), sat, iode);
     
     for (i=0;i<nav->ng;i++) {
         if (nav->geph[i].sat!=sat) continue;
@@ -377,8 +377,8 @@ static geph_t *selgeph(gtime_t time, int sat, int iode, const nav_t *nav)
         if (t<=tmin) {j=i; tmin=t;} /* toe closest to time */
     }
     if (iode>=0||j<0) {
-        trace(3,"no glonass ephemeris  : %s sat=%2d iode=%2d\n",time_str(time,0),
-              sat,iode);
+        arc_log(3, "no glonass ephemeris  : %s sat=%2d iode=%2d\n", time_str(time, 0),
+                sat, iode);
         return NULL;
     }
     return nav->geph+j;
@@ -388,8 +388,8 @@ static seph_t *selseph(gtime_t time, int sat, const nav_t *nav)
 {
     double t,tmax=MAXDTOE_SBS,tmin=tmax+1.0;
     int i,j=-1;
-    
-    trace(ARC_INFO,"selseph : time=%s sat=%2d\n",time_str(time,3),sat);
+
+    arc_log(ARC_INFO, "selseph : time=%s sat=%2d\n", time_str(time, 3), sat);
     
     for (i=0;i<nav->ns;i++) {
         if (nav->seph[i].sat!=sat) continue;
@@ -397,7 +397,7 @@ static seph_t *selseph(gtime_t time, int sat, const nav_t *nav)
         if (t<=tmin) {j=i; tmin=t;} /* toe closest to time */
     }
     if (j<0) {
-        trace(3,"no sbas ephemeris     : %s sat=%2d\n",time_str(time,0),sat);
+        arc_log(3, "no sbas ephemeris     : %s sat=%2d\n", time_str(time, 0), sat);
         return NULL;
     }
     return nav->seph+j;
@@ -410,8 +410,8 @@ static int ephclk(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     geph_t *geph;
     seph_t *seph;
     int sys;
-    
-    trace(ARC_INFO,"ephclk  : time=%s sat=%2d\n",time_str(time,3),sat);
+
+    arc_log(ARC_INFO, "ephclk  : time=%s sat=%2d\n", time_str(time, 3), sat);
     
     sys=satsys(sat,NULL);
     
@@ -432,8 +432,8 @@ static int ephpos(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     seph_t *seph;
     double rst[3],dtst[1],tt=1E-3;
     int i,sys;
-    
-    trace(ARC_INFO,"ephpos  : time=%s sat=%2d iode=%d\n",time_str(time,3),sat,iode);
+
+    arc_log(ARC_INFO, "ephpos  : time=%s sat=%2d iode=%d\n", time_str(time, 3), sat, iode);
     
     sys=satsys(sat,NULL);
     
@@ -475,7 +475,7 @@ extern int satpos(gtime_t time, gtime_t teph, int sat, int ephopt,
                   const nav_t *nav, double *rs, double *dts, double *var,
                   int *svh)
 {
-    trace(ARC_INFO,"satpos  : time=%s sat=%2d ephopt=%d\n",time_str(time,3),sat,ephopt);
+    arc_log(ARC_INFO, "satpos  : time=%s sat=%2d ephopt=%d\n", time_str(time, 3), sat, ephopt);
     
     *svh=0;
     
@@ -505,15 +505,15 @@ static int pephpos(gtime_t time, int sat, const nav_t *nav, double *rs,
 {
     double t[NMAX+1],p[3][NMAX+1],c[2],*pos,std=0.0,s[3],sinl,cosl;
     int i,j,k,index;
-    
-    trace(ARC_INFO,"pephpos : time=%s sat=%2d\n",time_str(time,3),sat);
+
+    arc_log(ARC_INFO, "pephpos : time=%s sat=%2d\n", time_str(time, 3), sat);
     
     rs[0]=rs[1]=rs[2]=dts[0]=0.0;
     
     if (nav->ne<NMAX+1||
         timediff(time,nav->peph[0].time)<-MAXDTE||
         timediff(time,nav->peph[nav->ne-1].time)>MAXDTE) {
-        trace(3,"no prec ephem %s sat=%2d\n",time_str(time,0),sat);
+        arc_log(3, "no prec ephem %s sat=%2d\n", time_str(time, 0), sat);
         return 0;
     }
     /* binary search */
@@ -530,7 +530,7 @@ static int pephpos(gtime_t time, int sat, const nav_t *nav, double *rs,
     for (j=0;j<=NMAX;j++) {
         t[j]=timediff(nav->peph[i+j].time,time);
         if (norm(nav->peph[i+j].pos[sat-1],3)<=0.0) {
-            trace(3,"prec ephem outage %s sat=%2d\n",time_str(time,0),sat);
+            arc_log(3, "prec ephem outage %s sat=%2d\n", time_str(time, 0), sat);
             return 0;
         }
     }
@@ -593,13 +593,13 @@ static int pephclk(gtime_t time, int sat, const nav_t *nav, double *dts,
 {
     double t[2],c[2],std;
     int i,j,k,index;
-    
-    trace(ARC_INFO,"pephclk : time=%s sat=%2d\n",time_str(time,3),sat);
+
+    arc_log(ARC_INFO, "pephclk : time=%s sat=%2d\n", time_str(time, 3), sat);
     
     if (nav->nc<2||
         timediff(time,nav->pclk[0].time)<-MAXDTE||
         timediff(time,nav->pclk[nav->nc-1].time)>MAXDTE) {
-        trace(3,"no prec clock %s sat=%2d\n",time_str(time,0),sat);
+        arc_log(3, "no prec clock %s sat=%2d\n", time_str(time, 0), sat);
         return 1;
     }
     /* binary search */
@@ -629,7 +629,7 @@ static int pephclk(gtime_t time, int sat, const nav_t *nav, double *dts,
         std=nav->pclk[index+i].std[sat-1][0]*CLIGHT+EXTERR_CLK*fabs(t[i]);
     }
     else {
-        trace(ARC_INFO,"prec clock outage %s sat=%2d\n",time_str(time,0),sat);
+        arc_log(ARC_INFO, "prec clock outage %s sat=%2d\n", time_str(time, 0), sat);
         return 0;
     }
     if (varc) *varc=SQR(std);
@@ -665,8 +665,8 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
     gtime_t time[2*MAXOBS]={{0}};
     double dt,pr;
     int i,j;
-    
-    trace(ARC_INFO,"satposs : teph=%s n=%d ephopt=%d\n",time_str(teph,3),n,ephopt);
+
+    arc_log(ARC_INFO, "satposs : teph=%s n=%d ephopt=%d\n", time_str(teph, 3), n, ephopt);
     
     for (i=0;i<n&&i<2*MAXOBS;i++) {
         for (j=0;j<6;j++) rs [j+i*6]=0.0;
@@ -677,7 +677,7 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         for (j=0,pr=0.0;j<NFREQ;j++) if ((pr=obs[i].P[j])!=0.0) break;
         
         if (j>=NFREQ) {
-            trace(ARC_INFO,"no pseudorange %s sat=%2d\n",time_str(obs[i].time,3),obs[i].sat);
+            arc_log(ARC_INFO, "no pseudorange %s sat=%2d\n", time_str(obs[i].time, 3), obs[i].sat);
             continue;
         }
         /* transmission time by satellite clock */
@@ -685,7 +685,7 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         
         /* satellite clock bias by broadcast ephemeris */
         if (!ephclk(time[i],teph,obs[i].sat,nav,&dt)) {
-            trace(ARC_WARNING,"no broadcast clock %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
+            arc_log(ARC_WARNING, "no broadcast clock %s sat=%2d\n", time_str(time[i], 3), obs[i].sat);
             continue;
         }
         time[i]=timeadd(time[i],-dt);
@@ -693,7 +693,7 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         /* satellite position and clock at transmission time */
         if (!satpos(time[i],teph,obs[i].sat,ephopt,nav,rs+i*6,dts+i*2,var+i,
                     svh+i)) {
-            trace(ARC_INFO,"no ephemeris %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
+            arc_log(ARC_INFO, "no ephemeris %s sat=%2d\n", time_str(time[i], 3), obs[i].sat);
             continue;
         }
         /* if no precise clock available, use broadcast clock instead */
@@ -704,9 +704,9 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         }
     }
     for (i=0;i<n&&i<2*MAXOBS;i++) {
-        trace(ARC_INFO,"%s sat=%2d rs=%13.3f %13.3f %13.3f dts=%12.3f var=%7.3f svh=%02X\n",
-              time_str(time[i],6),obs[i].sat,rs[i*6],rs[1+i*6],rs[2+i*6],
-              dts[i*2]*1E9,var[i],svh[i]);
+        arc_log(ARC_INFO, "%s sat=%2d rs=%13.3f %13.3f %13.3f dts=%12.3f var=%7.3f svh=%02X\n",
+                time_str(time[i], 6), obs[i].sat, rs[i * 6], rs[1 + i * 6], rs[2 + i * 6],
+                dts[i * 2] * 1E9, var[i], svh[i]);
     }
 }
 /* satellite antenna phase center offset ---------------------------------------
@@ -728,8 +728,8 @@ extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
     double ex[3],ey[3],ez[3],es[3],r[3],rsun[3],gmst,erpv[5]={0};
     double gamma,C1,C2,dant1,dant2;
     int i,j=0,k=1;
-    
-    trace(ARC_INFO,"satantoff: time=%s sat=%2d\n",time_str(time,3),sat);
+
+    arc_log(ARC_INFO, "satantoff: time=%s sat=%2d\n", time_str(time, 3), sat);
     
     /* sun position in ecef */
     sunmoonpos(gpst2utc(time),erpv,rsun,NULL,&gmst);
@@ -782,8 +782,8 @@ extern int peph2pos(gtime_t time, int sat, const nav_t *nav, int opt,
     gtime_t time_tt;
     double rss[3],rst[3],dtss[1],dtst[1],dant[3]={0},vare=0.0,varc=0.0,tt=1E-3;
     int i;
-    
-    trace(ARC_INFO,"peph2pos: time=%s sat=%2d opt=%d\n",time_str(time,3),sat,opt);
+
+    arc_log(ARC_INFO, "peph2pos: time=%s sat=%2d opt=%d\n", time_str(time, 3), sat, opt);
     
     if (sat<=0||MAXSAT<sat) return 0;
     

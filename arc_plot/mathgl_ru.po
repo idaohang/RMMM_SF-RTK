@@ -2406,7 +2406,7 @@ msgid "Get pulse properties"
 msgstr "Найти параметры импульса"
 
 #: src/exec_dat.cpp:1608
-msgid "Get trace of array"
+msgid "Get arc_log of array"
 msgstr "Найти след матрицы"
 
 #: src/base_cf.cpp:85

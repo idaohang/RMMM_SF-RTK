@@ -83,7 +83,7 @@
 #include "config.h"
 #include "glog/logging.h"
 
-// There are three different ways we can try to get the stack trace:
+// There are three different ways we can try to get the stack arc_log:
 //
 // 1) The libunwind library.  This is still in development, and as a
 //    separate library adds a new dependency, but doesn't need a frame
@@ -218,7 +218,7 @@ struct CrashReason {
   int line_number;
   const char* message;
 
-  // We'll also store a bit of stack trace context at the time of crash as
+  // We'll also store a bit of stack arc_log context at the time of crash as
   // it may not be available later on.
   void* stack[32];
   int depth;

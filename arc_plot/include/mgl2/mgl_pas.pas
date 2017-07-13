@@ -624,7 +624,7 @@ function  mgl_datac_subdata(const dat: HMDT;xx: integer;yy: integer;zz: integer)
 function  mgl_datac_subdata_ext(const dat: HMDT;const xx: HMDT;const yy: HMDT;const zz: HMDT): HADT; cdecl; external libmgl;
 /// Get column (or slice) of the data filled by formulas of named columns
 function  mgl_datac_column(const dat: HMDT;const eq: PChar): HADT; cdecl; external libmgl;
-/// Get trace of the data array
+/// Get arc_log of the data array
 function  mgl_datac_trace(const d: HMDT): HADT; cdecl; external libmgl;
 /// Resize the data to new sizes
 function  mgl_datac_resize(const dat: HMDT;mx: integer;my: integer;mz: integer): HADT; cdecl; external libmgl;

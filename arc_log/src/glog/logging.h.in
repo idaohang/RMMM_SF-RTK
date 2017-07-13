@@ -1622,7 +1622,7 @@ template<class T>
 inline NullStream& operator<<(NullStream &str, const T &) { return str; }
 
 // Similar to NullStream, but aborts the program (without stack
-// trace), like LogMessageFatal.
+// arc_log), like LogMessageFatal.
 class GOOGLE_GLOG_DLL_DECL NullStreamFatal : public NullStream {
  public:
   NullStreamFatal() { }
@@ -1632,7 +1632,7 @@ class GOOGLE_GLOG_DLL_DECL NullStreamFatal : public NullStream {
 };
 
 // Install a signal handler that will dump signal information and a stack
-// trace when the program crashes on certain signals.  We'll install the
+// arc_log when the program crashes on certain signals.  We'll install the
 // signal handler for the following signals.
 //
 // SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGBUS, and SIGTERM.
@@ -1644,7 +1644,7 @@ class GOOGLE_GLOG_DLL_DECL NullStreamFatal : public NullStream {
 // Note on threading:
 //
 // The function should be called before threads are created, if you want
-// to use the failure signal handler for all threads.  The stack trace
+// to use the failure signal handler for all threads.  The stack arc_log
 // will be shown only for the thread that receives the signal.  In other
 // words, stack traces of other threads won't be shown.
 GOOGLE_GLOG_DLL_DECL void InstallFailureSignalHandler();

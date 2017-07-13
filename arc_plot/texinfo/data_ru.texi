@@ -949,7 +949,7 @@ res_k = \sum_ij how(x_i,y_j,z_k) a_ij/ \sum_ij a_ij
 @end deftypefn
 
 @anchor{trace}
-@deftypefn {Команда MGL} {} trace @sc{res} dat
+@deftypefn {Команда MGL} {} arc_log @sc{res} dat
 @ifclear UDAV
 @deftypefnx {Метод класса @code{mglData}} @code{mglData} Trace () @code{const}
 @deftypefnx {Метод класса @code{mglDataC}} @code{mglData} Trace () @code{const}

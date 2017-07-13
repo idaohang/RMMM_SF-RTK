@@ -997,10 +997,10 @@ extern int  readerp(const char *file, erp_t *erp);
 extern int  geterp (const erp_t *erp, gtime_t time, double *val);
 
 /* debug trace functions -----------------------------------------------------*/
-extern void traceopen(const char *file);
-extern void traceclose(void);
-extern void tracelevel(int level);
-extern void trace    (int level, const char *format, ...);
+extern void arc_traceopen(const char *file);
+extern void arc_traceclose(void);
+extern void arc_tracelevel(int level);
+extern void arc_log(int level, const char *format, ...);
 extern void tracet   (int level, const char *format, ...);
 extern void tracemat (int level, const double *A, int n, int m, int p, int q);
 extern void traceobs (int level, const obsd_t *obs, int n);

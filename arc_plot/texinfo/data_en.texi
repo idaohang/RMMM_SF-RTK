@@ -962,7 +962,7 @@ Returns direct multiplication of arrays (like, res[i,j] = this[i]*a[j] and so on
 @end deftypefn
 
 @anchor{trace}
-@deftypefn {MGL command} {} trace @sc{res} dat
+@deftypefn {MGL command} {} arc_log @sc{res} dat
 @ifclear UDAV
 @deftypefnx {Method on @code{mglData}} @code{mglData} Trace () @code{const}
 @deftypefnx {Method on @code{mglDataC}} @code{mglData} Trace () @code{const}

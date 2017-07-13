@@ -1064,7 +1064,7 @@ Function {make_datsel()} {} {
       label Operation open
       xywh {105 155 130 25} down_box BORDER_BOX
       code0 {oper->add("max"); oper->add("min");}
-      code1 {oper->add("sum"); oper->add("trace");}
+      code1 {oper->add("sum"); oper->add("arc_log");}
       code2 {oper->add("pulse");}
     } {}
     Fl_Choice dir {

@@ -89,7 +89,7 @@ const prcopt_t prcopt_default={ /* defaults processing options */
 const solopt_t solopt_default={ /* defaults solution output options */
     SOLF_LLH,TIMES_GPST,1,3,    /* posf,times,timef,timeu */
     0,1,0,0,0,0,                /* degf,outhead,outopt,datum,height,geoid */
-    0,0,0,                      /* solstatic,sstat,trace */
+    0,0,0,                      /* solstatic,sstat,arc_log */
     {0.0,0.0},                  /* nmeaintv */
     " ",""                      /* separator/program name */
 };
@@ -106,7 +106,7 @@ const filopt_t fileopt_default = {
     "",   /* ftp/http temporaly directory */
     "",   /* google earth exec file */
     "",   /* solution statistics file */
-    ""    /* debug trace file */
+    ""    /* debug arc_log file */
 };
 
 static char *obscodes[]={       /* observation code strings */
@@ -316,7 +316,7 @@ extern int satexclude(int sat, int svh, const prcopt_t *opt)
     }
     if (sys==SYS_QZS) svh&=0xFE; /* mask QZSS LEX health */
     if (svh) {
-        trace(ARC_WARNING,"unhealthy satellite: sat=%3d svh=%02X\n",sat,svh);
+        arc_log(ARC_WARNING, "unhealthy satellite: sat=%3d svh=%02X\n", sat, svh);
         return 1;
     }
     return 0;
@@ -391,7 +391,7 @@ extern char *code2obs(unsigned char code, int *freq)
 *-----------------------------------------------------------------------------*/
 extern void setcodepri(int sys, int freq, const char *pri)
 {
-    trace(3,"setcodepri:sys=%d freq=%d pri=%s\n",sys,freq,pri);
+    arc_log(3, "setcodepri:sys=%d freq=%d pri=%s\n", sys, freq, pri);
     
     if (freq<=0||MAXFREQ<freq) return;
     if (sys&SYS_GPS) strcpy(codepris[0][freq-1],pri);
@@ -1630,8 +1630,8 @@ extern void eci2ecef(gtime_t tutc, const double *erpv, double *U, double *gmst)
     double eps,ze,th,z,t,t2,t3,dpsi,deps,gast,f[5];
     double R1[9],R2[9],R3[9],R[9],W[9],N[9],P[9],NP[9];
     int i;
-    
-    trace(4,"eci2ecef: tutc=%s\n",time_str(tutc,3));
+
+    arc_log(4, "eci2ecef: tutc=%s\n", time_str(tutc, 3));
     
     if (fabs(timediff(tutc,tutc_))<0.01) { /* read cache */
         for (i=0;i<9;i++) U[i]=U_[i];
@@ -1676,13 +1676,13 @@ extern void eci2ecef(gtime_t tutc, const double *erpv, double *U, double *gmst)
     matmul("NN",3,3,3,1.0,R ,NP,0.0,U_); /* U=W*Rz(gast)*N*P */
     
     for (i=0;i<9;i++) U[i]=U_[i];
-    if (gmst) *gmst=gmst_; 
-    
-    trace(5,"gmst=%.12f gast=%.12f\n",gmst_,gast);
-    trace(5,"P=\n"); tracemat(5,P,3,3,15,12);
-    trace(5,"N=\n"); tracemat(5,N,3,3,15,12);
-    trace(5,"W=\n"); tracemat(5,W,3,3,15,12);
-    trace(5,"U=\n"); tracemat(5,U,3,3,15,12);
+    if (gmst) *gmst=gmst_;
+
+    arc_log(5, "gmst=%.12f gast=%.12f\n", gmst_, gast);
+    arc_log(5, "P=\n"); tracemat(5,P,3,3,15,12);
+    arc_log(5, "N=\n"); tracemat(5,N,3,3,15,12);
+    arc_log(5, "W=\n"); tracemat(5,W,3,3,15,12);
+    arc_log(5, "U=\n"); tracemat(5,U,3,3,15,12);
 }
 /* decode antenna parameter field --------------------------------------------*/
 static int decodef(char *p, int n, double *v)
@@ -1703,7 +1703,7 @@ static void addpcv(const pcv_t *pcv, pcvs_t *pcvs)
     if (pcvs->nmax<=pcvs->n) {
         pcvs->nmax+=256;
         if (!(pcvs_pcv=(pcv_t *)realloc(pcvs->pcv,sizeof(pcv_t)*pcvs->nmax))) {
-            trace(1,"addpcv: memory allocation error\n");
+            arc_log(1, "addpcv: memory allocation error\n");
             free(pcvs->pcv); pcvs->pcv=NULL; pcvs->n=pcvs->nmax=0;
             return;
         }
@@ -1722,7 +1722,7 @@ static int readngspcv(const char *file, pcvs_t *pcvs)
     char buff[256];
     
     if (!(fp=fopen(file,"r"))) {
-        trace(2,"ngs pcv file open error: %s\n",file);
+        arc_log(2, "ngs pcv file open error: %s\n", file);
         return 0;
     }
     while (fgets(buff,sizeof(buff),fp)) {
@@ -1767,11 +1767,11 @@ static int readantex(const char *file, pcvs_t *pcvs)
     double neu[3];
     int i,f,freq=0,state=0,freqs[]={1,2,5,6,7,8,0};
     char buff[256];
-    
-    trace(ARC_INFO,"readantex: file=%s\n",file);
+
+    arc_log(ARC_INFO, "readantex: file=%s\n", file);
     
     if (!(fp=fopen(file,"r"))) {
-        trace(2,"antex pcv file open error: %s\n",file);
+        arc_log(2, "antex pcv file open error: %s\n", file);
         return 0;
     }
     while (fgets(buff,sizeof(buff),fp)) {
@@ -1841,8 +1841,8 @@ extern int readpcv(const char *file, pcvs_t *pcvs)
     pcv_t *pcv;
     char *ext,file_[1024];
     int i,stat;
-    
-    trace(ARC_INFO,"readpcv: file=%s\n",file);
+
+    arc_log(ARC_INFO, "readpcv: file=%s\n", file);
     
 	strcpy(file_,file);
     if (!(ext=strrchr(file_,'.'))) ext="";
@@ -1855,9 +1855,9 @@ extern int readpcv(const char *file, pcvs_t *pcvs)
     }
     for (i=0;i<pcvs->n;i++) {
         pcv=pcvs->pcv+i;
-        trace(ARC_INFO,"sat=%2d type=%20s code=%s off=%8.4f %8.4f %8.4f  %8.4f %8.4f %8.4f\n",
-              pcv->sat,pcv->type,pcv->code,pcv->off[0][0],pcv->off[0][1],
-              pcv->off[0][2],pcv->off[1][0],pcv->off[1][1],pcv->off[1][2]);
+        arc_log(ARC_INFO, "sat=%2d type=%20s code=%s off=%8.4f %8.4f %8.4f  %8.4f %8.4f %8.4f\n",
+                pcv->sat, pcv->type, pcv->code, pcv->off[0][0], pcv->off[0][1],
+                pcv->off[0][2], pcv->off[1][0], pcv->off[1][1], pcv->off[1][2]);
     }
     return stat;
 }
@@ -1875,8 +1875,8 @@ extern pcv_t *searchpcv(int sat, const char *type, gtime_t time,
     pcv_t *pcv;
     char buff[MAXANT],*types[2],*p;
     int i,j,n=0;
-    
-    trace(ARC_INFO,"searchpcv: sat=%2d type=%s\n",sat,type);
+
+    arc_log(ARC_INFO, "searchpcv: sat=%2d type=%s\n", sat, type);
     
     if (sat) { /* search satellite antenna */
         for (i=0;i<pcvs->n;i++) {
@@ -1902,8 +1902,8 @@ extern pcv_t *searchpcv(int sat, const char *type, gtime_t time,
         for (i=0;i<pcvs->n;i++) {
             pcv=pcvs->pcv+i;
             if (strstr(pcv->type,types[0])!=pcv->type) continue;
-            
-            trace(2,"pcv without radome is used type=%s\n",type);
+
+            arc_log(2, "pcv without radome is used type=%s\n", type);
             return pcv;
         }
     }
@@ -1925,8 +1925,8 @@ extern void readpos(const char *file, const char *rcv, double *pos)
     FILE *fp;
     int i,j,len,np=0;
     char buff[256],str[256];
-    
-    trace(ARC_INFO,"readpos: file=%s\n",file);
+
+    arc_log(ARC_INFO, "readpos: file=%s\n", file);
     
     if (!(fp=fopen(file,"r"))) {
         fprintf(stderr,"reference position file open error : %s\n",file);
@@ -1981,7 +1981,7 @@ extern int readblq(const char *file, const char *sta, double *odisp)
     for (p=staname;(*p=(char)toupper((int)(*p)));p++) ;
     
     if (!(fp=fopen(file,"r"))) {
-        trace(2,"blq file open error: file=%s\n",file);
+        arc_log(2, "blq file open error: file=%s\n", file);
         return 0;
     }
     while (fgets(buff,sizeof(buff),fp)) {
@@ -1998,7 +1998,7 @@ extern int readblq(const char *file, const char *sta, double *odisp)
         }
     }
     fclose(fp);
-    trace(2,"no otl parameters: sta=%s file=%s\n",sta,file);
+    arc_log(2, "no otl parameters: sta=%s file=%s\n", sta, file);
     return 0;
 }
 /* read earth rotation parameters ----------------------------------------------
@@ -2013,11 +2013,11 @@ extern int readerp(const char *file, erp_t *erp)
     erpd_t *erp_data;
     double v[14]={0};
     char buff[256];
-    
-    trace(ARC_INFO,"readerp: file=%s\n",file);
+
+    arc_log(ARC_INFO, "readerp: file=%s\n", file);
     
     if (!(fp=fopen(file,"r"))) {
-        trace(2,"erp file open error: file=%s\n",file);
+        arc_log(2, "erp file open error: file=%s\n", file);
         return 0;
     }
     while (fgets(buff,sizeof(buff),fp)) {
@@ -2058,8 +2058,8 @@ extern int geterp(const erp_t *erp, gtime_t time, double *erpv)
     const double ep[]={2000,1,1,12,0,0};
     double mjd,day,a;
     int i,j,k;
-    
-    trace(4,"geterp:\n");
+
+    arc_log(4, "geterp:\n");
     
     if (erp->n<=0) return 0;
     
@@ -2110,8 +2110,8 @@ static void uniqeph(nav_t *nav)
 {
     eph_t *nav_eph;
     int i,j;
-    
-    trace(ARC_INFO,"uniqeph: n=%d\n",nav->n);
+
+    arc_log(ARC_INFO, "uniqeph: n=%d\n", nav->n);
     
     if (nav->n<=0) return;
     
@@ -2126,14 +2126,14 @@ static void uniqeph(nav_t *nav)
     nav->n=j+1;
     
     if (!(nav_eph=(eph_t *)realloc(nav->eph,sizeof(eph_t)*nav->n))) {
-        trace(1,"uniqeph malloc error n=%d\n",nav->n);
+        arc_log(1, "uniqeph malloc error n=%d\n", nav->n);
         free(nav->eph); nav->eph=NULL; nav->n=nav->nmax=0;
         return;
     }
     nav->eph=nav_eph;
     nav->nmax=nav->n;
-    
-    trace(ARC_INFO,"uniqeph: n=%d\n",nav->n);
+
+    arc_log(ARC_INFO, "uniqeph: n=%d\n", nav->n);
 }
 /* compare glonass ephemeris -------------------------------------------------*/
 static int cmpgeph(const void *p1, const void *p2)
@@ -2148,8 +2148,8 @@ static void uniqgeph(nav_t *nav)
 {
     geph_t *nav_geph;
     int i,j;
-    
-    trace(ARC_INFO,"uniqgeph: ng=%d\n",nav->ng);
+
+    arc_log(ARC_INFO, "uniqgeph: ng=%d\n", nav->ng);
     
     if (nav->ng<=0) return;
     
@@ -2165,14 +2165,14 @@ static void uniqgeph(nav_t *nav)
     nav->ng=j+1;
     
     if (!(nav_geph=(geph_t *)realloc(nav->geph,sizeof(geph_t)*nav->ng))) {
-        trace(1,"uniqgeph malloc error ng=%d\n",nav->ng);
+        arc_log(1, "uniqgeph malloc error ng=%d\n", nav->ng);
         free(nav->geph); nav->geph=NULL; nav->ng=nav->ngmax=0;
         return;
     }
     nav->geph=nav_geph;
     nav->ngmax=nav->ng;
-    
-    trace(ARC_INFO,"uniqgeph: ng=%d\n",nav->ng);
+
+    arc_log(ARC_INFO, "uniqgeph: ng=%d\n", nav->ng);
 }
 /* compare sbas ephemeris ----------------------------------------------------*/
 static int cmpseph(const void *p1, const void *p2)
@@ -2187,8 +2187,8 @@ static void uniqseph(nav_t *nav)
 {
     seph_t *nav_seph;
     int i,j;
-    
-    trace(ARC_INFO,"uniqseph: ns=%d\n",nav->ns);
+
+    arc_log(ARC_INFO, "uniqseph: ns=%d\n", nav->ns);
     
     if (nav->ns<=0) return;
     
@@ -2203,14 +2203,14 @@ static void uniqseph(nav_t *nav)
     nav->ns=j+1;
     
     if (!(nav_seph=(seph_t *)realloc(nav->seph,sizeof(seph_t)*nav->ns))) {
-        trace(ARC_WARNING,"uniqseph malloc error ns=%d\n",nav->ns);
+        arc_log(ARC_WARNING, "uniqseph malloc error ns=%d\n", nav->ns);
         free(nav->seph); nav->seph=NULL; nav->ns=nav->nsmax=0;
         return;
     }
     nav->seph=nav_seph;
     nav->nsmax=nav->ns;
-    
-    trace(ARC_INFO,"uniqseph: ns=%d\n",nav->ns);
+
+    arc_log(ARC_INFO, "uniqseph: ns=%d\n", nav->ns);
 }
 /* unique ephemerides ----------------------------------------------------------
 * unique ephemerides in navigation data and update carrier wave length
@@ -2220,8 +2220,8 @@ static void uniqseph(nav_t *nav)
 extern void uniqnav(nav_t *nav)
 {
     int i,j;
-    
-    trace(ARC_INFO,"uniqnav: neph=%d ngeph=%d nseph=%d\n",nav->n,nav->ng,nav->ns);
+
+    arc_log(ARC_INFO, "uniqnav: neph=%d ngeph=%d nseph=%d\n", nav->n, nav->ng, nav->ns);
     
     /* unique ephemeris */
     uniqeph (nav);
@@ -2250,8 +2250,8 @@ static int cmpobs(const void *p1, const void *p2)
 extern int sortobs(obs_t *obs)
 {
     int i,j,n;
-    
-    trace(ARC_INFO,"sortobs: nobs=%d\n",obs->n);
+
+    arc_log(ARC_INFO, "sortobs: nobs=%d\n", obs->n);
     
     if (obs->n<=0) return 0;
     
@@ -2317,15 +2317,15 @@ extern void freenav(nav_t *nav, int opt)
     if (opt&0x20) {free(nav->alm ); nav->alm =NULL; nav->na=nav->namax=0;}
     if (opt&0x80) {free(nav->fcb ); nav->fcb =NULL; nav->nf=nav->nfmax=0;}
 }
-/* debug trace functions -----------------------------------------------------*/
+/* debug arc_log functions -----------------------------------------------------*/
 #ifdef TRACE
 
-static FILE *fp_trace=NULL;       /* file pointer of trace */
-static char file_trace[1024];     /* trace file */
-static int level_trace=0;         /* level of trace */
-static unsigned int tick_trace=0; /* tick time at traceopen (ms) */
-static gtime_t time_trace={0};    /* time at traceopen */
-static lock_t lock_trace;         /* lock for trace */
+static FILE *fp_trace=NULL;       /* file pointer of arc_log */
+static char file_trace[1024];     /* arc_log file */
+static int level_trace=0;         /* level of arc_log */
+static unsigned int tick_trace=0; /* tick time at arc_traceopen (ms) */
+static gtime_t time_trace={0};    /* time at arc_traceopen */
+static lock_t lock_trace;         /* lock for arc_log */
 static char s[1024];              /* log informations */
 static int glog_init=1;           /* google log initial flag */
 static int count=0;               /* how many count to output */
@@ -2357,7 +2357,7 @@ static void traceswap(void)
     }
     unlock(&lock_trace);
 }
-extern void traceopen(const char *file)
+extern void arc_traceopen(const char *file)
 {
     gtime_t time=utc2gpst(timeget());
     char path[1024];
@@ -2369,13 +2369,13 @@ extern void traceopen(const char *file)
     time_trace=time;
     initlock(&lock_trace);
 }
-extern void traceclose(void)
+extern void arc_traceclose(void)
 {
     if (fp_trace&&fp_trace!=stderr) fclose(fp_trace);
     fp_trace=NULL;
     file_trace[0]='\0';
 }
-extern void tracelevel(int level)
+extern void arc_tracelevel(int level)
 {
     level_trace=level;
 }
@@ -2383,7 +2383,7 @@ extern void tracebuf(int count)
 {
     buffcount=count;
 }
-extern void trace(int level, const char *format, ...)
+extern void arc_log(int level, const char *format, ...)
 {
     va_list ap;
     if (level_trace==ARC_NOLOG&&(level!=ARC_FATAL
@@ -2550,10 +2550,10 @@ extern void traceb(int level, const unsigned char *p, int n)
     fprintf(fp_trace,"\n");
 }
 #else
-extern void traceopen(const char *file) {}
+extern void arc_traceopen(const char *file) {}
 extern void traceclose(void) {}
 extern void tracelevel(int level) {}
-extern void trace   (int level, const char *format, ...) {}
+extern void arc_log   (int level, const char *format, ...) {}
 extern void tracet  (int level, const char *format, ...) {}
 extern void tracemat(int level, const double *A, int n, int m, int p, int q) {}
 extern void traceobs(int level, const obsd_t *obs, int n) {}
@@ -2583,7 +2583,7 @@ extern int expath(const char *path, char *paths[], int nmax)
     HANDLE h;
     char dir[1024]="",*p;
     
-    trace(ARC_INFO,"expath  : path=%s nmax=%d\n",path,nmax);
+    arc_log(ARC_INFO,"expath  : path=%s nmax=%d\n",path,nmax);
     
 	strcpy(path_,path);
     if ((p=strrchr(path_,'\\'))) {
@@ -2605,8 +2605,8 @@ extern int expath(const char *path, char *paths[], int nmax)
     const char *file=path;
     char dir[1024]="",s1[1024],s2[1024],*p,*q,*r;
     strcpy(path_,path);
-    
-    trace(ARC_INFO,"expath  : path=%s nmax=%d\n",path,nmax);
+
+    arc_log(ARC_INFO, "expath  : path=%s nmax=%d\n", path, nmax);
     
     if ((p=strrchr(path_,'/'))||(p=strrchr(path_,'\\'))) {
         file=p+1; strncpy(dir,path_,p-path_+1); dir[p-path_+1]='\0';
@@ -2636,7 +2636,7 @@ extern int expath(const char *path, char *paths[], int nmax)
             }
         }
     }
-    for (i=0;i<n;i++) trace(ARC_INFO,"expath  : file=%s\n",paths[i]);
+    for (i=0;i<n;i++) arc_log(ARC_INFO, "expath  : file=%s\n", paths[i]);
     
     return n;
 }
@@ -2747,8 +2747,8 @@ extern int reppaths(const char *path, char *rpath[], int nmax, gtime_t ts,
     gtime_t time;
     double tow,tint=86400.0;
     int i,n=0,week;
-    
-    trace(ARC_INFO,"reppaths: path =%s nmax=%d rov=%s base=%s\n",path,nmax,rov,base);
+
+    arc_log(ARC_INFO, "reppaths: path =%s nmax=%d rov=%s base=%s\n", path, nmax, rov, base);
     
     if (ts.time==0||te.time==0||timediff(ts,te)>0.0) return 0;
     
@@ -2763,7 +2763,7 @@ extern int reppaths(const char *path, char *rpath[], int nmax, gtime_t ts,
         if (n==0||strcmp(rpath[n],rpath[n-1])) n++;
         time=timeadd(time,tint);
     }
-    for (i=0;i<n;i++) trace(3,"reppaths: rpath=%s\n",rpath[i]);
+    for (i=0;i<n;i++) arc_log(3, "reppaths: rpath=%s\n", rpath[i]);
     return n;
 }
 /* satellite carrier wave length -----------------------------------------------
@@ -3081,8 +3081,8 @@ extern double tropmapf(gtime_t time, const double pos[], const double azel[],
     const double ep[]={2000,1,1,12,0,0};
     double mjd,lat,lon,hgt,zd,gmfh,gmfw;
 #endif
-    trace(ARC_INFO,"tropmapf: pos=%10.6f %11.6f %6.1f azel=%5.1f %4.1f\n",
-          pos[0]*R2D,pos[1]*R2D,pos[2],azel[0]*R2D,azel[1]*R2D);
+    arc_log(ARC_INFO, "tropmapf: pos=%10.6f %11.6f %6.1f azel=%5.1f %4.1f\n",
+            pos[0] * R2D, pos[1] * R2D, pos[2], azel[0] * R2D, azel[1] * R2D);
     
     if (pos[2]<-1000.0||pos[2]>20000.0) {
         if (mapfw) *mapfw=0.0;
@@ -3126,8 +3126,8 @@ extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
 {
     double e[3],off[3],cosel=cos(azel[1]);
     int i,j;
-    
-    trace(ARC_INFO,"antmodel: azel=%6.1f %4.1f opt=%d\n",azel[0]*R2D,azel[1]*R2D,opt);
+
+    arc_log(ARC_INFO, "antmodel: azel=%6.1f %4.1f opt=%d\n", azel[0] * R2D, azel[1] * R2D, opt);
     
     e[0]=sin(azel[0])*cosel;
     e[1]=cos(azel[0])*cosel;
@@ -3138,7 +3138,7 @@ extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
         
         dant[i]=-dot(off,e,3)+(opt?interpvar(90.0-azel[1]*R2D,pcv->var[i]):0.0);
     }
-    trace(ARC_INFO,"antmodel: dant=%6.3f %6.3f\n",dant[0],dant[1]);
+    arc_log(ARC_INFO, "antmodel: dant=%6.3f %6.3f\n", dant[0], dant[1]);
 }
 /* satellite antenna model ------------------------------------------------------
 * compute satellite antenna phase center parameters
@@ -3150,21 +3150,21 @@ extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
 extern void antmodel_s(const pcv_t *pcv, double nadir, double *dant)
 {
     int i;
-    
-    trace(ARC_INFO,"antmodel_s: nadir=%6.1f\n",nadir*R2D);
+
+    arc_log(ARC_INFO, "antmodel_s: nadir=%6.1f\n", nadir * R2D);
     
     for (i=0;i<NFREQ;i++) {
         dant[i]=interpvar(nadir*R2D*5.0,pcv->var[i]);
     }
-    trace(ARC_INFO,"antmodel_s: dant=%6.3f %6.3f\n",dant[0],dant[1]);
+    arc_log(ARC_INFO, "antmodel_s: dant=%6.3f %6.3f\n", dant[0], dant[1]);
 }
 /* sun and moon position in eci (ref [4] 5.1.1, 5.2.1) -----------------------*/
 static void sunmoonpos_eci(gtime_t tut, double *rsun, double *rmoon)
 {
     const double ep2000[]={2000,1,1,12,0,0};
     double t,f[5],eps,Ms,ls,rs,lm,pm,rm,sine,cose,sinp,cosp,sinl,cosl;
-    
-    trace(ARC_INFO,"sunmoonpos_eci: tut=%s\n",time_str(tut,3));
+
+    arc_log(ARC_INFO, "sunmoonpos_eci: tut=%s\n", time_str(tut, 3));
     
     t=timediff(tut,epoch2time(ep2000))/86400.0/36525.0;
     
@@ -3184,8 +3184,8 @@ static void sunmoonpos_eci(gtime_t tut, double *rsun, double *rmoon)
         rsun[0]=rs*cosl;
         rsun[1]=rs*cose*sinl;
         rsun[2]=rs*sine*sinl;
-        
-        trace(ARC_INFO,"rsun =%.3f %.3f %.3f\n",rsun[0],rsun[1],rsun[2]);
+
+        arc_log(ARC_INFO, "rsun =%.3f %.3f %.3f\n", rsun[0], rsun[1], rsun[2]);
     }
     /* moon position in eci */
     if (rmoon) {
@@ -3200,8 +3200,8 @@ static void sunmoonpos_eci(gtime_t tut, double *rsun, double *rmoon)
         rmoon[0]=rm*cosp*cosl;
         rmoon[1]=rm*(cose*cosp*sinl-sine*sinp);
         rmoon[2]=rm*(sine*cosp*sinl+cose*sinp);
-        
-        trace(ARC_INFO,"rmoon=%.3f %.3f %.3f\n",rmoon[0],rmoon[1],rmoon[2]);
+
+        arc_log(ARC_INFO, "rmoon=%.3f %.3f %.3f\n", rmoon[0], rmoon[1], rmoon[2]);
     }
 }
 /* sun and moon position -------------------------------------------------------
@@ -3218,8 +3218,8 @@ extern void sunmoonpos(gtime_t tutc, const double *erpv, double *rsun,
 {
     gtime_t tut;
     double rs[3],rm[3],U[9],gmst_;
-    
-    trace(ARC_INFO,"sunmoonpos: tutc=%s\n",time_str(tutc,3));
+
+    arc_log(ARC_INFO, "sunmoonpos: tutc=%s\n", time_str(tutc, 3));
     
     tut=timeadd(tutc,erpv[2]); /* utc -> ut1 */
     
@@ -3245,8 +3245,8 @@ extern void csmooth(obs_t *obs, int ns)
     double Ps[2][MAXSAT][NFREQ]={{{0}}},Lp[2][MAXSAT][NFREQ]={{{0}}},dcp;
     int i,j,s,r,n[2][MAXSAT][NFREQ]={{{0}}};
     obsd_t *p;
-    
-    trace(ARC_INFO,"csmooth: nobs=%d,ns=%d\n",obs->n,ns);
+
+    arc_log(ARC_INFO, "csmooth: nobs=%d,ns=%d\n", obs->n, ns);
     
     for (i=0;i<obs->n;i++) {
         p=&obs->data[i]; s=p->sat; r=p->rcv;
@@ -3272,8 +3272,8 @@ static void tide_pl(const double *eu, const double *rp, double GMp,
     const double H3=0.292,L3=0.015;
     double r,ep[3],latp,lonp,p,K2,K3,a,H2,L2,dp,du,cosp,sinl,cosl;
     int i;
-    
-    trace(ARC_INFO,"tide_pl : pos=%.3f %.3f\n",pos[0]*R2D,pos[1]*R2D);
+
+    arc_log(ARC_INFO, "tide_pl : pos=%.3f %.3f\n", pos[0] * R2D, pos[1] * R2D);
     
     if ((r=norm(rp,3))<=0.0) return;
     
@@ -3303,8 +3303,8 @@ static void tide_pl(const double *eu, const double *rp, double GMp,
     dr[0]=dp*ep[0]+du*eu[0];
     dr[1]=dp*ep[1]+du*eu[1];
     dr[2]=dp*ep[2]+du*eu[2];
-    
-    trace(ARC_INFO,"tide_pl : dr=%.3f %.3f %.3f\n",dr[0],dr[1],dr[2]);
+
+    arc_log(ARC_INFO, "tide_pl : dr=%.3f %.3f %.3f\n", dr[0], dr[1], dr[2]);
 }
 /* displacement by solid earth tide (ref [2] 7) ------------------------------*/
 static void tide_solid(const double *rsun, const double *rmoon,
@@ -3312,8 +3312,8 @@ static void tide_solid(const double *rsun, const double *rmoon,
                        double *dr)
 {
     double dr1[3],dr2[3],eu[3],du,dn,sinl,sin2l;
-    
-    trace(ARC_INFO,"tide_solid: pos=%.3f %.3f opt=%d\n",pos[0]*R2D,pos[1]*R2D,opt);
+
+    arc_log(ARC_INFO, "tide_solid: pos=%.3f %.3f opt=%d\n", pos[0] * R2D, pos[1] * R2D, opt);
     
     /* step1: time domain */
     eu[0]=E[2]; eu[1]=E[5]; eu[2]=E[8];
@@ -3337,7 +3337,7 @@ static void tide_solid(const double *rsun, const double *rmoon,
         dr[1]+=du*E[5]+dn*E[4];
         dr[2]+=du*E[8]+dn*E[7];
     }
-    trace(ARC_INFO,"tide_solid: dr=%.3f %.3f %.3f\n",dr[0],dr[1],dr[2]);
+    arc_log(ARC_INFO, "tide_solid: dr=%.3f %.3f %.3f\n", dr[0], dr[1], dr[2]);
 }
 #endif /* !IERS_MODEL */
 
@@ -3360,8 +3360,8 @@ static void tide_oload(gtime_t tut, const double *odisp, double *denu)
     const double ep1975[]={1975,1,1,0,0,0};
     double ep[6],fday,days,t,t2,t3,a[5],ang,dp[3]={0};
     int i,j;
-    
-    trace(ARC_INFO,"tide_oload:\n");
+
+    arc_log(ARC_INFO, "tide_oload:\n");
     
     /* angular argument: see subroutine arg.f for reference [1] */
     time2epoch(tut,ep);
@@ -3386,8 +3386,8 @@ static void tide_oload(gtime_t tut, const double *odisp, double *denu)
     denu[0]=-dp[1];
     denu[1]=-dp[2];
     denu[2]= dp[0];
-    
-    trace(ARC_INFO,"tide_oload: denu=%.3f %.3f %.3f\n",denu[0],denu[1],denu[2]);
+
+    arc_log(ARC_INFO, "tide_oload: denu=%.3f %.3f %.3f\n", denu[0], denu[1], denu[2]);
 }
 /* iers mean pole (ref [7] eq.7.25) ------------------------------------------*/
 static void iers_mean_pole(gtime_t tut, double *xp_bar, double *yp_bar)
@@ -3412,8 +3412,8 @@ static void tide_pole(gtime_t tut, const double *pos, const double *erpv,
                       double *denu)
 {
     double xp_bar,yp_bar,m1,m2,cosl,sinl;
-    
-    trace(ARC_INFO,"tide_pole: pos=%.3f %.3f\n",pos[0]*R2D,pos[1]*R2D);
+
+    arc_log(ARC_INFO, "tide_pole: pos=%.3f %.3f\n", pos[0] * R2D, pos[1] * R2D);
     
     /* iers mean pole (mas) */
     iers_mean_pole(tut,&xp_bar,&yp_bar);
@@ -3428,8 +3428,8 @@ static void tide_pole(gtime_t tut, const double *pos, const double *erpv,
     denu[0]=  9E-3*sin(pos[0])    *(m1*sinl-m2*cosl); /* de= Slambda (m) */
     denu[1]= -9E-3*cos(2.0*pos[0])*(m1*cosl+m2*sinl); /* dn=-Stheta  (m) */
     denu[2]=-33E-3*sin(2.0*pos[0])*(m1*cosl+m2*sinl); /* du= Sr      (m) */
-    
-    trace(ARC_INFO,"tide_pole : denu=%.3f %.3f %.3f\n",denu[0],denu[1],denu[2]);
+
+    arc_log(ARC_INFO, "tide_pole : denu=%.3f %.3f %.3f\n", denu[0], denu[1], denu[2]);
 }
 /* tidal displacement ----------------------------------------------------------
 * displacements by earth tides
@@ -3466,8 +3466,8 @@ extern void tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
     double ep[6],fhr;
     int year,mon,day;
 #endif
-    
-    trace(ARC_INFO,"tidedisp: tutc=%s\n",time_str(tutc,0));
+
+    arc_log(ARC_INFO, "tidedisp: tutc=%s\n", time_str(tutc, 0));
     
     if (erp) {
         geterp(erp,utc2gpst(tutc),erpv);
@@ -3511,7 +3511,7 @@ extern void tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
         matmul("TN",3,1,3,1.0,E,denu,0.0,drt);
         for (i=0;i<3;i++) dr[i]+=drt[i];
     }
-    trace(ARC_INFO,"tidedisp: dr=%.3f %.3f %.3f\n",dr[0],dr[1],dr[2]);
+    arc_log(ARC_INFO, "tidedisp: dr=%.3f %.3f %.3f\n", dr[0], dr[1], dr[2]);
 }
 /* get tick time ---------------------------------------------------------------
 * get current tick in ms
@@ -3557,8 +3557,8 @@ extern int rtk_uncompress(const char *file, char *uncfile)
 {
     int stat=0;
     char *p,cmd[2048]="",tmpfile[1024]="",buff[1024],*fname,*dir="";
-    
-    trace(ARC_INFO,"rtk_uncompress: file=%s\n",file);
+
+    arc_log(ARC_INFO, "rtk_uncompress: file=%s\n", file);
     
     strcpy(tmpfile,file);
     if (!(p=strrchr(tmpfile,'.'))) return 0;
@@ -3618,7 +3618,7 @@ extern int rtk_uncompress(const char *file, char *uncfile)
         if (stat) remove(tmpfile);
         stat=1;
     }
-    trace(ARC_INFO,"rtk_uncompress: stat=%d\n",stat);
+    arc_log(ARC_INFO, "rtk_uncompress: stat=%d\n", stat);
     return stat;
 }
 /* execute command -------------------------------------------------------------
@@ -3634,7 +3634,7 @@ extern int execcmd(const char *cmd)
     DWORD stat;
     char cmds[1024];
     
-    trace(ARC_INFO,"execcmd: cmd=%s\n",cmd);
+    arc_log(ARC_INFO,"execcmd: cmd=%s\n",cmd);
     
     si.cb=sizeof(si);
     sprintf(cmds,"cmd /c %s",cmd);
@@ -3646,7 +3646,7 @@ extern int execcmd(const char *cmd)
     CloseHandle(info.hThread);
     return (int)stat;
 #else
-    trace(3,"execcmd: cmd=%s\n",cmd);
+    arc_log(3, "execcmd: cmd=%s\n", cmd);
     
     return system(cmd);
 #endif
