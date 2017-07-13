@@ -441,7 +441,6 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
 			break;
 		}
         for (j=0;j<4;j++) x[j]+=dx[j];
-        
         if (norm(dx,4)<1E-6) {
             for (i=0;i<3;i++) sol->rr[i+3]=x[i];
             break;
