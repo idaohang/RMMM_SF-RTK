@@ -16,11 +16,9 @@
  *  Created on: July 07, 2017
  *      Author: SuJingLan
  *********************************************************************************/
-
 /**
- * @file arc.h
+ * @file rtklib.h
  * @brief Header file for the ARC-SRTK Library
- * @author SuJingLan
  */
 
 #ifndef RTKLIB_H
@@ -33,6 +31,7 @@
 #include <math.h>
 #include <time.h>
 #include <ctype.h>
+#include "arc_ceres_api.h"
 
 #ifdef WIN32
 #include <winsock2.h>
@@ -425,14 +424,6 @@ extern "C" {
 #define P2_50       8.881784197001252E-16 /* 2^-50 */
 #define P2_55       2.775557561562891E-17 /* 2^-55 */
 
-#define GLOG            1                 /* google log for debug */
-#define ARC_NOLOG       -1                /* disable log informations */
-#define ARC_INFO        0				  /* google information log */
-#define ARC_WARNING 	1				  /* google warnings */
-#define ARC_ERROR       2				  /* google errors */
-#define ARC_FATAL       3				  /* google fatals */
-#define ARC_LOGFILE     4 				  /* recore log information to file */
-
 #ifdef WIN32
 #define thread_t    HANDLE
 #define lock_t      CRITICAL_SECTION
@@ -725,7 +716,7 @@ typedef struct {        /* processing options type */
     /* (0:pos in prcopt,  1:average of single pos, */
     /*  2:read from file, 3:rinex header, 4:rtcm pos) */
     double eratio[NFREQ]; /* code/phase error ratio */
-    double err[5];      /* measurement error factor */
+    double err[5];        /* measurement error factor */
     /* [0]:reserved */
     /* [1-3]:error factor a/b/c of phase (m) */
     /* [4]:doppler frequency (hz) */
@@ -743,18 +734,20 @@ typedef struct {        /* processing options type */
     double ru[3];       /* rover position for fixed mode {x,y,z} (ecef) (m) */
     double rb[3];       /* base position for relative mode {x,y,z} (ecef) (m) */
     char anttype[2][MAXANT]; /* antenna types {rover,base} */
-    double antdel[2][3]; /* antenna delta {{rov_e,rov_n,rov_u},{ref_e,ref_n,ref_u}} */
-    pcv_t pcvr[2];      /* receiver antenna parameters {rov,base} */
+    double antdel[2][3];     /* antenna delta {{rov_e,rov_n,rov_u},{ref_e,ref_n,ref_u}} */
+    pcv_t pcvr[2];           /* receiver antenna parameters {rov,base} */
     unsigned char exsats[MAXSAT]; /* excluded satellites (1:excluded,2:included) */
     int  maxaveep;      /* max averaging epoches */
     int  initrst;       /* initialize by restart */
     int  outsingle;     /* output single by dgps/float/fix/ppp outage */
-    char rnxopt[2][256]; /* rinex options {rover,base} */
+    char rnxopt[2][256];/* rinex options {rover,base} */
     int  posopt[6];     /* positioning options */
     int  syncsol;       /* solution sync mode (0:off,1:on) */
     double odisp[2][6*11]; /* ocean tide loading parameters {rov,base} */
-    exterr_t exterr;    /* extended receiver error model */
-    int freqopt;        /* disable L2-AR */
+    exterr_t exterr;       /* extended receiver error model */
+    int freqopt;           /* disable L2-AR */
+    int ceres;             /* use ceres to sovle single rtk */
+    int cholesky;          /* ceres problem use cholesky decomposition */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -876,6 +869,10 @@ typedef struct {        /* RTK control/result type */
     int neb;             /* bytes in error message buffer */
     char errbuf[MAXERRMSG]; /* error message buffer */
     prcopt_t opt;           /* processing options */
+    ceres_problem_t *ceres_problem;
+                            /* solve the single rtk position problem */
+    ceres_cost_function_t *loss_function;
+                            /* solve the single rtk position loss function */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */

@@ -25,7 +25,6 @@
  */
 
 #include "arc.h"
-#include "glog/logging.h"
 #include "libPF/ParticleFilter.h"
 #include "arc_ObservationModel.h"
 #include "arc_MovementModel.h"
@@ -294,12 +293,10 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
     rtk_t rtk;
     obsd_t obs[MAXOBS*2]; /* for rover and base */
     double rb[3]={0};
-    int i,nobs,n,solstatic,pri[]={0,1,2,3,4,5,1,6},nu=0,nr=0;
+    int i,nobs,n,pri[]={0,1,2,3,4,5,1,6},nu=0,nr=0;
 
-    arc_log(ARC_INFO, "procpos : mode=%d\n", mode);
-    
-    solstatic=sopt->solstatic&&
-              (popt->mode==PMODE_STATIC||popt->mode==PMODE_PPP_STATIC);
+    arc_log(ARC_INFO, "arc_procpos : mode=%d\n", mode);
+
     rtkinit(&rtk,popt);
 
     while ((nobs=arc_inputobs(obs,rtk.sol.stat,popt,&nu,&nr))>=0) {
@@ -343,9 +340,6 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
             isolb++;
         }
     }
-    if (mode==0&&solstatic&&time.time!=0.0) {
-        sol.time=time;
-    }
     rtkfree(&rtk);
 }
 /* validation of combined solutions ------------------------------------------*/
@@ -378,12 +372,9 @@ static void arc_combres(const prcopt_t *popt, const solopt_t *sopt)
     gtime_t time={0};
     sol_t sols={{0}},sol={{0}};
     double tt,Qf[9],Qb[9],Qs[9],rbs[3]={0},rb[3]={0},rr_f[3],rr_b[3],rr_s[3];
-    int i,j,k,solstatic,pri[]={0,1,2,3,4,5,1,6};
+    int i,j,k,pri[]={0,1,2,3,4,5,1,6};
 
     arc_log(ARC_INFO, "arc_combres : isolf=%d isolb=%d\n", isolf, isolb);
-    
-    solstatic=sopt->solstatic&&
-              (popt->mode==PMODE_STATIC||popt->mode==PMODE_PPP_STATIC);
     
     for (i=0,j=isolb-1;i<isolf&&j>=0;i++,j--) {
         
@@ -448,9 +439,6 @@ static void arc_combres(const prcopt_t *popt, const solopt_t *sopt)
                 time=sols.time;
             }
         }
-    }
-    if (solstatic&&time.time!=0.0) {
-        sol.time=time;
     }
 }
 /* read prec ephemeris, sbas data, lex data, tec grid and open rtcm ----------*/

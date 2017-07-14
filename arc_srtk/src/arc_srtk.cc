@@ -1,12 +1,17 @@
 
-#include <arc.h>
 #include "arc.h"
+#include <iomanip>
+#include <fstream>
+#include <rtklib.h>
+
+using namespace std;
 
 /* constants/macros ----------------------------------------------------------*/
 #define SQR(x)      ((x)*(x))
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))
 #define MIN(x,y)    ((x)<=(y)?(x):(y))
 #define ROUND(x)    (int)floor((x)+0.5)
+#define MAXSTATES   80        /* max numbers of states */
 
 #define VAR_POS     SQR(30.0) /* initial variance of receiver pos (m^2) */
 #define VAR_VEL     SQR(10.0) /* initial variance of receiver vel ((m/s)^2) */
@@ -35,6 +40,28 @@
 #define II(s,opt)   (NP(opt)+(s)-1)                 /* ionos (s:satellite no) */
 #define IT(r,opt)   (NP(opt)+NI(opt)+NT(opt)/2*(r)) /* tropos (r:0=rov,1:ref) */
 #define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1)      /* phase bias (s:satno,f:freq) */
+
+/* constants/global variables for ceres problem--------------------------------------------*/
+static double *_H_=NULL;                            /* ceres problem jacobi matrix pointor */
+static int _NX_=0;                                  /* ceres problem parameters block numbers*/
+static int _NV_=0;                                  /* ceres problem residual block numbers */
+static int _IV_=0;                                  /* ceres problem residual index */
+static rtk_t *_RTK_;                                /* ceres problem rtk data type */
+static const obsd_t*_OBS_;                          /* ceres problem observation data */
+static const nav_t *_NAV_;                          /* ceres problem navigation data */
+static int _NU_;                                    /* ceres problem rover observation data */
+static int _NR_;                                    /* ceres problem base observation data */
+static double *_RS_;                                /* ceres problem satellite position/velecity */
+static double *_DTS_;                               /* ceres problem satellite clock drift */
+static double *_Y_;                                 /* ceres problem undifferenced residuals for rover and base */
+static double *_AZEL_;                              /* ceres problem satellite azel */
+static double *_E_;                                 /* ceres problem rover station - satellite's line of light */
+static int *_SVH_;                                  /* ceres problem satellite health flag */
+static int *_VFLAG_;                                /* ceres problem satellite valid flag */
+static int *_ParaBlock_=NULL;                       /* ceres problem parameters block list */
+static double **_Para_=NULL;                        /* ceres problem parameters block pointor */
+static int _Para_Const_List_[MAXSTATES]={-1};       /* ceres problem const parameters list */
+static int _NCP_=0;                                 /* ceres problem const parameters numbers */
 
 /* single-differenced observable ---------------------------------------------*/
 static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
@@ -372,7 +399,7 @@ static void arc_udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,
 {
     double tt=fabs(rtk->tt),bl,dr[3];
 
-    arc_log(ARC_INFO, "udstate : ns=%d\n", ns);
+    arc_log(ARC_INFO, "arc_udstate : ns=%d\n", ns);
     
     /* temporal update of position/velocity/acceleration */
     arc_udpos(rtk,tt);
@@ -410,7 +437,7 @@ static void arc_zdres_sat(int base, double r, const obsd_t *obs, const nav_t *na
     if (obs->P[i]!=0.0) y[i+nf]=obs->P[i]       -r-dant[i]-dion;
 }
 /* undifferenced phase/code residuals ----------------------------------------*/
-extern int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
+static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
                      const double *dts, const int *svh, const nav_t *nav,
                      const double *rr, const prcopt_t *opt, int index, double *y,
                      double *e, double *azel)
@@ -536,7 +563,6 @@ static int arc_constbl(rtk_t *rtk, const double *x, const double *P, double *v,
 
     arc_log(ARC_INFO, "baseline len   "
             "v=%13.3f R=%8.6f %8.6f\n", v[index], Ri[index], Rj[index]);
-    
     return 1;
 }
 /* precise tropspheric model -------------------------------------------------*/
@@ -678,7 +704,7 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
             else      rtk->ssat[sat[j]-1].resp[f-nf]=v[nv];
             
             /* test innovation */
-            if (opt->maxinno>0.0&&fabs(v[nv])>opt->maxinno) {
+            if (opt->ceres==0) if (opt->maxinno>0.0&&fabs(v[nv])>opt->maxinno) {
                 if (f<nf) {
                     rtk->ssat[sat[i]-1].rejc[f]++;
                     rtk->ssat[sat[j]-1].rejc[f]++;
@@ -688,9 +714,10 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
                 continue;
             }
             /* single-differenced measurement error variances */
-            Ri[nv]=arc_varerr(sat[i],sysi,azel[1+iu[i]*2],bl,dt,f,opt);
-            Rj[nv]=arc_varerr(sat[j],sysj,azel[1+iu[j]*2],bl,dt,f,opt);
-            
+            if (R) {
+                Rj[nv]=arc_varerr(sat[j],sysj,azel[1+iu[j]*2],bl,dt,f,opt);
+                Ri[nv]=arc_varerr(sat[i],sysi,azel[1+iu[i]*2],bl,dt,f,opt);
+            }
             /* set valid data flags */
             if (opt->mode>PMODE_DGPS) {
                 if (f<nf) rtk->ssat[sat[i]-1].vsat[f]=rtk->ssat[sat[j]-1].vsat[f]=1;
@@ -698,8 +725,8 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
             else {
                 rtk->ssat[sat[i]-1].vsat[f-nf]=rtk->ssat[sat[j]-1].vsat[f-nf]=1;
             }
-            arc_log(ARC_INFO, "arc_ddres : sat=%3d-%3d %s%d v=%13.3f R=%8.6f %8.6f\n", sat[i],
-                    sat[j], f < nf ? "L" : "P", f % nf + 1, v[nv], Ri[nv], Rj[nv]);
+            arc_log(ARC_INFO,"arc_ddres : sat=%3d-%3d %s%d v=%13.3f R=%8.6f %8.6f\n", sat[i],
+                    sat[j],f<nf?"L":"P",f%nf+1,v[nv],Ri[nv],Rj[nv]);
             
             vflg[nv++]=(sat[i]<<16)|(sat[j]<<8)|((f<nf?0:1)<<4)|(f%nf);
             nb[b]++;
@@ -713,11 +740,12 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
         vflg[nv++]=3<<4;
         nb[b++]++;
     }
-    if (H) { arc_log(ARC_INFO, "arc_ddres : H=\n");
-        arc_tracemat(5, H, rtk->nx, nv, 7, 4);}
+    if (H) {
+        arc_log(ARC_INFO, "arc_ddres : H=\n");
+        arc_tracemat(ARC_MATPRINTF, H, rtk->nx, nv, 7, 4);}
     
     /* double-differenced measurement error covariance */
-    arc_ddcov(nb,b,Ri,Rj,nv,R);
+    if (R) arc_ddcov(nb,b,Ri,Rj,nv,R);
     
     free(Ri); free(Rj); free(im);
     free(tropu); free(tropr); free(dtdxu); free(dtdxr);
@@ -845,7 +873,7 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
     double *v,*H,*R;
     int i,n,m,f,info,index[MAXSAT],nb=rtk->nx-rtk->na,nv=0,nf=NF(&rtk->opt);
 
-    arc_log(ARC_INFO, "holdamb :\n");
+    arc_log(ARC_INFO, "arc_holdamb :\n");
     
     v=mat(nb,1); H=zeros(nb,rtk->nx);
     
@@ -917,15 +945,15 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
     for (i=0;i<na;i++) for (j=0;j<nb;j++) Qab[i+j*na]=Qy[   i+(na+j)*ny];
 
     arc_log(ARC_INFO, "arc_resamb_LAMBDA : N(0)=");
-    arc_tracemat(4,y+na,1,nb,10,3);
+    arc_tracemat(ARC_MATPRINTF,y+na,1,nb,10,3);
     
     /* lambda/mlambda integer least-square estimation */
     if (!(info=lambda(nb,2,y+na,Qb,b,s))) {
 
         arc_log(ARC_INFO, "N(1)=");
-        arc_tracemat(4,b,1,nb,10,3);
+        arc_tracemat(ARC_MATPRINTF,b,1,nb,10,3);
         arc_log(ARC_INFO, "N(2)=");
-        arc_tracemat(4,b+nb,1,nb,10,3);
+        arc_tracemat(ARC_MATPRINTF,b+nb,1,nb,10,3);
         
         rtk->sol.ratio=s[0]>0?(float)(s[1]/s[0]):0.0f;
         if (rtk->sol.ratio>999.9) rtk->sol.ratio=999.9f;
@@ -978,7 +1006,7 @@ static int arc_valpos(rtk_t *rtk, const double *v, const double *R, const int *v
 {
     double fact=thres*thres;
     int i,stat=1,sat1,sat2,type,freq;
-    char *stype;
+    char stype[8];
 
     arc_log(ARC_INFO, "arc_valpos  : nv=%d thres=%.1f\n", nv, thres);
     
@@ -995,6 +1023,148 @@ static int arc_valpos(rtk_t *rtk, const double *v, const double *R, const int *v
                 sat1,sat2,stype,freq+1,v[i],SQRT(R[i+i*nv]));
     }
     return stat;
+}
+/* ceres problem pointor asignment -------------------------------------------*/
+static void arc_ceres_init(double *H,const prcopt_t* opt,int nv,double* rs,
+                           double *dts,double *y,double *azel,int nu,int nr,
+                           double *e,int *svh,int *vflag,rtk_t *rtk,
+                           const obsd_t *obs,const nav_t* nav)
+{
+    int i;
+    /* set the jacobi matric pointor to ceres problem */
+    _H_=H;
+    /* set the ceres parameters block numbers */
+    _NX_=NX(opt);
+    /* set the ceres residual block numbers */
+    _NV_=nv;
+    /* set satellite position/clock pointor */
+    _RS_=rs; _DTS_=dts;
+    /* set the satellite azimuth/elevation angle */
+    _AZEL_=azel;
+    /* set the undifferenced residuals for rover and base */
+    _Y_=y;
+    /* get the rover and base station obsevation numbers */
+    _NU_=nu; _NR_=nr;
+    /* rover station - satellite's line of light */
+    _E_=e;
+    /* satellite health flag */
+    _SVH_=svh;
+    /* satellite valid flag */
+    _VFLAG_=vflag;
+    /* observation data/navigation data pointor */
+    _RTK_=rtk; _OBS_=obs; _NAV_=nav;
+    /* initial parameters block list */
+    if (_ParaBlock_==NULL) {
+        _ParaBlock_=(int*)malloc(sizeof(int)*rtk->nx);
+        for (i=0;i<rtk->nx;i++) _ParaBlock_[i]=1;
+    }
+}
+/* asignment parameters block ------------------------------------------------*/
+static double** arc_ceres_para(const rtk_t* rtk)
+{
+    int i;
+    double **para;
+
+    /* allocate memeory */
+    for (i=0;i<MAXSTATES;i++) para[i]=(double*)malloc(sizeof(double));
+    
+    /* asigne parameter pointor */
+    for (i=0;i<rtk->nx;i++) {
+        para[i]=rtk->x+i;
+    }
+    return para;
+}
+/* check whether there is some parameter can be set to be const parameters ----*/
+static int arc_para_chk(const rtk_t* rtk,const double *H,const double *x)
+{
+    int i,k=0;
+    for (i=0,k=0;i<rtk->nx;i++) {
+        if (x[i]==0.0&&rtk->P[i+i*rtk->nx]==0.0) _Para_Const_List_[k++]=i;
+    }
+    return k;
+}
+/* ceres solve problem covariance matrix -------------------------------------*/
+static int arc_ceres_cov(rtk_t* rtk,const double *H,double *R,int n,int m,
+                         double *cov)
+{
+    double *Pp_,*H_,*HTR_;
+    int i,j,k,info,*ix;
+
+    ix=imat(n,1); for (i=k=0;i<n;i++) if (rtk->x[i]!=0.0&&rtk->P[i+i*n]>0.0) ix[k++]=i;
+    Pp_=mat(k,k); H_=mat(k,m); HTR_=mat(k,m);
+    for (i=0;i<k;i++) {
+        for (j=0;j<m;j++) H_[i+j*k]=H[ix[i]+j*n];
+    }
+    if (!(info=matinv(R,m))) {
+        matmul("TN",k,m,m,1.0,H_,R,0.0,HTR_);
+        matmul("NN",k,k,m,1.0,HTR_,H_,0.0,Pp_);
+        info=matinv(Pp_,k);
+    }
+    for (i=0;i<k;i++) {
+        for (j=0;j<k;j++) cov[ix[i]+ix[j]*n]=Pp_[i+j*k];
+    }
+    free(ix); free(Pp_); free(H_); free(HTR_);
+    return info;
+}
+/* ceres solve problem cost function -----------------------------------------*/
+static int arc_ceres_residual(void* m,double** parameters,double* residuals,
+                              double** jacobians)
+{
+    prcopt_t *opt=&_RTK_->opt;
+    gtime_t time=_OBS_[0].time;
+    double *v,*R,dt,*L,*H;
+    int ns,ny,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],i,j;
+
+    LOG(INFO)<<setiosflags(ios::fixed)<<setprecision(6)<<"ceres solve position : "
+             <<parameters[0][0]<<"   "<<parameters[1][0]<<"   "<<parameters[2][0];
+
+    /* adjust parameters positions */
+    for (i=0;i<_RTK_->nx;i++) _RTK_->x[i]=parameters[i][0];
+
+    /* select common satellites between rover and base-station */
+    if ((ns=arc_selsat(_OBS_,_AZEL_,_NU_,_NR_,opt,sat,iu,ir))<=0) {
+        arc_log(ARC_WARNING, "ceres_residual : no common satellite\n");
+        return 0;
+    }
+    ny=ns*2+2;
+    v=mat(1,ny); R=mat(ny,ny);
+    dt=timediff(time,_OBS_[_NU_].time);
+
+    /* undifferenced residuals for rover */
+    if (!arc_zdres(0,_OBS_,_NU_,_RS_,_DTS_,_SVH_,_NAV_,_RTK_->x,opt,0,_Y_,_E_,_AZEL_)) {
+        arc_log(ARC_WARNING, "ceres_residual : rover initial position error\n");
+        free(v); free(R);
+        return 0;
+    }
+    /* double-differenced residuals and partial derivatives */
+    if ((_NV_=arc_ddres(_RTK_,_NAV_,dt,_RTK_->x,_RTK_->P,sat,_Y_,_E_,
+                        _AZEL_,iu,ir,ns,v,_H_,R,_VFLAG_))<1) {
+        arc_log(ARC_WARNING, "ceres_residual : no double-differenced residual\n");
+        free(v); free(R);
+        return 0;
+    }
+    if (opt->cholesky) {
+        /* cholesky decomposition */
+        L=arc_cholesky(R,_NV_); H=mat(_NV_,_NX_);
+        /* asign the double-difference residual */
+        matmul("NN",_NV_,1,_NV_,1.0,L,v,0.0,residuals);
+        /* get the double-difference jacobi matrix */
+        matmul("NN",_NV_,1,_NV_,1.0,L,_H_,0.0,H);
+    }
+    else {
+        H=_H_; matcpy(residuals,v,_NV_,1);
+    }
+
+    if (jacobians) {
+        for (i=0;i<_NX_;i++) {
+            if (jacobians[i]) for (j=0;j<_NV_;j++) jacobians[i][j]=-H[j*_NX_+i];
+        }
+    }
+    if (opt->cholesky) {
+        free(L); free(H);
+    }
+    free(v); free(R);
+    return 1;
 }
 /* relative positioning ------------------------------------------------------*/
 static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
@@ -1046,7 +1216,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     arc_udstate(rtk,obs,sat,iu,ir,ns,nav);
 
     arc_log(ARC_INFO, "arc_relpos : x(0)=");
-    arc_tracemat(4, rtk->x, 1, NR(opt), 13, 4);
+    arc_tracemat(ARC_MATPRINTF,rtk->x,1,NR(opt),13,4);
     
     xp=mat(rtk->nx,1); Pp=zeros(rtk->nx,rtk->nx); xa=mat(rtk->nx,1);
     matcpy(xp,rtk->x,rtk->nx,1);
@@ -1057,7 +1227,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* add 2 iterations for baseline-constraint moving-base */
     niter=opt->niter+(opt->mode==PMODE_MOVEB&&opt->baseline[0]>0.0?2:0);
     
-    for (i=0;i<niter;i++) {
+    if (opt->ceres==0) for (i=0;i<niter;i++) {
         /* undifferenced residuals for rover */
         if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
             arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
@@ -1078,7 +1248,57 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             break;
         }
         arc_log(ARC_INFO, "arc_relpos : x(%d)=", i + 1);
-        arc_tracemat(4, xp, 1, NR(opt), 13, 4);
+        arc_tracemat(ARC_MATPRINTF, xp, 1, NR(opt), 13, 4);
+    }
+    else if (opt->ceres) {
+        /* undifferenced residuals for rover */
+        if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
+            arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
+            stat=SOLQ_NONE;
+        }
+        /* double-differenced residuals and partial derivatives */
+        if ((nv=arc_ddres(rtk,nav,dt,xp,Pp,sat,y,e,azel,iu,ir,ns,v,H,R,vflg))<1) {
+            arc_log(ARC_WARNING, "arc_relpos : no double-differenced residual\n");
+            stat=SOLQ_NONE;
+        }
+        /* compute the states covariance matrix */
+        if (arc_ceres_cov(rtk,H,R,rtk->nx,nv,Pp)) {
+            arc_log(ARC_ERROR, "arc_relpos : compute the states covariance matrix errorl \n");
+            stat=SOLQ_NONE;
+        }
+        arc_tracemat(ARC_MATPRINTF,Pp,rtk->nx,rtk->nx,10,4);
+        
+        /* build a ceres solve problem */
+        ceres_problem_t *ceres_problem=ceres_create_problem();
+        /* ceres problem initial */
+        arc_ceres_init(H,opt,nv,rs,dts,y,azel,nu,nr,e,svh,vflg,rtk,obs,nav);
+
+        /* get the ceres problem parameter pointor */
+        _Para_=arc_ceres_para(rtk);
+        /* add parameters block to ceres problem */
+        arc_ceres_add_para_block(ceres_problem,rtk->nx,_Para_);
+
+        /* check parameter list ,and get some parameters can be const */
+        if ((_NCP_=arc_para_chk(rtk,H,rtk->x))>0) {
+            for (i=0;i<_NCP_;i++) arc_ceres_set_para_const(ceres_problem,_Para_[_Para_Const_List_[i]]);
+        }
+        /* create a ceres solve problem to add all the residuals. */
+        ceres_problem_add_residual_block(
+                ceres_problem,
+                arc_ceres_residual,    /* Cost function */
+                NULL,                  /* Points to the measurement */
+                NULL,                  /* No loss function */
+                ceres_create_huber_loss_function_data(1.0),
+                                       /* loss function user data */
+                _NV_,                  /* Number of residuals */
+                _NX_,                  /* Number of parameter blocks */
+                _ParaBlock_,           /* NUmber of parameter size */
+                _Para_);               /* Parameters pointor */
+        /* solve the problem */
+        ceres_solve(ceres_problem);
+        ceres_free_problem(ceres_problem);
+        /* copy ceres problem states to xp */
+        if (xp) matcpy(xp,rtk->x,rtk->nx,1);
     }
     if (stat!=SOLQ_NONE&&arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
         
@@ -1194,6 +1414,7 @@ extern void rtkinit(rtk_t *rtk, const prcopt_t *opt)
     rtk->P=zeros(rtk->nx,rtk->nx);
     rtk->xa=zeros(rtk->na,1);
     rtk->Pa=zeros(rtk->na,rtk->na);
+    rtk->ceres_problem=ceres_create_problem();
     rtk->nfix=rtk->neb=0;
     for (i=0;i<MAXSAT;i++) {
         rtk->ambc[i]=ambc0;
@@ -1217,64 +1438,7 @@ extern void rtkfree(rtk_t *rtk)
     free(rtk->xa); rtk->xa=NULL;
     free(rtk->Pa); rtk->Pa=NULL;
 }
-/* precise positioning ---------------------------------------------------------
-* input observation data and navigation message, compute rover position by 
-* precise positioning
-* args   : rtk_t *rtk       IO  rtk control/result struct
-*            rtk->sol       IO  solution
-*                .time      O   solution time
-*                .rr[]      IO  rover position/velocity
-*                               (I:fixed mode,O:single mode)
-*                .dtr[0]    O   receiver clock bias (s)
-*                .dtr[1]    O   receiver glonass-gps time offset (s)
-*                .Qr[]      O   rover position covarinace
-*                .stat      O   solution status (SOLQ_???)
-*                .ns        O   number of valid satellites
-*                .age       O   age of differential (s)
-*                .ratio     O   ratio factor for ambiguity validation
-*            rtk->rb[]      IO  base station position/velocity
-*                               (I:relative mode,O:moving-base mode)
-*            rtk->nx        I   number of all states
-*            rtk->na        I   number of integer states
-*            rtk->ns        O   number of valid satellite
-*            rtk->tt        O   time difference between current and previous (s)
-*            rtk->x[]       IO  float states pre-filter and post-filter
-*            rtk->P[]       IO  float covariance pre-filter and post-filter
-*            rtk->xa[]      O   fixed states after AR
-*            rtk->Pa[]      O   fixed covariance after AR
-*            rtk->ssat[s]   IO  sat(s+1) status
-*                .sys       O   system (SYS_???)
-*                .az   [r]  O   azimuth angle   (rad) (r=0:rover,1:base)
-*                .el   [r]  O   elevation angle (rad) (r=0:rover,1:base)
-*                .vs   [r]  O   data valid single     (r=0:rover,1:base)
-*                .resp [f]  O   freq(f+1) pseudorange residual (m)
-*                .resc [f]  O   freq(f+1) carrier-phase residual (m)
-*                .vsat [f]  O   freq(f+1) data vaild (0:invalid,1:valid)
-*                .fix  [f]  O   freq(f+1) ambiguity flag
-*                               (0:nodata,1:float,2:fix,3:hold)
-*                .slip [f]  O   freq(f+1) slip flag
-*                               (bit8-7:rcv1 LLI, bit6-5:rcv2 LLI,
-*                                bit2:parity unknown, bit1:slip)
-*                .lock [f]  IO  freq(f+1) carrier lock count
-*                .outc [f]  IO  freq(f+1) carrier outage count
-*                .slipc[f]  IO  freq(f+1) cycle slip count
-*                .rejc [f]  IO  freq(f+1) data reject count
-*                .gf        IO  geometry-free phase (L1-L2) (m)
-*                .gf2       IO  geometry-free phase (L1-L5) (m)
-*            rtk->nfix      IO  number of continuous fixes of ambiguity
-*            rtk->neb       IO  bytes of error message buffer
-*            rtk->errbuf    IO  error message buffer
-*            rtk->tstr      O   time string for debug
-*            rtk->opt       I   processing options
-*          obsd_t *obs      I   observation data for an epoch
-*                               obs[i].rcv=1:rover,2:reference
-*                               sorted by receiver and satellte
-*          int    n         I   number of observation data
-*          nav_t  *nav      I   navigation messages
-* return : status (0:no solution,1:valid solution)
-* notes  : before calling function, base station position rtk->sol.rb[] should
-*          be properly set for relative mode except for moving-baseline
-*-----------------------------------------------------------------------------*/
+/* arc single rtk precise positioning ---------------------------------------*/
 extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
 {
     prcopt_t *opt=&rtk->opt;

@@ -52,6 +52,8 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/arc/include
     ${GFLAGS_INCLUDE_DIR}
     ${PROJECT_SOURCE_DIR}/arc_pf/lib/include
+    ${PROJECT_SOURCE_DIR}/arc_ceres/include
+    /usr/include/eigen3
 )
 add_subdirectory(arc_plot)
 add_subdirectory(arc_log)
@@ -70,9 +72,10 @@ add_library(${PROJECT_NAME}_rtk STATIC
     arc/src/arc_MovementModel.cc
     arc/src/arc_ObservationModel.cpp
     arc/src/arc_StatesDistribution.cpp
-        )
+    arc/src/arc_ceres_api.cc
+)
 
-target_link_libraries(${PROJECT_NAME}_rtk glog PF)
+target_link_libraries(${PROJECT_NAME}_rtk glog PF ceres)
 add_executable(arc_test1 
                arc_test/src/test1)
 add_executable(arc_test2

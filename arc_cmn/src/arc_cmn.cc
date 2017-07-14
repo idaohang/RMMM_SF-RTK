@@ -696,6 +696,29 @@ extern int solve(const char *tr, const double *A, const double *Y, int n,
     free(B);
     return info;
 }
+/* arc cholesky functions ------------------------------------------------------*/
+extern double *arc_cholesky(double *A,int n)
+{
+    int i,j,k;
+    double *L=(double*)calloc(n*n,sizeof(double));
+    if (L==NULL)
+        fprintf(stderr,"Falta cholesky decomp \n");
+    for (i=0;i<n;i++) {
+        for (j=0;j<(i+1);j++) {
+            double s=0;
+            for (k=0;k<j;k++) {
+                s+= L[i *n+k]*L[j*n+k];
+            }
+            if (i==j) {
+                L[i*n+j]=sqrt(A[i*n+i]-s);
+            }
+            else {
+                L[i*n+j]=(1.0/L[j*n+ j]*(A[i*n+j]-s));
+            }
+        }
+    }
+    return L;
+}
 
 /* end of matrix routines ----------------------------------------------------*/
 
@@ -829,7 +852,7 @@ extern int smoother(const double *xf, const double *Qf, const double *xb,
 extern void matfprint(const double A[], int n, int m, int p, int q, FILE *fp)
 {
     int i,j;
-    
+    fprintf(fp,"MAT:----------------------------------------------------------\n");
     for (i=0;i<n;i++) {
         for (j=0;j<m;j++) fprintf(fp," %*.*f",p,q,A[i+j*n]);
         fprintf(fp,"\n");
@@ -2442,8 +2465,8 @@ extern void arc_tracet(int level, const char *format, ...)
 }
 extern void arc_tracemat(int level, const double *A, int n, int m, int p, int q)
 {
-    if (!fp_trace||level>level_trace) return;
-    matfprint(A,n,m,p,q,fp_trace); fflush(fp_trace);
+    if (level!=ARC_MATPRINTF) return;
+    matfprint(A,n,m,p,q,stderr); fflush(stderr);
 }
 extern void arc_traceobs(int level, const obsd_t *obs, int n)
 {

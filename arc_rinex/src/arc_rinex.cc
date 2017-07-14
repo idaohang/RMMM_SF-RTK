@@ -1,6 +1,5 @@
 
 #include "arc.h"
-#include "glog/logging.h"
 /* constants/macros ----------------------------------------------------------*/
 #define SQR(x)      ((x)*(x))
 

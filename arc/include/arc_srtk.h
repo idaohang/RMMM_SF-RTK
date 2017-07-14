@@ -31,18 +31,27 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-////////////////////////////////////////////////////////////////////////////////
+/* constants/global variables -------------------------------------------------*/
+#define GLOG            1                 /* google log for debug */
+#define ARC_NOLOG       -1                /* disable log informations */
+#define ARC_INFO        0				  /* google information log */
+#define ARC_WARNING 	1				  /* google warnings */
+#define ARC_ERROR       2				  /* google errors */
+#define ARC_FATAL       3				  /* google fatals */
+#define ARC_LOGFILE     4 				  /* recore log information to file */
+#define ARC_MATPRINTF   5                 /* matrix printf flag */
+/* single frequency rtk position post-processing ------------------------------*/
 extern int  arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,
                         const filopt_t *fopt, char **infile, int n, char *outfile,
                         const char *rov, const char *base);
-////////////////////////////////////////////////////////////////////////////////
+/* using particle filter solve single frequency position ---------------------*/
 extern int  arc_pf_srtk(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,
                         const filopt_t *fopt, char **infile, int n, char *outfile);
-////////////////////////////////////////////////////////////////////////////////
+/* single frequency rtk positioning ------------------------------------------*/
 extern int  arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
-////////////////////////////////////////////////////////////////////////////////
+/* arc trace log functions ---------------------------------------------------*/
 extern void arc_traceopen(const char *file);
 extern void arc_traceclose(void);
 extern void arc_tracelevel(int level);
@@ -57,7 +66,9 @@ extern void arc_tracepeph(int level, const nav_t *nav);
 extern void arc_tracepclk(int level, const nav_t *nav);
 extern void arc_traceb(int level, const unsigned char *p, int n);
 extern void arc_tracebuf(int buffcount);
-////////////////////////////////////////////////////////////////////////////////
+/* arc cholesky functions ------------------------------------------------------*/
+extern double *arc_cholesky(double *A,int n);
+
 #ifdef __cplusplus
 }
 #endif

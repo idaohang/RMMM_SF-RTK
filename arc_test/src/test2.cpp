@@ -1,5 +1,5 @@
-#include <arc.h>
-#include "glog/logging.h"
+#include "arc.h"
+
 #define NUMINFILE 10
 
 int main()
@@ -34,6 +34,8 @@ int main()
     arc_opt.elmin = 15.0 * D2R;
     arc_opt.navsys = SYS_GPS;
     arc_opt.dynamics=0;
+    arc_opt.ceres=1;
+    arc_opt.cholesky=0;
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
@@ -62,7 +64,7 @@ int main()
     arc_tracebuf(10);
 
     //arc_pf_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile);
-    //arc_postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile,rover,base);
+    arc_postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile,rover,base);
 
     return 0;
 }

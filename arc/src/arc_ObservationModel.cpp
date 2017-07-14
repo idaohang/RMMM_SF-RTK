@@ -28,7 +28,6 @@
 #include "arc_ObservationModel.h"
 #include "glog/logging.h"
 
-///////////////////////////////////////////////////////////////////////////////////
 /* single-differenced observable ---------------------------------------------*/
 static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
 {
