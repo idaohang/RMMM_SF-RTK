@@ -682,7 +682,7 @@ long s_hull_pro( std::vector<Shx> &pts, std::vector<Triad> &triads)
 // Commented by A.Balakin 21 April 2014 -- library shouldn't print anything
 //	cerr << "of triangles " << triads.size() << " to be flipped. "<< endl;
 
-	//  write_Triads(triads, "tris0.mat");
+	//  write_Triads(triads, "tris0.arc_mat");
 
 	std::set<long> ids;
 
@@ -694,7 +694,7 @@ long s_hull_pro( std::vector<Shx> &pts, std::vector<Triad> &triads)
 		return(-3);
 	}
 
-	//  write_Triads(triads, "tris1.mat");
+	//  write_Triads(triads, "tris1.arc_mat");
 
 	long nits = (long) ids.size(), nit=1;
 	while(  nits > 0 && nit < 50)

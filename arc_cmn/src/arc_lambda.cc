@@ -12,7 +12,7 @@
 static int LD(int n, const double *Q, double *L, double *D)
 {
     int i,j,k,info=0;
-    double a,*A=mat(n,n);
+    double a,*A= arc_mat(n, n);
     
     memcpy(A,Q,sizeof(double)*n*n);
     for (i=n-1;i>=0;i--) {
@@ -77,7 +77,7 @@ static int search(int n, int m, const double *L, const double *D,
 {
     int i,j,k,c,nn=0,imax=0;
     double newdist,maxdist=1E99,y;
-    double *S=zeros(n,n),*dist=mat(n,1),*zb=mat(n,1),*z=mat(n,1),*step=mat(n,1);
+    double *S= arc_zeros(n, n),*dist= arc_mat(n, 1),*zb= arc_mat(n, 1),*z= arc_mat(n, 1),*step= arc_mat(n, 1);
     
     k=n-1; dist[k]=0.0;
     zb[k]=zs[k];
@@ -151,19 +151,19 @@ extern int lambda(int n, int m, const double *a, const double *Q, double *F,
     double *L,*D,*Z,*z,*E;
     
     if (n<=0||m<=0) return -1;
-    L=zeros(n,n); D=mat(n,1); Z=eye(n); z=mat(n,1); E=mat(n,m);
+    L= arc_zeros(n, n); D= arc_mat(n, 1); Z= arc_eye(n); z= arc_mat(n, 1); E= arc_mat(n, m);
     
     /* LD factorization */
     if (!(info=LD(n,Q,L,D))) {
         
         /* lambda reduction */
         reduction(n,L,D,Z);
-        matmul("TN",n,1,n,1.0,Z,a,0.0,z); /* z=Z'*a */
+        arc_matmul("TN", n, 1, n, 1.0, Z, a, 0.0, z); /* z=Z'*a */
         
         /* mlambda search */
         if (!(info=search(n,m,L,D,z,E,s))) {
             
-            info=solve("T",Z,E,n,m,F); /* F=Z'\E */
+            info= arc_solve("T", Z, E, n, m, F); /* F=Z'\E */
         }
     }
     free(L); free(D); free(Z); free(z); free(E);
@@ -183,7 +183,7 @@ extern int lambda_reduction(int n, const double *Q, double *Z)
     
     if (n<=0) return -1;
     
-    L=zeros(n,n); D=mat(n,1);
+    L= arc_zeros(n, n); D= arc_mat(n, 1);
     
     for (i=0;i<n;i++) for (j=0;j<n;j++) {
         Z[i+j*n]=i==j?1.0:0.0;
@@ -217,7 +217,7 @@ extern int lambda_search(int n, int m, const double *a, const double *Q,
     
     if (n<=0||m<=0) return -1;
     
-    L=zeros(n,n); D=mat(n,1);
+    L= arc_zeros(n, n); D= arc_mat(n, 1);
     
     /* LD factorization */
     if ((info=LD(n,Q,L,D))) {

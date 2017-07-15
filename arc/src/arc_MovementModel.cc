@@ -119,7 +119,7 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
             X[j]=0.0;
             rtk->ssat[sat[i]-1].lock[f]=-rtk->opt.minlock;
         }
-        bias=zeros(ns,1);
+        bias= arc_zeros(ns, 1);
 
         /* estimate approximate phase-bias by phase - code */
         for (i=j=0,offset=0.0;i<ns;i++) {
@@ -153,7 +153,7 @@ static double baseline(const double *ru, const double *rb, double *dr)
 {
     int i;
     for (i=0;i<3;i++) dr[i]=ru[i]-rb[i];
-    return norm(dr,3);
+    return arc_norm(dr, 3);
 }
 /* temporal update of states --------------------------------------------------*/
 static void arc_udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,

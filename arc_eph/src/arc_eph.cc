@@ -201,7 +201,7 @@ extern void eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
 /* glonass orbit differential equations --------------------------------------*/
 static void deq(const double *x, double *xdot, const double *acc)
 {
-    double a,b,c,r2=dot(x,x,3),r3=r2*sqrt(r2),omg2=SQR(OMGE_GLO);
+    double a,b,c,r2= arc_dot(x, x, 3),r3=r2*sqrt(r2),omg2=SQR(OMGE_GLO);
     
     if (r2<=0.0) {
         xdot[0]=xdot[1]=xdot[2]=xdot[3]=xdot[4]=xdot[5]=0.0;
@@ -529,7 +529,7 @@ static int pephpos(gtime_t time, int sat, const nav_t *nav, double *rs,
     
     for (j=0;j<=NMAX;j++) {
         t[j]=timediff(nav->peph[i+j].time,time);
-        if (norm(nav->peph[i+j].pos[sat-1],3)<=0.0) {
+        if (arc_norm(nav->peph[i + j].pos[sat - 1], 3)<=0.0) {
             arc_log(3, "prec ephem outage %s sat=%2d\n", time_str(time, 0), sat);
             return 0;
         }
@@ -553,7 +553,7 @@ static int pephpos(gtime_t time, int sat, const nav_t *nav, double *rs,
     }
     if (vare) {
         for (i=0;i<3;i++) s[i]=nav->peph[index].std[sat-1][i];
-        std=norm(s,3);
+        std= arc_norm(s, 3);
         
         /* extrapolation error for orbit */
         if      (t[0   ]>0.0) std+=EXTERR_EPH*SQR(t[0   ])/2.0;
@@ -736,12 +736,12 @@ extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
     
     /* unit vectors of satellite fixed coordinates */
     for (i=0;i<3;i++) r[i]=-rs[i];
-    if (!normv3(r,ez)) return;
+    if (!arc_normv3(r, ez)) return;
     for (i=0;i<3;i++) r[i]=rsun[i]-rs[i];
-    if (!normv3(r,es)) return;
-    cross3(ez,es,r);
-    if (!normv3(r,ey)) return;
-    cross3(ey,ez,ex);
+    if (!arc_normv3(r, es)) return;
+    arc_cross3(ez, es, r);
+    if (!arc_normv3(r, ey)) return;
+    arc_cross3(ey, ez, ex);
     
     if (NFREQ>=3&&(satsys(sat,NULL)&(SYS_GAL|SYS_SBS))) k=2;
     
@@ -805,7 +805,7 @@ extern int peph2pos(gtime_t time, int sat, const nav_t *nav, int opt,
     }
     /* relativistic effect correction */
     if (dtss[0]!=0.0) {
-        dts[0]=dtss[0]-2.0*dot(rs,rs+3,3)/CLIGHT/CLIGHT;
+        dts[0]=dtss[0]-2.0* arc_dot(rs, rs + 3, 3)/CLIGHT/CLIGHT;
         dts[1]=(dtst[0]-dtss[0])/tt;
     }
     else { /* no precise clock */

@@ -33,7 +33,7 @@ namespace ARC {
     ARC_StateDistribution::ARC_StateDistribution(const ARC_OPT *OPT,
                                                  const ARC_RTK *SRTK) {
         m_OPT=OPT; m_SRTK=SRTK;
-        m_UniState=mat(2,m_SRTK->nx);
+        m_UniState= arc_mat(2, m_SRTK->nx);
     }
     ARC_StateDistribution::~ARC_StateDistribution() {
         delete m_RNG;

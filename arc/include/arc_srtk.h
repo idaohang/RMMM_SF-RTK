@@ -32,6 +32,7 @@
 extern "C" {
 #endif
 /* constants/global variables -------------------------------------------------*/
+#define ARC_TRACE_MAT                     /* matrix printf */
 #define GLOG            1                 /* google log for debug */
 #define ARC_NOLOG       -1                /* disable log informations */
 #define ARC_INFO        0				  /* google information log */
@@ -40,6 +41,7 @@ extern "C" {
 #define ARC_FATAL       3				  /* google fatals */
 #define ARC_LOGFILE     4 				  /* recore log information to file */
 #define ARC_MATPRINTF   5                 /* matrix printf flag */
+#define ARC_SOLVALTHRES 4.0               /* validation of solution thres */
 /* single frequency rtk position post-processing ------------------------------*/
 extern int  arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,

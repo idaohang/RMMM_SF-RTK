@@ -41,7 +41,7 @@ using namespace std;
 #define __GNUC_PREREQ(maj, min) (0)
 #endif
 
-// Count leading zeros.
+// Count leading arc_zeros.
 uint32_t CLZ(uint32_t a) 
 {
 #if __GNUC_PREREQ(3,4)

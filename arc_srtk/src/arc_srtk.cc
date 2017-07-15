@@ -23,8 +23,7 @@ using namespace std;
 #define VAR_HOLDAMB 0.001    /* constraint to hold ambiguity (cycle^2) */
 
 #define TTOL_MOVEB  (1.0+2*DTTOL)
-                             /* time sync tolerance for moving-baseline (s) */
-#define MAXSLIP_PHASE   10   /* max difference of current epoch and precious epoch phase measurements */
+                               /* time sync tolerance for moving-baseline (s) */
 
 /* number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated) */
 #define NF(opt)     ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf)
@@ -45,7 +44,6 @@ using namespace std;
 static double *_H_=NULL;                            /* ceres problem jacobi matrix pointor */
 static int _NX_=0;                                  /* ceres problem parameters block numbers*/
 static int _NV_=0;                                  /* ceres problem residual block numbers */
-static int _IV_=0;                                  /* ceres problem residual index */
 static rtk_t *_RTK_;                                /* ceres problem rtk data type */
 static const obsd_t*_OBS_;                          /* ceres problem observation data */
 static const nav_t *_NAV_;                          /* ceres problem navigation data */
@@ -62,6 +60,9 @@ static int *_ParaBlock_=NULL;                       /* ceres problem parameters 
 static double **_Para_=NULL;                        /* ceres problem parameters block pointor */
 static int _Para_Const_List_[MAXSTATES]={-1};       /* ceres problem const parameters list */
 static int _NCP_=0;                                 /* ceres problem const parameters numbers */
+static double *_XP_=NULL;                           /* ceres problem prior states */
+static double *_PP_=NULL;                           /* ceres problem prior covariance matrix */
+static double *_X_=NULL;                            /* ceres problem states */
 
 /* single-differenced observable ---------------------------------------------*/
 static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
@@ -103,7 +104,7 @@ static double arc_baseline(const double *ru, const double *rb, double *dr)
 {
     int i;
     for (i=0;i<3;i++) dr[i]=ru[i]-rb[i];
-    return norm(dr,3);
+    return arc_norm(dr, 3);
 }
 /* initialize state and covariance -------------------------------------------*/
 static void arc_initx(rtk_t *rtk, double xi, double var, int i)
@@ -146,13 +147,16 @@ static void arc_udpos(rtk_t *rtk, double tt)
         return;
     }
     /* initialize position for first epoch */
-    if (norm(rtk->x,3)<=0.0) {
+    if (arc_norm(rtk->x,3)<=0.0) {
         for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
         if (rtk->opt.dynamics) {
             for (i=3;i<6;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_VEL,i);
             for (i=6;i<9;i++) arc_initx(rtk,1E-6,VAR_ACC,i);
         }
-    } 
+    }
+    /* static mode */
+    if (rtk->opt.mode==PMODE_STATIC) return;
+
     /* kinmatic mode without dynamics */
     if (!rtk->opt.dynamics) {
         for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
@@ -161,7 +165,7 @@ static void arc_udpos(rtk_t *rtk, double tt)
     /* check variance of estimated postion */
     for (i=0;i<3;i++) var+=rtk->P[i+i*rtk->nx]; var/=3.0;
     
-    if (var>VAR_POS) {
+    if (var>=VAR_POS) {
         /* reset position with large variance */
         for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
         for (i=3;i<6;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_VEL,i);
@@ -171,16 +175,16 @@ static void arc_udpos(rtk_t *rtk, double tt)
         return;
     }
     /* state transition of position/velocity/acceleration */
-    F=eye(rtk->nx); FP=mat(rtk->nx,rtk->nx); xp=mat(rtk->nx,1);
+    F=arc_eye(rtk->nx); FP= arc_mat(rtk->nx,rtk->nx); xp=arc_mat(rtk->nx,1);
     
     for (i=0;i<6;i++) {
         F[i+(i+3)*rtk->nx]=tt;
     }
     /* x=F*x, P=F*P*F+Q */
-    matmul("NN",rtk->nx,1,rtk->nx,1.0,F,rtk->x,0.0,xp);
-    matcpy(rtk->x,xp,rtk->nx,1);
-    matmul("NN",rtk->nx,rtk->nx,rtk->nx,1.0,F,rtk->P,0.0,FP);
-    matmul("NT",rtk->nx,rtk->nx,rtk->nx,1.0,FP,F,0.0,rtk->P);
+    arc_matmul("NN",rtk->nx,1,rtk->nx,1.0,F,rtk->x,0.0,xp);
+    arc_matcpy(rtk->x,xp,rtk->nx, 1);
+    arc_matmul("NN",rtk->nx,rtk->nx,rtk->nx,1.0,F,rtk->P,0.0,FP);
+    arc_matmul("NT",rtk->nx,rtk->nx,rtk->nx,1.0,FP,F,0.0,rtk->P);
     
     /* process noise added to only acceleration */
     Q[0]=Q[4]=SQR(rtk->opt.prn[3]); Q[8]=SQR(rtk->opt.prn[4]);
@@ -274,7 +278,7 @@ static void arc_detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
         if (LLI&1) {
             arc_log(ARC_WARNING, "arc_detslp_ll : "
                             "slip detected backward (sat=%2d rcv=%d F=%d LLI=%x)\n",
-                    sat, rcv, f + 1, LLI);
+                    sat,rcv,f+1,LLI);
         }
         slip=LLI;
     }
@@ -282,7 +286,7 @@ static void arc_detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
     if (((LLI&2)&&!(obs[i].LLI[f]&2))||(!(LLI&2)&&(obs[i].LLI[f]&2))) {
         arc_log(ARC_WARNING, "arc_detslp_ll : "
                         "slip detected half-cyc (sat=%2d rcv=%d F=%d LLI=%x->%x)\n",
-                sat, rcv, f + 1, LLI, obs[i].LLI[f]);
+                sat,rcv,f+1,LLI,obs[i].LLI[f]);
         slip|=1;
     }
     /* save current LLI */
@@ -293,27 +297,6 @@ static void arc_detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
     rtk->ssat[sat-1].slip[f]|=(unsigned char)slip;
     rtk->ssat[sat-1].half[f]=(obs[i].LLI[f]&2)?0:1;
 }
-/* detect cycle slip by phase --------------------------------------------------*/
-static void arc_detslp_phase(rtk_t *rtk, const obsd_t *obs, int i,int rcv)
-{
-    unsigned int slip;
-    double pl,cl;
-    int f=0,sat=obs[i].sat;  /* just for single frequency (BDS or GPS) */
-
-    arc_log(ARC_INFO, "arc_detslp_phase: i=%d rcv=%d\n", i, rcv);
-
-    /* current epoch phase measurement */
-    if ((cl=obs[i].L[f])==0.0) return;
-    
-    /* previous epoch phase measurement */
-    pl=rtk->ssat[sat-1].ph[rcv-1][f];
-
-    /* detect slip by cycle slip in phase measurements */
-    if (fabs(cl-pl)>=MAXSLIP_PHASE) slip=1;
-
-    /* save current slip flag */
-    rtk->ssat[sat-1].slip[f]|=(unsigned char)slip;
-}
 /* temporal update of phase biases -------------------------------------------*/
 static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
                        const int *iu, const int *ir, int ns, const nav_t *nav)
@@ -321,7 +304,7 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
     double cp,pr,*bias,offset,lami;
     int i,j,f=0,slip,reset;
 
-    arc_log(ARC_INFO, "arc_udbias  : tt=%.1f ns=%d\n", tt, ns);
+    arc_log(ARC_INFO,"arc_udbias  : tt=%.1f ns=%d\n",tt,ns);
     
     for (i=0;i<ns;i++) {
         
@@ -329,10 +312,6 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
         rtk->ssat[sat[i]-1].slip[f]&=0xFC;
         arc_detslp_ll(rtk,obs,iu[i],1);
         arc_detslp_ll(rtk,obs,ir[i],2);
-        
-        /* detect cycle slip by phase measurements */
-        arc_detslp_phase(rtk,obs,iu[i],1);
-        arc_detslp_phase(rtk,obs,ir[i],2);
         
         /* update half-cycle valid flag */
         rtk->ssat[sat[i]-1].half[f]=
@@ -348,7 +327,7 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
         else if (reset&&rtk->x[IB(i,f,&rtk->opt)]!=0.0) {
             arc_initx(rtk,0.0,0.0,IB(i,f,&rtk->opt));
             arc_log(ARC_INFO, "arc_udbias : obs outage counter overflow (sat=%3d L%d n=%d)\n",
-                    i, f + 1, rtk->ssat[i - 1].outc[f]);
+                    i,f+1,rtk->ssat[i-1].outc[f]);
         }
         if (rtk->opt.modear!=ARMODE_INST&&reset) {
             rtk->ssat[i-1].lock[f]=-rtk->opt.minlock;
@@ -363,18 +342,18 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
         rtk->x[j]=0.0;
         rtk->ssat[sat[i]-1].lock[f]=-rtk->opt.minlock;
     }
-    bias=zeros(ns,1);
+    bias=arc_zeros(ns,1);
 
     /* estimate approximate phase-bias by phase - code */
     for (i=j=0,offset=0.0;i<ns;i++) {
-        if (rtk->opt.ionoopt!=IONOOPT_IFLC) {
-            cp=arc_sdobs(obs,iu[i],ir[i],f); /* cycle */
-            pr=arc_sdobs(obs,iu[i],ir[i],f+NFREQ);
-            lami=nav->lam[sat[i]-1][f];
-            if (cp==0.0||pr==0.0||lami<=0.0) continue;
 
-            bias[i]=cp-pr/lami;
-        }
+        cp=arc_sdobs(obs,iu[i],ir[i],f); /* cycle */
+        pr=arc_sdobs(obs,iu[i],ir[i],f+NFREQ);
+        lami=nav->lam[sat[i]-1][f];
+        if (cp==0.0||pr==0.0||lami<=0.0) continue;
+
+        bias[i]=cp-pr/lami;
+
         if (rtk->x[IB(sat[i],f,&rtk->opt)]!=0.0) {
             offset+=bias[i]-rtk->x[IB(sat[i],f,&rtk->opt)];
             j++;
@@ -450,7 +429,7 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
     
     for (i=0;i<n*nf*2;i++) y[i]=0.0;
     
-    if (norm(rr,3)<=0.0) return 0; /* no receiver position */
+    if (arc_norm(rr,3)<=0.0) return 0; /* no receiver position */
     
     for (i=0;i<3;i++) rr_[i]=rr[i];
     
@@ -494,7 +473,7 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
                 azel[1 + i * 2] * R2D);
     }
     arc_log(ARC_INFO, "arc_zdres : y=\n");
-    arc_tracemat(4, y, nf * 2, n, 13, 3);
+    arc_tracemat(4,y,nf*2,n,13,3);
     
     return 1;
 }
@@ -540,7 +519,7 @@ static int arc_constbl(rtk_t *rtk, const double *x, const double *P, double *v,
         xb[i]=rtk->rb[i]+rtk->rb[i+3]*rtk->sol.age;
         b[i]=x[i]-xb[i];
     }
-    bb=norm(b,3);
+    bb= arc_norm(b, 3);
     
     /* approximate variance of solution */
     if (P) {
@@ -617,8 +596,8 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
     bl=arc_baseline(x,rtk->rb,dr);
     ecef2pos(x,posu); ecef2pos(rtk->rb,posr);
     
-    Ri=mat(ns*nf*2+2,1); Rj=mat(ns*nf*2+2,1); im=mat(ns,1);
-    tropu=mat(ns,1); tropr=mat(ns,1); dtdxu=mat(ns,3); dtdxr=mat(ns,3);
+    Ri=arc_mat(ns*nf*2+2,1); Rj=arc_mat(ns*nf*2+2,1); im=arc_mat(ns,1);
+    tropu=arc_mat(ns,1); tropr=arc_mat(ns,1); dtdxu=arc_mat(ns,3); dtdxr=arc_mat(ns,3);
     
     for (i=0;i<MAXSAT;i++) {
         rtk->ssat[i].resp[0]=rtk->ssat[i].resc[0]=0.0;
@@ -875,7 +854,7 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
 
     arc_log(ARC_INFO, "arc_holdamb :\n");
     
-    v=mat(nb,1); H=zeros(nb,rtk->nx);
+    v= arc_mat(nb,1); H=arc_zeros(nb,rtk->nx);
     
     for (m=0;m<4;m++) for (f=0;f<nf;f++) {
         
@@ -892,18 +871,17 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
         for (i=1;i<n;i++) {
             v[nv]=(xa[index[0]]-xa[index[i]])
                   -(rtk->x[index[0]]-rtk->x[index[i]]);
-            
             H[index[0]+nv*rtk->nx]= 1.0;
             H[index[i]+nv*rtk->nx]=-1.0;
             nv++;
         }
     }
     if (nv>0) {
-        R=zeros(nv,nv);
+        R= arc_zeros(nv,nv);
         for (i=0;i<nv;i++) R[i+i*nv]=VAR_HOLDAMB;
         
         /* update states with constraints */
-        if ((info=filter(rtk->x,rtk->P,H,v,R,rtk->nx,nv))) {
+        if ((info= arc_filter(rtk->x,rtk->P,H,v,R,rtk->nx,nv))) {
             arc_log(ARC_WARNING, "filter error (info=%d)\n", info);
         }
         free(R);
@@ -926,19 +904,21 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
         return 0;
     }
     /* single to double-difference transformation matrix (D') */
-    D=zeros(nx,nx);
+    D= arc_zeros(nx, nx);
     if ((nb=arc_ddmat(rtk,D))<=0) {
         arc_log(ARC_WARNING, "arc_resamb_LAMBDA : no valid double-difference\n");
         free(D);
         return 0;
     }
-    ny=na+nb; y=mat(ny,1); Qy=mat(ny,ny); DP=mat(ny,nx);
-    b=mat(nb,2); db=mat(nb,1); Qb=mat(nb,nb); Qab=mat(na,nb); QQ=mat(na,nb);
+    ny=na+nb;
+    y=arc_mat(ny,1); Qy=arc_mat(ny,ny);DP=arc_mat(ny,nx);
+    b=arc_mat(nb,2); db=arc_mat(nb,1); Qb=arc_mat(nb,nb);
+    Qab=arc_mat(na,nb); QQ=arc_mat(na,nb);
     
     /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
-    matmul("TN",ny, 1,nx,1.0,D ,rtk->x,0.0,y );
-    matmul("TN",ny,nx,nx,1.0,D ,rtk->P,0.0,DP);
-    matmul("NN",ny,ny,nx,1.0,DP,D     ,0.0,Qy);
+    arc_matmul("TN",ny,1,nx,1.0, D,rtk->x,0.0,y);
+    arc_matmul("TN",ny,nx,nx,1.0,D,rtk->P,0.0,DP);
+    arc_matmul("NN",ny,ny,nx,1.0,DP,D,0.0,Qy);
     
     /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
     for (i=0;i<nb;i++) for (j=0;j<nb;j++) Qb [i+j*nb]=Qy[na+i+(na+j)*ny];
@@ -949,7 +929,8 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
     
     /* lambda/mlambda integer least-square estimation */
     if (!(info=lambda(nb,2,y+na,Qb,b,s))) {
-
+        
+        arc_tracemat(ARC_MATPRINTF,Qb,nb,nb,10,3);
         arc_log(ARC_INFO, "N(1)=");
         arc_tracemat(ARC_MATPRINTF,b,1,nb,10,3);
         arc_log(ARC_INFO, "N(2)=");
@@ -970,13 +951,13 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
                 bias[i]=b[i];
                 y[na+i]-=b[i];
             }
-            if (!matinv(Qb,nb)) {
-                matmul("NN",nb,1,nb, 1.0,Qb ,y+na,0.0,db);
-                matmul("NN",na,1,nb,-1.0,Qab,db  ,1.0,rtk->xa);
+            if (!arc_matinv(Qb,nb)) {
+                arc_matmul("NN",nb,1,nb,1.0,Qb,y+na,0.0,db);
+                arc_matmul("NN",na,1,nb,-1.0,Qab,db,1.0,rtk->xa);
                 
                 /* covariance of fixed solution (Qa=Qa-Qab*Qb^-1*Qab') */
-                matmul("NN",na,nb,nb, 1.0,Qab,Qb ,0.0,QQ);
-                matmul("NT",na,na,nb,-1.0,QQ ,Qab,1.0,rtk->Pa);
+                arc_matmul("NN",na,nb,nb,1.0,Qab,Qb,0.0,QQ);
+                arc_matmul("NT",na,na,nb,-1.0,QQ,Qab,1.0,rtk->Pa);
 
                 arc_log(ARC_INFO, "arc_resamb : validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
                         nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
@@ -1053,11 +1034,27 @@ static void arc_ceres_init(double *H,const prcopt_t* opt,int nv,double* rs,
     _VFLAG_=vflag;
     /* observation data/navigation data pointor */
     _RTK_=rtk; _OBS_=obs; _NAV_=nav;
+    
     /* initial parameters block list */
     if (_ParaBlock_==NULL) {
         _ParaBlock_=(int*)malloc(sizeof(int)*rtk->nx);
         for (i=0;i<rtk->nx;i++) _ParaBlock_[i]=1;
     }
+    /* initial ceres problem prior information */
+    if (_XP_==NULL) {
+        _XP_=arc_mat(_NX_,1); _PP_=arc_mat(_NX_,_NX_);
+    }
+    /* initial ceres problem states */
+    if (_X_==NULL) {
+        _X_=arc_mat(_NX_,1);   /* allocate memory to ceres problem states */
+    }
+    for (i=0;i<_NX_;i++) _X_[i]=_RTK_->x[i]; /* ceres problem states asignment */
+}
+/* ceres problem prior information setting :staets and covariance matrix -----*/
+static void arc_ceres_set_prior(const rtk_t* rtk)
+{
+    if (rtk->x&&_XP_) arc_matcpy(_XP_,rtk->x,rtk->nx,1);
+    if (rtk->P&&_PP_) arc_matcpy(_PP_,rtk->P,rtk->nx,rtk->nx);
 }
 /* asignment parameters block ------------------------------------------------*/
 static double** arc_ceres_para(const rtk_t* rtk)
@@ -1069,9 +1066,7 @@ static double** arc_ceres_para(const rtk_t* rtk)
     for (i=0;i<MAXSTATES;i++) para[i]=(double*)malloc(sizeof(double));
     
     /* asigne parameter pointor */
-    for (i=0;i<rtk->nx;i++) {
-        para[i]=rtk->x+i;
-    }
+    for (i=0;i<_NX_;i++) para[i]=_X_+i;
     return para;
 }
 /* check whether there is some parameter can be set to be const parameters ----*/
@@ -1090,15 +1085,15 @@ static int arc_ceres_cov(rtk_t* rtk,const double *H,double *R,int n,int m,
     double *Pp_,*H_,*HTR_;
     int i,j,k,info,*ix;
 
-    ix=imat(n,1); for (i=k=0;i<n;i++) if (rtk->x[i]!=0.0&&rtk->P[i+i*n]>0.0) ix[k++]=i;
-    Pp_=mat(k,k); H_=mat(k,m); HTR_=mat(k,m);
+    ix=arc_imat(n,1); for (i=k=0;i<n;i++) if (_X_[i]!=0.0&&_RTK_->P[i+i*n]>0.0) ix[k++]=i;
+    Pp_=arc_mat(k,k); H_=arc_mat(k,m); HTR_=arc_mat(k,m);
     for (i=0;i<k;i++) {
         for (j=0;j<m;j++) H_[i+j*k]=H[ix[i]+j*n];
     }
-    if (!(info=matinv(R,m))) {
-        matmul("TN",k,m,m,1.0,H_,R,0.0,HTR_);
-        matmul("NN",k,k,m,1.0,HTR_,H_,0.0,Pp_);
-        info=matinv(Pp_,k);
+    if (!(info=arc_matinv(R,m))) {
+        arc_matmul("TN",k,m,m,1.0,H_,R,0.0,HTR_);
+        arc_matmul("NN",k,k,m,1.0,HTR_,H_,0.0,Pp_);
+        info= arc_matinv(Pp_,k);
     }
     for (i=0;i<k;i++) {
         for (j=0;j<k;j++) cov[ix[i]+ix[j]*n]=Pp_[i+j*k];
@@ -1115,11 +1110,11 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
     double *v,*R,dt,*L,*H;
     int ns,ny,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],i,j;
 
-    LOG(INFO)<<setiosflags(ios::fixed)<<setprecision(6)<<"ceres solve position : "
-             <<parameters[0][0]<<"   "<<parameters[1][0]<<"   "<<parameters[2][0];
+    arc_log(ARC_INFO,"ceres solve position : %10.6lf  %10.6lf  %10.6lf \n",
+            parameters[0][0],parameters[1][0],parameters[2][0]);
 
     /* adjust parameters positions */
-    for (i=0;i<_RTK_->nx;i++) _RTK_->x[i]=parameters[i][0];
+    for (i=0;i<_NX_;i++) _X_[i]=parameters[i][0];
 
     /* select common satellites between rover and base-station */
     if ((ns=arc_selsat(_OBS_,_AZEL_,_NU_,_NR_,opt,sat,iu,ir))<=0) {
@@ -1127,17 +1122,17 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
         return 0;
     }
     ny=ns*2+2;
-    v=mat(1,ny); R=mat(ny,ny);
+    v=arc_mat(1,ny); R=arc_mat(ny,ny);
     dt=timediff(time,_OBS_[_NU_].time);
 
     /* undifferenced residuals for rover */
-    if (!arc_zdres(0,_OBS_,_NU_,_RS_,_DTS_,_SVH_,_NAV_,_RTK_->x,opt,0,_Y_,_E_,_AZEL_)) {
+    if (!arc_zdres(0,_OBS_,_NU_,_RS_,_DTS_,_SVH_,_NAV_,_X_,opt,0,_Y_,_E_,_AZEL_)) {
         arc_log(ARC_WARNING, "ceres_residual : rover initial position error\n");
         free(v); free(R);
         return 0;
     }
     /* double-differenced residuals and partial derivatives */
-    if ((_NV_=arc_ddres(_RTK_,_NAV_,dt,_RTK_->x,_RTK_->P,sat,_Y_,_E_,
+    if ((_NV_=arc_ddres(_RTK_,_NAV_,dt,_X_,NULL,sat,_Y_,_E_,
                         _AZEL_,iu,ir,ns,v,_H_,R,_VFLAG_))<1) {
         arc_log(ARC_WARNING, "ceres_residual : no double-differenced residual\n");
         free(v); free(R);
@@ -1145,14 +1140,15 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
     }
     if (opt->cholesky) {
         /* cholesky decomposition */
-        L=arc_cholesky(R,_NV_); H=mat(_NV_,_NX_);
+        L=arc_cholesky(R,_NV_); H=arc_mat(_NV_,_NX_);
         /* asign the double-difference residual */
-        matmul("NN",_NV_,1,_NV_,1.0,L,v,0.0,residuals);
+        arc_matmul("NN",_NV_,1,_NV_,1.0,L,v,0.0,residuals);
         /* get the double-difference jacobi matrix */
-        matmul("NN",_NV_,1,_NV_,1.0,L,_H_,0.0,H);
+        arc_matmul("NN",_NV_,1,_NV_,1.0,L,_H_,0.0,H);
     }
     else {
-        H=_H_; matcpy(residuals,v,_NV_,1);
+        H=_H_;
+        arc_matcpy(residuals, v, _NV_, 1);
     }
 
     if (jacobians) {
@@ -1166,7 +1162,46 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
     free(v); free(R);
     return 1;
 }
+/* the prior information of states ceres problem cost function----------------*/
+static int arc_ceres_prior_residual(void* m,double** parameters,double* residuals,
+                                    double** jacobians)
+{
+    int i,j,k,*ix;
+    double *Pp,*L,*v;
+    /* extract the used states */
+    ix=arc_imat(_NX_,1); for (i=k=0;i<_NX_;i++) {
+        if (_XP_[i]!=0.0&&_PP_[i+i*_NX_]>0.0) ix[k++]=i;
+    }
+    Pp=arc_zeros(k,k);
+    for (i=0;i<k;i++) for (j=0;j<k;j++) Pp[i+j*k]=_PP_[ix[i]+ix[j]*_NX_];
+    
+    /* cholesky decomposition for sqrt information matrix */
+    if (arc_matinv(Pp,k)) {
+        free(ix); free(Pp); return 0;
+    }
+    arc_tracemat(ARC_MATPRINTF,Pp,k,k,10,4);
+    if (!(L=arc_cholesky(Pp,k))) {
+        free(ix); free(Pp); free(L); return 0;
+    }
+    arc_tracemat(ARC_MATPRINTF,L,k,k,10,4);
+    /* compute the residuals vector */
+    v=arc_mat(k,1);
+    if (residuals) {
+        for (i=0;i<k;i++) v[i]=parameters[ix[i]][0]-_XP_[ix[i]];
+        arc_matmul("NN",k,1,k,1.0,L,v,0.0,residuals);
+    }
+    arc_tracemat(ARC_MATPRINTF,residuals,k,1,10,4);
+    /* get the jacobi matrix */
+    if (jacobians) {
+        for (i=0;i<k;i++) if (jacobians[ix[i]]) {
+            for (j=0;j<k;j++) jacobians[ix[i]][j]=L[i+j*k];
+        }
+    }
+    free(ix); free(Pp); free(L); free(v);
+    return 1;
+}
 /* relative positioning ------------------------------------------------------*/
+ofstream fp_pf_ceres("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_ceres_pos");
 static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                       const nav_t *nav)
 {
@@ -1182,8 +1217,9 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     
     dt=timediff(time,obs[nu].time);
     
-    rs=mat(6,n); dts=mat(2,n); var=mat(1,n); y=mat(nf*2,n); e=mat(3,n);
-    azel=zeros(2,n);
+    rs=arc_mat(6,n); dts=arc_mat(2,n);
+    var=arc_mat(1,n); y=arc_mat(nf*2,n); e=arc_mat(3,n);
+    azel= arc_zeros(2,n);
     
     for (i=0;i<MAXSAT;i++) {
         rtk->ssat[i].sys=satsys(i+1,NULL);
@@ -1218,11 +1254,11 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     arc_log(ARC_INFO, "arc_relpos : x(0)=");
     arc_tracemat(ARC_MATPRINTF,rtk->x,1,NR(opt),13,4);
     
-    xp=mat(rtk->nx,1); Pp=zeros(rtk->nx,rtk->nx); xa=mat(rtk->nx,1);
-    matcpy(xp,rtk->x,rtk->nx,1);
+    xp=arc_mat(rtk->nx,1); Pp=arc_zeros(rtk->nx,rtk->nx); xa=arc_mat(rtk->nx,1);
+    arc_matcpy(xp,rtk->x,rtk->nx,1);
     
     ny=ns*nf*2+2;
-    v=mat(ny,1); H=zeros(rtk->nx,ny); R=mat(ny,ny); bias=mat(rtk->nx,1);
+    v=arc_mat(ny,1); H=arc_zeros(rtk->nx,ny); R=arc_mat(ny,ny); bias=arc_mat(rtk->nx,1);
     
     /* add 2 iterations for baseline-constraint moving-base */
     niter=opt->niter+(opt->mode==PMODE_MOVEB&&opt->baseline[0]>0.0?2:0);
@@ -1241,8 +1277,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             break;
         }
         /* kalman filter measurement update */
-        matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
-        if ((info=filter(xp,Pp,H,v,R,rtk->nx,nv))) {
+        arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
+        if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv))) {
             arc_log(ARC_WARNING, "arc_relpos : filter error (info=%d)\n", info);
             stat=SOLQ_NONE;
             break;
@@ -1251,6 +1287,10 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         arc_tracemat(ARC_MATPRINTF, xp, 1, NR(opt), 13, 4);
     }
     else if (opt->ceres) {
+        
+        /* initial ceres problem covariance matrix */
+        arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
+
         /* undifferenced residuals for rover */
         if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
             arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
@@ -1261,29 +1301,38 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             arc_log(ARC_WARNING, "arc_relpos : no double-differenced residual\n");
             stat=SOLQ_NONE;
         }
-        /* compute the states covariance matrix */
-        if (arc_ceres_cov(rtk,H,R,rtk->nx,nv,Pp)) {
-            arc_log(ARC_ERROR, "arc_relpos : compute the states covariance matrix errorl \n");
-            stat=SOLQ_NONE;
-        }
-        arc_tracemat(ARC_MATPRINTF,Pp,rtk->nx,rtk->nx,10,4);
-        
         /* build a ceres solve problem */
-        ceres_problem_t *ceres_problem=ceres_create_problem();
+        ceres_problem_t *ceres_problem= arc_ceres_create_problem();
         /* ceres problem initial */
         arc_ceres_init(H,opt,nv,rs,dts,y,azel,nu,nr,e,svh,vflg,rtk,obs,nav);
 
         /* get the ceres problem parameter pointor */
         _Para_=arc_ceres_para(rtk);
         /* add parameters block to ceres problem */
-        arc_ceres_add_para_block(ceres_problem,rtk->nx,_Para_);
+        arc_ceres_add_para_block(ceres_problem,_NX_,_Para_);
 
         /* check parameter list ,and get some parameters can be const */
-        if ((_NCP_=arc_para_chk(rtk,H,rtk->x))>0) {
+        if ((_NCP_=arc_para_chk(rtk,H,_X_))>0) {
             for (i=0;i<_NCP_;i++) arc_ceres_set_para_const(ceres_problem,_Para_[_Para_Const_List_[i]]);
         }
-        /* create a ceres solve problem to add all the residuals. */
-        ceres_problem_add_residual_block(
+        /* add prior information of states if need */
+        if (opt->ceres_prior) {
+            /* get the prior information */
+            arc_ceres_set_prior(rtk);
+            /* add prior residual to ceres problem */
+            arc_ceres_problem_add_residual_block(ceres_problem,
+                    arc_ceres_prior_residual,   /* prior cost function */
+                    NULL,                       /* Points to the measurement */
+                    NULL,                       /* No loss function */
+                    ceres_create_huber_loss_function_data(1.0),
+                                                /* loss function user data */
+                    _NX_-_NCP_,                 /* Number of residuals */
+                    _NX_,                       /* Number of parameter blocks */
+                    _ParaBlock_,                /* NUmber of parameter size */
+                    _Para_);                    /* Parameters pointor */
+        }
+        /* create a ceres solve problem to add all the double-difference residuals. */
+        arc_ceres_problem_add_residual_block(
                 ceres_problem,
                 arc_ceres_residual,    /* Cost function */
                 NULL,                  /* Points to the measurement */
@@ -1295,10 +1344,22 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                 _ParaBlock_,           /* NUmber of parameter size */
                 _Para_);               /* Parameters pointor */
         /* solve the problem */
-        ceres_solve(ceres_problem);
-        ceres_free_problem(ceres_problem);
+        arc_ceres_solve(ceres_problem);
+
+        /* compute the states covariance matrix */
+        if (arc_ceres_cov(rtk,H,R,_NX_,nv,Pp)) {
+            arc_log(ARC_ERROR, "arc_relpos : compute the states covariance matrix errorl \n");
+            stat=SOLQ_NONE;
+        }
         /* copy ceres problem states to xp */
-        if (xp) matcpy(xp,rtk->x,rtk->nx,1);
+        if (xp) arc_matcpy(xp,_X_,_NX_,1);
+
+        /* free ceres problem */
+        arc_ceres_free_problem(ceres_problem);
+
+        fp_pf_ceres<<setiosflags(ios::fixed)<<setprecision(10);
+        for (int i=0;i<3;i++) fp_pf_ceres<<_X_[i]<<"  ";
+        fp_pf_ceres<<std::endl;
     }
     if (stat!=SOLQ_NONE&&arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
         
@@ -1309,8 +1370,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         if (arc_valpos(rtk,v,R,vflg,nv,4.0)) {
             
             /* update state and covariance matrix */
-            matcpy(rtk->x,xp,rtk->nx,1);
-            matcpy(rtk->P,Pp,rtk->nx,rtk->nx);
+            arc_matcpy(rtk->x,xp,rtk->nx,1);
+            arc_matcpy(rtk->P,Pp,rtk->nx,rtk->nx);
             
             /* update ambiguity control struct */
             rtk->sol.ns=0;
@@ -1334,12 +1395,12 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             nv=arc_ddres(rtk,nav,dt,xa,NULL,sat,y,e,azel,iu,ir,ns,v,NULL,R,vflg);
             
             /* validation of fixed solution */
-            if (arc_valpos(rtk,v,R,vflg,nv,4.0)) {
+            if (arc_valpos(rtk,v,R,vflg,nv,ARC_SOLVALTHRES)) {
                 
                 /* hold integer ambiguity */
                 if (++rtk->nfix>=rtk->opt.minfix&&
                     rtk->opt.modear==ARMODE_FIXHOLD) {
-                    arc_holdamb(rtk,xa);
+                    arc_holdamb(rtk,xa);  /* todo:ambguity fix function need to improved */
                 }
                 stat=SOLQ_FIX;
             }
@@ -1410,11 +1471,10 @@ extern void rtkinit(rtk_t *rtk, const prcopt_t *opt)
     rtk->nx=opt->mode<=PMODE_FIXED?NX(opt):pppnx(opt);
     rtk->na=opt->mode<=PMODE_FIXED?NR(opt):pppnx(opt);
     rtk->tt=0.0;
-    rtk->x=zeros(rtk->nx,1);
-    rtk->P=zeros(rtk->nx,rtk->nx);
-    rtk->xa=zeros(rtk->na,1);
-    rtk->Pa=zeros(rtk->na,rtk->na);
-    rtk->ceres_problem=ceres_create_problem();
+    rtk->x=arc_zeros(rtk->nx,1);
+    rtk->P=arc_zeros(rtk->nx,rtk->nx);
+    rtk->xa=arc_zeros(rtk->na,1);
+    rtk->Pa=arc_zeros(rtk->na,rtk->na);
     rtk->nfix=rtk->neb=0;
     for (i=0;i<MAXSAT;i++) {
         rtk->ambc[i]=ambc0;

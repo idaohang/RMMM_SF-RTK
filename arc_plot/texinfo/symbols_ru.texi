@@ -687,7 +687,7 @@ style of @ref{tape}.
 @tab Paste range of numbers from clipboard.
 
 @item @key{Ctrl-Shift-N}
-@tab Recreate the data with new sizes and fill it by zeros.
+@tab Recreate the data with new sizes and fill it by arc_zeros.
 
 @item @key{Ctrl-Shift-R}
 @tab Resize (interpolate) the data to specified sizes.

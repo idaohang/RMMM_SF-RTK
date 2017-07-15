@@ -889,7 +889,7 @@ std::wstring MGL_EXPORT mgl_ftoa(double v, const char *fmt)
 	int st = se[0]=='-'?1:0;
 	if(strcmp(sf,"nan"))
 	{
-		if(plus || se[3+st+dig]=='-')	// first remove zeros after 'e'
+		if(plus || se[3+st+dig]=='-')	// first remove arc_zeros after 'e'
 		{
 			for(i=(dig>0?4:3)+st+dig;i<le && se[i]=='0';i++);
 			memmove(se+(dig>0?4:3)+st+dig,se+i,le-i+1);

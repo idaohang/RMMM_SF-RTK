@@ -284,7 +284,7 @@ static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
     rtkfree(&rtk);
 }
 /* process positioning -------------------------------------------------------*/
-FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/rtklib_pos","w");
+FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/rtklib_pos5","w");
 static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
                         int mode)
 {
@@ -419,11 +419,11 @@ static void arc_combres(const prcopt_t *popt, const solopt_t *sopt)
             if (popt->mode==PMODE_MOVEB) {
                 for (k=0;k<3;k++) rr_f[k]=solf[i].rr[k]-rbf[k+i*3];
                 for (k=0;k<3;k++) rr_b[k]=solb[j].rr[k]-rbb[k+j*3];
-                if (smoother(rr_f,Qf,rr_b,Qb,3,rr_s,Qs)) continue;
+                if (arc_smoother(rr_f, Qf, rr_b, Qb, 3, rr_s, Qs)) continue;
                 for (k=0;k<3;k++) sols.rr[k]=rbs[k]+rr_s[k];
             }
             else {
-                if (smoother(solf[i].rr,Qf,solb[j].rr,Qb,3,sols.rr,Qs)) continue;
+                if (arc_smoother(solf[i].rr, Qf, solb[j].rr, Qb, 3, sols.rr, Qs)) continue;
             }
             sols.qr[0]=(float)Qs[0];
             sols.qr[1]=(float)Qs[4];
@@ -598,7 +598,7 @@ static int arc_antpos(prcopt_t *opt, int rcvno, const obs_t *obs, const nav_t *n
         }
     }
     else if (postype==POSOPT_RINEX) { /* get from rinex header */
-        if (norm(stas[rcvno==1?0:1].pos,3)<=0.0) {
+        if (arc_norm(stas[rcvno == 1 ? 0 : 1].pos, 3)<=0.0) {
             arc_log(ARC_WARNING, "no position position in rinex header\n");
             return 0;
         }
@@ -636,14 +636,14 @@ static int arc_openses(const prcopt_t *popt, const solopt_t *sopt,
     }
     /* use satellite L2 offset if L5 offset does not exists */
     for (i=0;i<pcvs->n;i++) {
-        if (norm(pcvs->pcv[i].off[2],3)>0.0) continue;
-        matcpy(pcvs->pcv[i].off[2],pcvs->pcv[i].off[1], 3,1);
-        matcpy(pcvs->pcv[i].var[2],pcvs->pcv[i].var[1],19,1);
+        if (arc_norm(pcvs->pcv[i].off[2], 3)>0.0) continue;
+        arc_matcpy(pcvs->pcv[i].off[2], pcvs->pcv[i].off[1], 3, 1);
+        arc_matcpy(pcvs->pcv[i].var[2], pcvs->pcv[i].var[1], 19, 1);
     }
     for (i=0;i<pcvr->n;i++) {
-        if (norm(pcvr->pcv[i].off[2],3)>0.0) continue;
-        matcpy(pcvr->pcv[i].off[2],pcvr->pcv[i].off[1], 3,1);
-        matcpy(pcvr->pcv[i].var[2],pcvr->pcv[i].var[1],19,1);
+        if (arc_norm(pcvr->pcv[i].off[2], 3)>0.0) continue;
+        arc_matcpy(pcvr->pcv[i].off[2], pcvr->pcv[i].off[1], 3, 1);
+        arc_matcpy(pcvr->pcv[i].var[2], pcvr->pcv[i].var[1], 19, 1);
     }
     return 1;
 }
@@ -686,7 +686,7 @@ static void arc_setpcv(gtime_t time, prcopt_t *popt, nav_t *nav, const pcvs_t *p
         if (!strcmp(popt->anttype[i],"*")) { /* set by station parameters */
             strcpy(popt->anttype[i],sta[i].antdes);
             if (sta[i].deltype==1) { /* xyz */
-                if (norm(sta[i].pos,3)>0.0) {
+                if (arc_norm(sta[i].pos, 3)>0.0) {
                     ecef2pos(sta[i].pos,pos);
                     ecef2enu(pos,sta[i].del,del);
                     for (j=0;j<3;j++) popt->antdel[i][j]=del[j];

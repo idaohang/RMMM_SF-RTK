@@ -47,7 +47,7 @@ extern "C" {
 #endif
 
 /* Init the Ceres private data. Must be called before anything else. */
-CERES_EXPORT void ceres_init();
+CERES_EXPORT void arc_ceres_init();
 
 /* Equivalent to CostFunction::Evaluate() in the C++ API.
  *
@@ -119,24 +119,26 @@ typedef struct ceres_residual_block_id_s ceres_residual_block_id_t;
 
 /* Create and destroy a problem */
 /* TODO(keir): Add options for the problem. */
-CERES_EXPORT ceres_problem_t* ceres_create_problem();
-CERES_EXPORT void ceres_free_problem(ceres_problem_t* problem);
+CERES_EXPORT ceres_problem_t* arc_ceres_create_problem();
+CERES_EXPORT void arc_ceres_free_problem(ceres_problem_t *problem);
 
 /* Add a residual block. */
-CERES_EXPORT ceres_residual_block_id_t* ceres_problem_add_residual_block(
-    ceres_problem_t* problem,
-    ceres_cost_function_t cost_function,
-    void* cost_function_data,
-    ceres_loss_function_t loss_function,
-    void* loss_function_data,
-    int num_residuals,
-    int num_parameter_blocks,
-    int* parameter_block_sizes,
-    double** parameters);
+CERES_EXPORT ceres_residual_block_id_t* arc_ceres_problem_add_residual_block(
+        ceres_problem_t *problem,
+        ceres_cost_function_t cost_function,
+        void *cost_function_data,
+        ceres_loss_function_t loss_function,
+        void *loss_function_data,
+        int num_residuals,
+        int num_parameter_blocks,
+        int *parameter_block_sizes,
+        double **parameters);
 
-CERES_EXPORT void ceres_solve(ceres_problem_t* problem);
+CERES_EXPORT void arc_ceres_solve(ceres_problem_t *problem);
 
 CERES_EXPORT void arc_ceres_set_para_const(ceres_problem_t* problem,double *val);
+
+CERES_EXPORT void arc_ceres_set_para_var(ceres_problem_t* problem,double *val);
 
 CERES_EXPORT void arc_ceres_add_para_block(ceres_problem_t* problem,int nblock,double **para);
 

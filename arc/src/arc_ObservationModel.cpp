@@ -40,7 +40,7 @@ static double baseline(const double *ru, const double *rb, double *dr)
 {
     int i;
     for (i=0;i<3;i++) dr[i]=ru[i]-rb[i];
-    return norm(dr,3);
+    return arc_norm(dr, 3);
 }
 /* select common satellites between rover and reference station --------------*/
 static int arc_selsat(const obsd_t *obs, double *azel, int nu, int nr,
@@ -86,7 +86,7 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
 
     for (i=0;i<n*nf*2;i++) y[i]=0.0;
 
-    if (norm(rr,3)<=0.0) return 0; /* no receiver position */
+    if (arc_norm(rr, 3)<=0.0) return 0; /* no receiver position */
 
     for (i=0;i<3;i++) rr_[i]=rr[i];
 
@@ -286,9 +286,9 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     int nf=1;
 
     dt=timediff(time,obs[nu].time);
-    rs=mat(6,n); dts=mat(2,n); var=mat(1,n);
-    y=mat(nf*2,n); e=mat(3,n);
-    azel=zeros(2,n);
+    rs= arc_mat(6, n); dts= arc_mat(2, n); var= arc_mat(1, n);
+    y= arc_mat(nf * 2, n); e= arc_mat(3, n);
+    azel= arc_zeros(2, n);
 
     /* initial satellite status informations */
     for (i=0;i<MAXSAT;i++) {

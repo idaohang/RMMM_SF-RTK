@@ -88,7 +88,7 @@ extern int ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
         return 1;
     }
     /* qzss broadcast model */
-    if (ionoopt==IONOOPT_QZS&&norm(nav->ion_qzs,8)>0.0) {
+    if (ionoopt==IONOOPT_QZS&& arc_norm(nav->ion_qzs, 8)>0.0) {
         *ion=ionmodel(time,nav->ion_qzs,pos,azel);
         *var=SQR(*ion*ERR_BRDCI);
         return 1;
@@ -217,7 +217,7 @@ static int arc_valsol(const double *azel, const int *vsat, int n,
     arc_log(ARC_INFO, "valsol  : n=%d nv=%d\n", n, nv);
     
     /* chi-square validation of residuals */
-    vv=dot(v,v,nv);
+    vv= arc_dot(v, v, nv);
     if (nv>nx&&vv>chisqr[nv-nx-1]) {
         sprintf(msg,"chi-square error nv=%d vv=%.1f"
                 " cs=%.1f",nv,vv,chisqr[nv-nx-1]);
@@ -248,7 +248,7 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
 
     arc_log(ARC_INFO, "estpos  : n=%d\n", n);
     
-    v=mat(n+4,1); H=mat(NX,n+4); var=mat(n+4,1);
+    v= arc_mat(n + 4, 1); H= arc_mat(NX, n + 4); var= arc_mat(n + 4, 1);
     
     for (i=0;i<3;i++) x[i]=sol->rr[i];
     
@@ -268,13 +268,13 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
             for (k=0;k<NX;k++) H[k+j*NX]/=sig;
         }
         /* least square estimation */
-        if ((info=lsq(H,v,NX,nv,dx,Q))) {
+        if ((info= arc_lsq(H, v, NX, nv, dx, Q))) {
             sprintf(msg,"lsq error info=%d",info);
             break;
         }
         for (j=0;j<NX;j++) x[j]+=dx[j];
         
-        if (norm(dx,NX)<1E-4) {
+        if (arc_norm(dx, NX)<1E-4) {
             sol->type=0;
             sol->time=timeadd(obs[0].time,-x[3]/CLIGHT);
             sol->dtr[0]=x[3]/CLIGHT; /* receiver clock bias (s) */
@@ -317,8 +317,8 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
     arc_log(ARC_INFO, "raim_fde: %s n=%2d\n", time_str(obs[0].time, 0), n);
     
     if (!(obs_e=(obsd_t *)malloc(sizeof(obsd_t)*n))) return 0;
-    rs_e=mat(6,n); dts_e=mat(2,n); vare_e=mat(1,n); azel_e=zeros(2,n);
-    svh_e=imat(1,n); vsat_e=imat(1,n); resp_e=mat(1,n); 
+    rs_e= arc_mat(6, n); dts_e= arc_mat(2, n); vare_e= arc_mat(1, n); azel_e= arc_zeros(2, n);
+    svh_e= arc_imat(1, n); vsat_e= arc_imat(1, n); resp_e= arc_mat(1, n);
     
     for (i=0;i<n;i++) {
         
@@ -326,8 +326,8 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
         for (j=k=0;j<n;j++) {
             if (j==i) continue;
             obs_e[k]=obs[j];
-            matcpy(rs_e +6*k,rs +6*j,6,1);
-            matcpy(dts_e+2*k,dts+2*j,2,1);
+            arc_matcpy(rs_e + 6 * k, rs + 6 * j, 6, 1);
+            arc_matcpy(dts_e + 2 * k, dts + 2 * j, 2, 1);
             vare_e[k]=vare[j];
             svh_e[k++]=svh[j];
         }
@@ -355,7 +355,7 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
         /* save result */
         for (j=k=0;j<n;j++) {
             if (j==i) continue;
-            matcpy(azel+2*j,azel_e+2*k,2,1);
+            arc_matcpy(azel + 2 * j, azel_e + 2 * k, 2, 1);
             vsat[j]=vsat_e[k];
             resp[j]=resp_e[k++];
         }
@@ -392,7 +392,7 @@ static int arc_resdop(const obsd_t *obs, int n, const double *rs, const double *
         lam=nav->lam[obs[i].sat-1][0];
         
         if (obs[i].D[0]==0.0||lam==0.0
-            ||!vsat[i]||norm(rs+3+i*6,3)<=0.0) {
+            ||!vsat[i]|| arc_norm(rs + 3 + i * 6, 3)<=0.0) {
             continue;
         }
         /* line-of-sight vector in ecef */
@@ -400,13 +400,13 @@ static int arc_resdop(const obsd_t *obs, int n, const double *rs, const double *
         a[0]=sin(azel[i*2])*cosel;
         a[1]=cos(azel[i*2])*cosel;
         a[2]=sin(azel[1+i*2]);
-        matmul("TN",3,1,3,1.0,E,a,0.0,e);
+        arc_matmul("TN", 3, 1, 3, 1.0, E, a, 0.0, e);
         
         /* satellite velocity relative to receiver in ecef */
         for (j=0;j<3;j++) vs[j]=rs[j+3+i*6]-x[j];
         
         /* range rate with earth rotation correction */
-        rate=dot(vs,e,3)+OMGE/CLIGHT*(rs[4+i*6]*rr[0]+rs[1+i*6]*x[0]-
+        rate= arc_dot(vs, e, 3)+OMGE/CLIGHT*(rs[4+i*6]*rr[0]+rs[1+i*6]*x[0]-
                                       rs[3+i*6]*rr[1]-rs[  i*6]*x[1]);
         /* doppler residual */
         v[nv]=-lam*obs[i].D[0]-(rate+x[3]-CLIGHT*dts[1+i*2]);
@@ -427,7 +427,7 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
 
     arc_log(ARC_INFO, "estvel  : n=%d\n", n);
     
-    v=mat(n,1); H=mat(4,n);
+    v= arc_mat(n, 1); H= arc_mat(4, n);
     
     for (i=0;i<MAXITR;i++) {
         
@@ -437,11 +437,11 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
             break;
         }
         /* least square estimation */
-        if (lsq(H,v,4,nv,dx,Q)) {
+        if (arc_lsq(H, v, 4, nv, dx, Q)) {
 			break;
 		}
         for (j=0;j<4;j++) x[j]+=dx[j];
-        if (norm(dx,4)<1E-6) {
+        if (arc_norm(dx, 4)<1E-6) {
             for (i=0;i<3;i++) sol->rr[i+3]=x[i];
             break;
         }
@@ -480,7 +480,7 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
     
     sol->time=obs[0].time; if (msg) msg[0]='\0';
     
-    rs=mat(6,n); dts=mat(2,n); var=mat(1,n); azel_=zeros(2,n); resp=mat(1,n);
+    rs= arc_mat(6, n); dts= arc_mat(2, n); var= arc_mat(1, n); azel_= arc_zeros(2, n); resp= arc_mat(1, n);
     
     if (opt_.mode!=PMODE_SINGLE) { /* for precise positioning */
 #if 0

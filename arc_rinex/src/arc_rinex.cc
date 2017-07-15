@@ -1739,7 +1739,7 @@ static void combpeph(nav_t *nav, int opt)
         if (fabs(timediff(nav->peph[i].time,nav->peph[j].time))<1E-9) {
             
             for (k=0;k<MAXSAT;k++) {
-                if (norm(nav->peph[j].pos[k],4)<=0.0) continue;
+                if (arc_norm(nav->peph[j].pos[k], 4)<=0.0) continue;
                 for (m=0;m<4;m++) nav->peph[i].pos[k][m]=nav->peph[j].pos[k][m];
                 for (m=0;m<4;m++) nav->peph[i].std[k][m]=nav->peph[j].std[k][m];
                 for (m=0;m<4;m++) nav->peph[i].vel[k][m]=nav->peph[j].vel[k][m];

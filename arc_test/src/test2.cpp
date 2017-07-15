@@ -1,3 +1,4 @@
+#include <rtklib.h>
 #include "arc.h"
 
 #define NUMINFILE 10
@@ -14,7 +15,7 @@ int main()
     prcopt_t arc_opt = prcopt_default;
     solopt_t arc_solopt = solopt_default;
 
-    arc_opt.mode = PMODE_STATIC;
+    arc_opt.mode = PMODE_KINEMA;
     arc_opt.ionoopt = IONOOPT_SBAS;
     arc_opt.tropopt = TROPOPT_SAAS;
     arc_opt.modear = ARMODE_FIXHOLD;                    //AR mode(0:off, 1 : continuous, 2 : instantaneous（瞬时的）, 3 : fix and hold, 4 : ppp - ar) * /
@@ -33,9 +34,10 @@ int main()
     arc_opt.nf = 1;                                     // 解算频率
     arc_opt.elmin = 15.0 * D2R;
     arc_opt.navsys = SYS_GPS;
-    arc_opt.dynamics=0;
-    arc_opt.ceres=1;
+    arc_opt.dynamics=1;
+    arc_opt.ceres=0;
     arc_opt.cholesky=0;
+    arc_opt.ceres_prior=1;
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
@@ -60,7 +62,7 @@ int main()
     strcpy(infile[2], navf);
     strcpy(infile[3],navf1);
 
-    arc_tracelevel(ARC_NOLOG);
+    arc_tracelevel(ARC_INFO);
     arc_tracebuf(10);
 
     //arc_pf_srtk(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 3, outfile);

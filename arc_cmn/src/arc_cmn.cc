@@ -156,12 +156,12 @@ static void fatalerr(const char *format, ...)
     exit(-9);
 }
 /* add fatal callback function -------------------------------------------------
-* add fatal callback function for mat(),zeros(),imat()
+* add fatal callback function for arc_mat(),arc_zeros(),arc_imat()
 * args   : fatalfunc_t *func I  callback function
 * return : none
 * notes  : if malloc() failed in return : none
 *-----------------------------------------------------------------------------*/
-extern void add_fatal(fatalfunc_t *func)
+extern void arc_add_fatal(fatalfunc_t *func)
 {
     fatalfunc=func;
 }
@@ -482,7 +482,7 @@ extern void setbits(unsigned char *buff, int pos, int len, int data)
 * args   : int    n,m       I   number of rows and columns of matrix
 * return : matrix pointer (if n<=0 or m<=0, return NULL)
 *-----------------------------------------------------------------------------*/
-extern double *mat(int n, int m)
+extern double *arc_mat(int n, int m)
 {
     double *p;
     
@@ -497,7 +497,7 @@ extern double *mat(int n, int m)
 * args   : int    n,m       I   number of rows and columns of matrix
 * return : matrix pointer (if n<=0 or m<=0, return NULL)
 *-----------------------------------------------------------------------------*/
-extern int *imat(int n, int m)
+extern int *arc_imat(int n, int m)
 {
     int *p;
     
@@ -512,12 +512,12 @@ extern int *imat(int n, int m)
 * args   : int    n,m       I   number of rows and columns of matrix
 * return : matrix pointer (if n<=0 or m<=0, return NULL)
 *-----------------------------------------------------------------------------*/
-extern double *zeros(int n, int m)
+extern double *arc_zeros(int n, int m)
 {
     double *p;
     
 #if NOCALLOC
-    if ((p=mat(n,m))) for (n=n*m-1;n>=0;n--) p[n]=0.0;
+    if ((p=arc_mat(n,m))) for (n=n*m-1;n>=0;n--) p[n]=0.0;
 #else
     if (n<=0||m<=0) return NULL;
     if (!(p=(double *)calloc(sizeof(double),n*m))) {
@@ -531,12 +531,12 @@ extern double *zeros(int n, int m)
 * args   : int    n         I   number of rows and columns of matrix
 * return : matrix pointer (if n<=0, return NULL)
 *-----------------------------------------------------------------------------*/
-extern double *eye(int n)
+extern double *arc_eye(int n)
 {
     double *p;
     int i;
     
-    if ((p=zeros(n,n))) for (i=0;i<n;i++) p[i+i*n]=1.0;
+    if ((p= arc_zeros(n, n))) for (i=0;i<n;i++) p[i+i*n]=1.0;
     return p;
 }
 /* inner product ---------------------------------------------------------------
@@ -545,7 +545,7 @@ extern double *eye(int n)
 *          int    n         I   size of vector a,b
 * return : a'*b
 *-----------------------------------------------------------------------------*/
-extern double dot(const double *a, const double *b, int n)
+extern double arc_dot(const double *a, const double *b, int n)
 {
     double c=0.0;
     
@@ -558,9 +558,9 @@ extern double dot(const double *a, const double *b, int n)
 *          int    n         I   size of vector a
 * return : || a ||
 *-----------------------------------------------------------------------------*/
-extern double norm(const double *a, int n)
+extern double arc_norm(const double *a, int n)
 {
-    return sqrt(dot(a,a,n));
+    return sqrt(arc_dot(a, a, n));
 }
 /* outer product of 3d vectors -------------------------------------------------
 * outer product of 3d vectors 
@@ -568,7 +568,7 @@ extern double norm(const double *a, int n)
 *          double *c        O   outer product (a x b) (3 x 1)
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void cross3(const double *a, const double *b, double *c)
+extern void arc_cross3(const double *a, const double *b, double *c)
 {
     c[0]=a[1]*b[2]-a[2]*b[1];
     c[1]=a[2]*b[0]-a[0]*b[2];
@@ -580,10 +580,10 @@ extern void cross3(const double *a, const double *b, double *c)
 *          double *b        O   normlized vector (3 x 1) || b || = 1
 * return : status (1:ok,0:error)
 *-----------------------------------------------------------------------------*/
-extern int normv3(const double *a, double *b)
+extern int arc_normv3(const double *a, double *b)
 {
     double r;
-    if ((r=norm(a,3))<=0.0) return 0;
+    if ((r= arc_norm(a, 3))<=0.0) return 0;
     b[0]=a[0]/r;
     b[1]=a[1]/r;
     b[2]=a[2]/r;
@@ -596,14 +596,14 @@ extern int normv3(const double *a, double *b)
 *          int    n,m       I   number of rows and columns of matrix
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void matcpy(double *A, const double *B, int n, int m)
+extern void arc_matcpy(double *A, const double *B, int n, int m)
 {
     memcpy(A,B,sizeof(double)*n*m);
 }
 
 /* multiply matrix -----------------------------------------------------------*/
-extern void matmul(const char *tr, int n, int k, int m, double alpha,
-                   const double *A, const double *B, double beta, double *C)
+extern void arc_matmul(const char *tr, int n, int k, int m, double alpha,
+                       const double *A, const double *B, double beta, double *C)
 {
     double d;
     int i,j,x,f=tr[0]=='N'?(tr[1]=='N'?1:2):(tr[1]=='N'?3:4);
@@ -622,7 +622,7 @@ extern void matmul(const char *tr, int n, int k, int m, double alpha,
 /* LU decomposition ----------------------------------------------------------*/
 static int ludcmp(double *A, int n, int *indx, double *d)
 {
-    double big,s,tmp,*vv=mat(n,1);
+    double big,s,tmp,*vv= arc_mat(n, 1);
     int i,imax=0,j,k;
     
     *d=1.0;
@@ -670,12 +670,13 @@ static void lubksb(const double *A, int n, const int *indx, double *b)
     }
 }
 /* inverse of matrix ---------------------------------------------------------*/
-extern int matinv(double *A, int n)
+extern int arc_matinv(double *A, int n)
 {
     double d,*B;
     int i,j,*indx;
     
-    indx=imat(n,1); B=mat(n,n); matcpy(B,A,n,n);
+    indx= arc_imat(n, 1); B= arc_mat(n, n);
+    arc_matcpy(B, A, n, n);
     if (ludcmp(B,n,indx,&d)) {free(indx); free(B); return -1;}
     for (j=0;j<n;j++) {
         for (i=0;i<n;i++) A[i+j*n]=0.0; A[j+j*n]=1.0;
@@ -685,14 +686,14 @@ extern int matinv(double *A, int n)
     return 0;
 }
 /* solve linear equation -----------------------------------------------------*/
-extern int solve(const char *tr, const double *A, const double *Y, int n,
-                 int m, double *X)
+extern int arc_solve(const char *tr, const double *A, const double *Y, int n,
+                     int m, double *X)
 {
-    double *B=mat(n,n);
+    double *B= arc_mat(n, n);
     int info;
-    
-    matcpy(B,A,n,n);
-    if (!(info=matinv(B,n))) matmul(tr[0]=='N'?"NN":"TN",n,m,n,1.0,B,Y,0.0,X);
+
+    arc_matcpy(B, A, n, n);
+    if (!(info= arc_matinv(B, n))) arc_matmul(tr[0] == 'N' ? "NN" : "TN", n, m, n, 1.0, B, Y, 0.0, X);
     free(B);
     return info;
 }
@@ -713,7 +714,7 @@ extern double *arc_cholesky(double *A,int n)
                 L[i*n+j]=sqrt(A[i*n+i]-s);
             }
             else {
-                L[i*n+j]=(1.0/L[j*n+ j]*(A[i*n+j]-s));
+                L[i*n+j]=(1.0/L[j*n+j]*(A[i*n+j]-s));
             }
         }
     }
@@ -733,17 +734,17 @@ extern double *arc_cholesky(double *A,int n)
 * notes  : for weighted least square, replace A and y by A*w and w*y (w=W^(1/2))
 *          matirix stored by column-major order (fortran convention)
 *-----------------------------------------------------------------------------*/
-extern int lsq(const double *A, const double *y, int n, int m, double *x,
-               double *Q)
+extern int arc_lsq(const double *A, const double *y, int n, int m, double *x,
+                   double *Q)
 {
     double *Ay;
     int info;
     
     if (m<n) return -1;
-    Ay=mat(n,1);
-    matmul("NN",n,1,m,1.0,A,y,0.0,Ay); /* Ay=A*y */
-    matmul("NT",n,n,m,1.0,A,A,0.0,Q);  /* Q=A*A' */
-    if (!(info=matinv(Q,n))) matmul("NN",n,1,n,1.0,Q,Ay,0.0,x); /* x=Q^-1*Ay */
+    Ay= arc_mat(n, 1);
+    arc_matmul("NN", n, 1, m, 1.0, A, y, 0.0, Ay); /* Ay=A*y */
+    arc_matmul("NT", n, n, m, 1.0, A, A, 0.0, Q);  /* Q=A*A' */
+    if (!(info= arc_matinv(Q, n))) arc_matmul("NN", n, 1, n, 1.0, Q, Ay, 0.0, x); /* x=Q^-1*Ay */
     free(Ay);
     return info;
 }
@@ -768,30 +769,30 @@ static int filter_(const double *x, const double *P, const double *H,
                    const double *v, const double *R, int n, int m,
                    double *xp, double *Pp)
 {
-    double *F=mat(n,m),*Q=mat(m,m),*K=mat(n,m),*I=eye(n);
+    double *F= arc_mat(n, m),*Q= arc_mat(m, m),*K= arc_mat(n, m),*I= arc_eye(n);
     int info;
-    
-    matcpy(Q,R,m,m);
-    matcpy(xp,x,n,1);
-    matmul("NN",n,m,n,1.0,P,H,0.0,F);       /* Q=H'*P*H+R */
-    matmul("TN",m,m,n,1.0,H,F,1.0,Q);
-    if (!(info=matinv(Q,m))) {
-        matmul("NN",n,m,m,1.0,F,Q,0.0,K);   /* K=P*H*Q^-1 */
-        matmul("NN",n,1,m,1.0,K,v,1.0,xp);  /* xp=x+K*v */
-        matmul("NT",n,n,m,-1.0,K,H,1.0,I);  /* Pp=(I-K*H')*P */
-        matmul("NN",n,n,n,1.0,I,P,0.0,Pp);
+
+    arc_matcpy(Q, R, m, m);
+    arc_matcpy(xp, x, n, 1);
+    arc_matmul("NN", n, m, n, 1.0, P, H, 0.0, F);       /* Q=H'*P*H+R */
+    arc_matmul("TN", m, m, n, 1.0, H, F, 1.0, Q);
+    if (!(info= arc_matinv(Q, m))) {
+        arc_matmul("NN", n, m, m, 1.0, F, Q, 0.0, K);   /* K=P*H*Q^-1 */
+        arc_matmul("NN", n, 1, m, 1.0, K, v, 1.0, xp);  /* xp=x+K*v */
+        arc_matmul("NT", n, n, m, -1.0, K, H, 1.0, I);  /* Pp=(I-K*H')*P */
+        arc_matmul("NN", n, n, n, 1.0, I, P, 0.0, Pp);
     }
     free(F); free(Q); free(K); free(I);
     return info;
 }
-extern int filter(double *x, double *P, const double *H, const double *v,
-                  const double *R, int n, int m)
+extern int arc_filter(double *x, double *P, const double *H, const double *v,
+                      const double *R, int n, int m)
 {
     double *x_,*xp_,*P_,*Pp_,*H_;
     int i,j,k,info,*ix;
     
-    ix=imat(n,1); for (i=k=0;i<n;i++) if (x[i]!=0.0&&P[i+i*n]>0.0) ix[k++]=i;
-    x_=mat(k,1); xp_=mat(k,1); P_=mat(k,k); Pp_=mat(k,k); H_=mat(k,m);
+    ix= arc_imat(n, 1); for (i=k=0;i<n;i++) if (x[i]!=0.0&&P[i+i*n]>0.0) ix[k++]=i;
+    x_= arc_mat(k, 1); xp_= arc_mat(k, 1); P_= arc_mat(k, k); Pp_= arc_mat(k, k); H_= arc_mat(k, m);
     for (i=0;i<k;i++) {
         x_[i]=x[ix[i]];
         for (j=0;j<k;j++) P_[i+j*k]=P[ix[i]+ix[j]*n];
@@ -821,20 +822,20 @@ extern int filter(double *x, double *P, const double *H, const double *v,
 * notes  : see reference [4] 5.2
 *          matirix stored by column-major order (fortran convention)
 *-----------------------------------------------------------------------------*/
-extern int smoother(const double *xf, const double *Qf, const double *xb,
-                    const double *Qb, int n, double *xs, double *Qs)
+extern int arc_smoother(const double *xf, const double *Qf, const double *xb,
+                        const double *Qb, int n, double *xs, double *Qs)
 {
-    double *invQf=mat(n,n),*invQb=mat(n,n),*xx=mat(n,1);
+    double *invQf= arc_mat(n, n),*invQb= arc_mat(n, n),*xx= arc_mat(n, 1);
     int i,info=-1;
-    
-    matcpy(invQf,Qf,n,n);
-    matcpy(invQb,Qb,n,n);
-    if (!matinv(invQf,n)&&!matinv(invQb,n)) {
+
+    arc_matcpy(invQf, Qf, n, n);
+    arc_matcpy(invQb, Qb, n, n);
+    if (!arc_matinv(invQf, n)&&!arc_matinv(invQb, n)) {
         for (i=0;i<n*n;i++) Qs[i]=invQf[i]+invQb[i];
-        if (!(info=matinv(Qs,n))) {
-            matmul("NN",n,1,n,1.0,invQf,xf,0.0,xx);
-            matmul("NN",n,1,n,1.0,invQb,xb,1.0,xx);
-            matmul("NN",n,1,n,1.0,Qs,xx,0.0,xs);
+        if (!(info= arc_matinv(Qs, n))) {
+            arc_matmul("NN", n, 1, n, 1.0, invQf, xf, 0.0, xx);
+            arc_matmul("NN", n, 1, n, 1.0, invQb, xb, 1.0, xx);
+            arc_matmul("NN", n, 1, n, 1.0, Qs, xx, 0.0, xs);
         }
     }
     free(invQf); free(invQb); free(xx);
@@ -1371,7 +1372,7 @@ extern double dms2deg(const double *dms)
 *-----------------------------------------------------------------------------*/
 extern void ecef2pos(const double *r, double *pos)
 {
-    double e2=FE_WGS84*(2.0-FE_WGS84),r2=dot(r,r,2),z,zk,v=RE_WGS84,sinp;
+    double e2=FE_WGS84*(2.0-FE_WGS84),r2= arc_dot(r, r, 2),z,zk,v=RE_WGS84,sinp;
     
     for (z=r[2],zk=0.0;fabs(z-zk)>=1E-4;) {
         zk=z;
@@ -1426,7 +1427,7 @@ extern void ecef2enu(const double *pos, const double *r, double *e)
     double E[9];
     
     xyz2enu(pos,E);
-    matmul("NN",3,1,3,1.0,E,r,0.0,e);
+    arc_matmul("NN", 3, 1, 3, 1.0, E, r, 0.0, e);
 }
 /* transform local vector to ecef coordinate -----------------------------------
 * transform local tangental coordinate vector to ecef
@@ -1440,7 +1441,7 @@ extern void enu2ecef(const double *pos, const double *e, double *r)
     double E[9];
     
     xyz2enu(pos,E);
-    matmul("TN",3,1,3,1.0,E,e,0.0,r);
+    arc_matmul("TN", 3, 1, 3, 1.0, E, e, 0.0, r);
 }
 /* transform covariance to local tangental coordinate --------------------------
 * transform ecef covariance to local tangental coordinate
@@ -1454,8 +1455,8 @@ extern void covenu(const double *pos, const double *P, double *Q)
     double E[9],EP[9];
     
     xyz2enu(pos,E);
-    matmul("NN",3,3,3,1.0,E,P,0.0,EP);
-    matmul("NT",3,3,3,1.0,EP,E,0.0,Q);
+    arc_matmul("NN", 3, 3, 3, 1.0, E, P, 0.0, EP);
+    arc_matmul("NT", 3, 3, 3, 1.0, EP, E, 0.0, Q);
 }
 /* transform local enu coordinate covariance to xyz-ecef -----------------------
 * transform local enu covariance to xyz-ecef coordinate
@@ -1469,8 +1470,8 @@ extern void covecef(const double *pos, const double *Q, double *P)
     double E[9],EQ[9];
     
     xyz2enu(pos,E);
-    matmul("TN",3,3,3,1.0,E,Q,0.0,EQ);
-    matmul("NN",3,3,3,1.0,EQ,E,0.0,P);
+    arc_matmul("TN", 3, 3, 3, 1.0, E, Q, 0.0, EQ);
+    arc_matmul("NN", 3, 3, 3, 1.0, EQ, E, 0.0, P);
 }
 /* coordinate rotation matrix ------------------------------------------------*/
 #define Rx(t,X) do { \
@@ -1677,14 +1678,14 @@ extern void eci2ecef(gtime_t tutc, const double *erpv, double *U, double *gmst)
     z =(2306.2181*t+1.09468*t2+0.018203*t3)*AS2R;
     eps=(84381.448-46.8150*t-0.00059*t2+0.001813*t3)*AS2R;
     Rz(-z,R1); Ry(th,R2); Rz(-ze,R3);
-    matmul("NN",3,3,3,1.0,R1,R2,0.0,R);
-    matmul("NN",3,3,3,1.0,R, R3,0.0,P); /* P=Rz(-z)*Ry(th)*Rz(-ze) */
+    arc_matmul("NN", 3, 3, 3, 1.0, R1, R2, 0.0, R);
+    arc_matmul("NN", 3, 3, 3, 1.0, R, R3, 0.0, P); /* P=Rz(-z)*Ry(th)*Rz(-ze) */
     
     /* iau 1980 nutation */
     nut_iau1980(t,f,&dpsi,&deps);
     Rx(-eps-deps,R1); Rz(-dpsi,R2); Rx(eps,R3);
-    matmul("NN",3,3,3,1.0,R1,R2,0.0,R);
-    matmul("NN",3,3,3,1.0,R ,R3,0.0,N); /* N=Rx(-eps)*Rz(-dspi)*Rx(eps) */
+    arc_matmul("NN", 3, 3, 3, 1.0, R1, R2, 0.0, R);
+    arc_matmul("NN", 3, 3, 3, 1.0, R, R3, 0.0, N); /* N=Rx(-eps)*Rz(-dspi)*Rx(eps) */
     
     /* greenwich aparent sidereal time (rad) */
     gmst_=utc2gmst(tutc_,erpv[2]);
@@ -1693,10 +1694,10 @@ extern void eci2ecef(gtime_t tutc, const double *erpv, double *U, double *gmst)
     
     /* eci to ecef transformation matrix */
     Ry(-erpv[0],R1); Rx(-erpv[1],R2); Rz(gast,R3);
-    matmul("NN",3,3,3,1.0,R1,R2,0.0,W );
-    matmul("NN",3,3,3,1.0,W ,R3,0.0,R ); /* W=Ry(-xp)*Rx(-yp) */
-    matmul("NN",3,3,3,1.0,N ,P ,0.0,NP);
-    matmul("NN",3,3,3,1.0,R ,NP,0.0,U_); /* U=W*Rz(gast)*N*P */
+    arc_matmul("NN", 3, 3, 3, 1.0, R1, R2, 0.0, W);
+    arc_matmul("NN", 3, 3, 3, 1.0, W, R3, 0.0, R); /* W=Ry(-xp)*Rx(-yp) */
+    arc_matmul("NN", 3, 3, 3, 1.0, N, P, 0.0, NP);
+    arc_matmul("NN", 3, 3, 3, 1.0, R, NP, 0.0, U_); /* U=W*Rz(gast)*N*P */
     
     for (i=0;i<9;i++) U[i]=U_[i];
     if (gmst) *gmst=gmst_;
@@ -2466,7 +2467,9 @@ extern void arc_tracet(int level, const char *format, ...)
 extern void arc_tracemat(int level, const double *A, int n, int m, int p, int q)
 {
     if (level!=ARC_MATPRINTF) return;
+#ifdef ARC_TRACE_MAT
     matfprint(A,n,m,p,q,stderr); fflush(stderr);
+#endif
 }
 extern void arc_traceobs(int level, const obsd_t *obs, int n)
 {
@@ -2846,9 +2849,9 @@ extern double geodist(const double *rs, const double *rr, double *e)
     double r;
     int i;
     
-    if (norm(rs,3)<RE_WGS84) return -1.0;
+    if (arc_norm(rs, 3)<RE_WGS84) return -1.0;
     for (i=0;i<3;i++) e[i]=rs[i]-rr[i];
-    r=norm(e,3);
+    r= arc_norm(e, 3);
     for (i=0;i<3;i++) e[i]/=r;
     return r+OMGE*(rs[0]*rr[1]-rs[1]*rr[0])/CLIGHT;
 }
@@ -2866,7 +2869,7 @@ extern double satazel(const double *pos, const double *e, double *azel)
     
     if (pos[2]>-RE_WGS84) {
         ecef2enu(pos,e,enu);
-        az=dot(enu,enu,2)<1E-12?0.0:atan2(enu[0],enu[1]);
+        az= arc_dot(enu, enu, 2)<1E-12?0.0:atan2(enu[0],enu[1]);
         if (az<0.0) az+=2*PI;
         el=asin(enu[2]);
     }
@@ -2900,9 +2903,9 @@ extern void dops(int ns, const double *azel, double elmin, double *dop)
         H[3+4*n++]=1.0;
     }
     if (n<4) return;
-    
-    matmul("NT",4,4,n,1.0,H,H,0.0,Q);
-    if (!matinv(Q,4)) {
+
+    arc_matmul("NT", 4, 4, n, 1.0, H, H, 0.0, Q);
+    if (!arc_matinv(Q, 4)) {
         dop[0]=SQRT(Q[0]+Q[5]+Q[10]+Q[15]); /* GDOP */
         dop[1]=SQRT(Q[0]+Q[5]+Q[10]);       /* PDOP */
         dop[2]=SQRT(Q[0]+Q[5]);             /* HDOP */
@@ -2928,7 +2931,7 @@ extern double ionmodel(gtime_t t, const double *ion, const double *pos,
     int week;
     
     if (pos[2]<-1E3||azel[1]<=0) return 0.0;
-    if (norm(ion,8)<=0.0) ion=ion_default;
+    if (arc_norm(ion, 8)<=0.0) ion=ion_default;
     
     /* earth centered angle (semi-circle) */
     psi=0.0137/(azel[1]/PI+0.11)-0.022;
@@ -3163,7 +3166,7 @@ extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
     for (i=0;i<NFREQ;i++) {
         for (j=0;j<3;j++) off[j]=pcv->off[i][j]+del[j];
         
-        dant[i]=-dot(off,e,3)+(opt?interpvar(90.0-azel[1]*R2D,pcv->var[i]):0.0);
+        dant[i]=-arc_dot(off, e, 3)+(opt?interpvar(90.0-azel[1]*R2D,pcv->var[i]):0.0);
     }
     arc_log(ARC_INFO, "antmodel: dant=%6.3f %6.3f\n", dant[0], dant[1]);
 }
@@ -3257,8 +3260,8 @@ extern void sunmoonpos(gtime_t tutc, const double *erpv, double *rsun,
     eci2ecef(tutc,erpv,U,&gmst_);
     
     /* sun and moon postion in ecef */
-    if (rsun ) matmul("NN",3,1,3,1.0,U,rs,0.0,rsun );
-    if (rmoon) matmul("NN",3,1,3,1.0,U,rm,0.0,rmoon);
+    if (rsun ) arc_matmul("NN", 3, 1, 3, 1.0, U, rs, 0.0, rsun);
+    if (rmoon) arc_matmul("NN", 3, 1, 3, 1.0, U, rm, 0.0, rmoon);
     if (gmst ) *gmst=gmst_;
 }
 /* carrier smoothing -----------------------------------------------------------
@@ -3302,7 +3305,7 @@ static void arc_tide_pl(const double *eu, const double *rp, double GMp,
 
     arc_log(ARC_INFO, "tide_pl : pos=%.3f %.3f\n", pos[0] * R2D, pos[1] * R2D);
     
-    if ((r=norm(rp,3))<=0.0) return;
+    if ((r= arc_norm(rp, 3))<=0.0) return;
     
     for (i=0;i<3;i++) ep[i]=rp[i]/r;
     
@@ -3315,7 +3318,7 @@ static void arc_tide_pl(const double *eu, const double *rp, double GMp,
     p=(3.0*sinl*sinl-1.0)/2.0;
     H2=0.6078-0.0006*p;
     L2=0.0847+0.0002*p;
-    a=dot(ep,eu,3);
+    a= arc_dot(ep, eu, 3);
     dp=K2*3.0*L2*a;
     du=K2*(H2*(1.5*a*a-0.5)-3.0*L2*a*a);
     
@@ -3503,9 +3506,9 @@ extern void tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
     
     dr[0]=dr[1]=dr[2]=0.0;
     
-    if (norm(rr,3)<=0.0) return;
+    if (arc_norm(rr, 3)<=0.0) return;
     
-    pos[0]=asin(rr[2]/norm(rr,3));
+    pos[0]=asin(rr[2]/ arc_norm(rr, 3));
     pos[1]=atan2(rr[1],rr[0]);
     xyz2enu(pos,E);
     
@@ -3530,12 +3533,12 @@ extern void tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
     }
     if ((opt&2)&&odisp) { /* ocean tide loading */
         arc_tide_oload(tut,odisp,denu);
-        matmul("TN",3,1,3,1.0,E,denu,0.0,drt);
+        arc_matmul("TN", 3, 1, 3, 1.0, E, denu, 0.0, drt);
         for (i=0;i<3;i++) dr[i]+=drt[i];
     }
     if ((opt&4)&&erp) { /* pole tide */
         arc_tide_pole(tut,pos,erpv,denu);
-        matmul("TN",3,1,3,1.0,E,denu,0.0,drt);
+        arc_matmul("TN", 3, 1, 3, 1.0, E, denu, 0.0, drt);
         for (i=0;i<3;i++) dr[i]+=drt[i];
     }
     arc_log(ARC_INFO, "tidedisp: dr=%.3f %.3f %.3f\n", dr[0], dr[1], dr[2]);

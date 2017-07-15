@@ -309,7 +309,7 @@ Cuts off far edge of the data to be more optimal for fast Fourier transform. The
 @deftypefnx {C function} @code{void} mgl_data_insert (@code{HMDT} dat, @code{char} dir, @code{int} pos, @code{char} num)
 @deftypefnx {C function} @code{void} mgl_datac_insert (@code{HADT} dat, @code{char} dir, @code{int} pos, @code{char} num)
 @end ifclear
-Insert @var{num} slices along @var{dir}-direction at position @var{pos} and fill it by zeros.
+Insert @var{num} slices along @var{dir}-direction at position @var{pos} and fill it by arc_zeros.
 @end deftypefn
 
 @anchor{delete}

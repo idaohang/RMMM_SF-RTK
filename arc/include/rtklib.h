@@ -748,6 +748,8 @@ typedef struct {        /* processing options type */
     int freqopt;           /* disable L2-AR */
     int ceres;             /* use ceres to sovle single rtk */
     int cholesky;          /* ceres problem use cholesky decomposition */
+    int ceres_prior;       /* ceres problem add states prior information */
+    int single_epoch;      /* every epoch ambguity is initaial,but the rover station is using kalman filter propagate */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -855,15 +857,15 @@ typedef struct {        /* ambiguity control type */
     char flags[MAXSAT]; /* fix flags */
 } ambc_t;
 
-typedef struct {        /* RTK control/result type */
-    sol_t  sol;         /* RTK solution */
-    double rb[6];       /* base position/velocity (ecef) (m|m/s) */
-    int nx,na;          /* number of float states/fixed states */
-    double tt;          /* time difference between current and previous (s) */
-    double *x, *P;      /* float states and their covariance */
-    double *xa,*Pa;     /* fixed states and their covariance */
-    double *x_pf;       /* particle filter states */
-    int nfix;           /* number of continuous fixes of ambiguity */
+typedef struct {         /* RTK control/result type */
+    sol_t  sol;          /* RTK solution */
+    double rb[6];        /* base position/velocity (ecef) (m|m/s) */
+    int nx,na;           /* number of float states/fixed states */
+    double tt;           /* time difference between current and previous (s) */
+    double *x, *P;       /* float states and their covariance */
+    double *xa,*Pa;      /* fixed states and their covariance */
+    double *x_pf;        /* particle filter states */
+    int nfix;            /* number of continuous fixes of ambiguity */
     ambc_t ambc[MAXSAT]; /* ambibuity control */
     ssat_t ssat[MAXSAT]; /* satellite status */
     int neb;             /* bytes in error message buffer */
@@ -911,27 +913,27 @@ extern int execcmd(const char *cmd);
 extern void setbitu(unsigned char *buff, int pos, int len, unsigned int data);
 
 /* matrix and vector functions -----------------------------------------------*/
-extern double *mat  (int n, int m);
-extern int    *imat (int n, int m);
-extern double *zeros(int n, int m);
-extern double *eye  (int n);
-extern double dot (const double *a, const double *b, int n);
-extern double norm(const double *a, int n);
-extern void cross3(const double *a, const double *b, double *c);
-extern int  normv3(const double *a, double *b);
-extern void matcpy(double *A, const double *B, int n, int m);
-extern void matmul(const char *tr, int n, int k, int m, double alpha,
-                   const double *A, const double *B, double beta, double *C);
-extern int  matinv(double *A, int n);
-extern int  solve (const char *tr, const double *A, const double *Y, int n,
-                   int m, double *X);
-extern int  lsq   (const double *A, const double *y, int n, int m, double *x,
-                   double *Q);
-extern int  filter(double *x, double *P, const double *H, const double *v,
-                   const double *R, int n, int m);
-extern int  smoother(const double *xf, const double *Qf, const double *xb,
-                     const double *Qb, int n, double *xs, double *Qs);
-extern void add_fatal(fatalfunc_t *func);
+extern double *arc_mat(int n, int m);
+extern int    *arc_imat(int n, int m);
+extern double *arc_zeros(int n, int m);
+extern double *arc_eye(int n);
+extern double arc_dot(const double *a, const double *b, int n);
+extern double arc_norm(const double *a, int n);
+extern void arc_cross3(const double *a, const double *b, double *c);
+extern int  arc_normv3(const double *a, double *b);
+extern void arc_matcpy(double *A, const double *B, int n, int m);
+extern void arc_matmul(const char *tr, int n, int k, int m, double alpha,
+                       const double *A, const double *B, double beta, double *C);
+extern int  arc_matinv(double *A, int n);
+extern int  arc_solve(const char *tr, const double *A, const double *Y, int n,
+                      int m, double *X);
+extern int  arc_lsq(const double *A, const double *y, int n, int m, double *x,
+                    double *Q);
+extern int  arc_filter(double *x, double *P, const double *H, const double *v,
+                       const double *R, int n, int m);
+extern int  arc_smoother(const double *xf, const double *Qf, const double *xb,
+                         const double *Qb, int n, double *xs, double *Qs);
+extern void arc_add_fatal(fatalfunc_t *func);
 
 /* time and string functions -------------------------------------------------*/
 extern double  str2num(const char *s, int i, int n);

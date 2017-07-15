@@ -3878,7 +3878,7 @@ msgid "Recent files"
 msgstr "Последние файлы"
 
 #: udav/dat_pnl.cpp:768
-msgid "Recreate the data with new sizes and fill it by zeros (Ctrl+Shift+N)."
+msgid "Recreate the data with new sizes and fill it by arc_zeros (Ctrl+Shift+N)."
 msgstr "Пересоздать данные с новым размером и заполнить нулями (Ctrl+Shift+N)."
 
 #: udav/text_pnl.cpp:521

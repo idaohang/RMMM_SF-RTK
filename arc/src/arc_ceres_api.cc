@@ -36,18 +36,18 @@
 
 using ceres::Problem;
 
-void ceres_init() {
+void arc_ceres_init() {
   // This is not ideal, but it's not clear what to do if there is no gflags and
   // no access to command line arguments.
   char message[] = "<unknown>";
   google::InitGoogleLogging(message);
 }
 
-ceres_problem_t* ceres_create_problem() {
+ceres_problem_t* arc_ceres_create_problem() {
   return reinterpret_cast<ceres_problem_t*>(new Problem);
 }
 
-void ceres_free_problem(ceres_problem_t* problem) {
+void arc_ceres_free_problem(ceres_problem_t *problem) {
   delete reinterpret_cast<Problem*>(problem);
 }
 
@@ -128,16 +128,16 @@ void ceres_stock_loss_function(void* user_data,
       ->Evaluate(squared_norm, out);
 }
 
-ceres_residual_block_id_t* ceres_problem_add_residual_block(
-    ceres_problem_t* problem,
-    ceres_cost_function_t cost_function,
-    void* cost_function_data,
-    ceres_loss_function_t loss_function,
-    void* loss_function_data,
-    int num_residuals,
-    int num_parameter_blocks,
-    int* parameter_block_sizes,
-    double** parameters) {
+ceres_residual_block_id_t* arc_ceres_problem_add_residual_block(
+        ceres_problem_t *problem,
+        ceres_cost_function_t cost_function,
+        void *cost_function_data,
+        ceres_loss_function_t loss_function,
+        void *loss_function_data,
+        int num_residuals,
+        int num_parameter_blocks,
+        int *parameter_block_sizes,
+        double **parameters) {
   Problem* ceres_problem = reinterpret_cast<Problem*>(problem);
 
   ceres::CostFunction* callback_cost_function =
@@ -161,7 +161,7 @@ ceres_residual_block_id_t* ceres_problem_add_residual_block(
                                       parameter_blocks));
 }
 
-void ceres_solve(ceres_problem_t* c_problem) {
+void arc_ceres_solve(ceres_problem_t *c_problem) {
   Problem* problem = reinterpret_cast<Problem*>(c_problem);
 
   // TODO(keir): Obviously, this way of setting options won't scale or last.
@@ -190,4 +190,9 @@ void arc_ceres_add_para_block(ceres_problem_t* problem_c,int nblock, double**par
     for (i=0;i<nblock;i++) {
         problem->AddParameterBlock(para[i],1);
     }
+}
+void arc_ceres_set_para_var(ceres_problem_t* problem_c,double *val)
+{
+    Problem* problem = reinterpret_cast<Problem*>(problem_c);
+    if (problem&&val) problem->SetParameterBlockVariable(val);
 }

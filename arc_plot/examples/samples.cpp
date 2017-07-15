@@ -2880,9 +2880,9 @@ const char *mmgl_section="subplot 1 1 0 '<_':title 'Section&Join sample'\n"
 "axis:box:line -1 0 1 0 'h:'\n# first lets demonstrate 'join'\n"
 "new aa 11 'x^2':new a1 3 '-x':new a2 15 'x^3'\njoin aa a1:join aa a2\n"
 "# add x-coordinate\nnew xx aa.nx 'x':join aa xx\nplot aa(:,1) aa(:,0) '2y'\n"
-"# now select 1-st (id=0) section between zeros\n"
+"# now select 1-st (id=0) section between arc_zeros\n"
 "section b1 aa 0 'x' 0\nplot b1(:,1) b1(:,0) 'bo'\n"
-"# next, select 3-d (id=2) section between zeros\n"
+"# next, select 3-d (id=2) section between arc_zeros\n"
 "section b3 aa 2 'x' 0\nplot b3(:,1) b3(:,0) 'gs'\n"
 "# finally, select 2-nd (id=-2) section from the end\n"
 "section b4 aa -2 'x' 0\nplot b4(:,1) b4(:,0) 'r#o'";
@@ -2898,10 +2898,10 @@ void smgl_section(mglGraph *gr)
 	// add x-coordinate
 	mglData xx(aa.nx);	gr->Fill(xx,"x");	aa.Join(xx);
 	gr->Plot(aa.SubData(-1,1), aa.SubData(-1,0), "2y");
-	// now select 1-st (id=0) section between zeros
+	// now select 1-st (id=0) section between arc_zeros
 	mglData b1(aa.Section(0,'x',0));
 	gr->Plot(b1.SubData(-1,1), b1.SubData(-1,0), "bo");
-	// next, select 3-d (id=2) section between zeros
+	// next, select 3-d (id=2) section between arc_zeros
 	mglData b2(aa.Section(2,'x',0));
 	gr->Plot(b2.SubData(-1,1), b2.SubData(-1,0), "gs");
 	// finally, select 2-nd (id=-2) section from the end
