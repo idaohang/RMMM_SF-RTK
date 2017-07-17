@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 /* constants/global variables -------------------------------------------------*/
-#define ARC_TRACE_MAT                     /* matrix printf */
+//#define ARC_TRACE_MAT                     /* matrix printf */
 #define GLOG            1                 /* google log for debug */
 #define ARC_NOLOG       -1                /* disable log informations */
 #define ARC_INFO        0				  /* google information log */
