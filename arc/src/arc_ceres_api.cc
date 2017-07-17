@@ -47,6 +47,22 @@ ceres_problem_t* arc_ceres_create_problem() {
   return reinterpret_cast<ceres_problem_t*>(new Problem);
 }
 
+ceres_option_t* arc_ceres_create_option() {
+    return reinterpret_cast<ceres_option_t*>(new ceres::Solver::Options);
+}
+
+ceres_summary_t* arc_ceres_create_summary() {
+    return reinterpret_cast<ceres_summary_t*>(new ceres::Solver::Summary);
+}
+
+void arc_ceres_free_option(ceres_option_t *option) {
+    delete reinterpret_cast<ceres::Solver::Options*>(option);
+}
+
+void arc_ceres_free_summary(ceres_summary_t *summay) {
+    delete reinterpret_cast<ceres::Solver::Summary *>(summay);
+}
+
 void arc_ceres_free_problem(ceres_problem_t *problem) {
   delete reinterpret_cast<Problem*>(problem);
 }
@@ -171,7 +187,6 @@ void arc_ceres_solve(ceres_problem_t *c_problem) {
   options.max_num_iterations = 100;
   options.linear_solver_type = ceres::DENSE_QR;
   options.minimizer_progress_to_stdout = true;
-
   ceres::Solver::Summary summary;
   ceres::Solve(options, problem, &summary);
   std::cout << summary.FullReport() << "\n";
@@ -195,4 +210,18 @@ void arc_ceres_set_para_var(ceres_problem_t* problem_c,double *val)
 {
     Problem* problem = reinterpret_cast<Problem*>(problem_c);
     if (problem&&val) problem->SetParameterBlockVariable(val);
+}
+
+void arc_ceres_solvex(ceres_problem_t *c_problem,ceres_summary_t* c_summay,ceres_option_t* c_option)
+{
+    ceres::Solver::Options *option=reinterpret_cast<ceres::Solver::Options*>(c_option);
+    ceres::Solver::Summary *summary=reinterpret_cast<ceres::Solver::Summary*>(c_summay);
+    Problem* problem = reinterpret_cast<Problem*>(c_problem);
+
+    option->max_num_iterations = 100;
+    option->linear_solver_type = ceres::DENSE_SCHUR;
+    option->minimizer_progress_to_stdout = true;
+
+    ceres::Solve(*option,problem,summary);
+    std::cout << summary->FullReport() << "\n";
 }

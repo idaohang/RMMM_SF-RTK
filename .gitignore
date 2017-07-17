@@ -20,3 +20,6 @@ windows/arc.vcxproj~
 !/arc_pf/lib/include/
 /arc_pf/lib/
 arc_papers/
+arc_srtk/src/arc_srtk (copy).cc
+arc_test/src/PlotTest.py
+arc_test/src/PlotTest.py~

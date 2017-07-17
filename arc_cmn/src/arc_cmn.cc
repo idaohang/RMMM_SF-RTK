@@ -77,7 +77,7 @@ const prcopt_t prcopt_default={ /* defaults processing options */
     {100.0,100.0},              /* eratio[] */
     {100.0,0.003,0.003,0.0,1.0}, /* err[] */
     {30.0,0.03,0.3},            /* std[] */
-    {1E-4,1E-3,1E-4,1E-1,1E-2,0.0}, /* prn[] */
+    {1E-1,1E-2,1E-2,1E-1,1E-2,0.0}, /* prn[] */
     5E-12,                      /* sclkstab */
     {3.0,0.9999,0.25,0.1,0.05}, /* thresar */
     0.0,0.0,0.05,               /* elmaskar,almaskhold,thresslip */
@@ -791,8 +791,8 @@ extern int arc_filter(double *x, double *P, const double *H, const double *v,
     double *x_,*xp_,*P_,*Pp_,*H_;
     int i,j,k,info,*ix;
     
-    ix= arc_imat(n, 1); for (i=k=0;i<n;i++) if (x[i]!=0.0&&P[i+i*n]>0.0) ix[k++]=i;
-    x_= arc_mat(k, 1); xp_= arc_mat(k, 1); P_= arc_mat(k, k); Pp_= arc_mat(k, k); H_= arc_mat(k, m);
+    ix= arc_imat(n,1); for (i=k=0;i<n;i++) if (x[i]!=0.0&&P[i+i*n]>0.0) ix[k++]=i;
+    x_= arc_mat(k,1); xp_=arc_mat(k,1); P_=arc_mat(k,k); Pp_=arc_mat(k,k); H_=arc_mat(k,m);
     for (i=0;i<k;i++) {
         x_[i]=x[ix[i]];
         for (j=0;j<k;j++) P_[i+j*k]=P[ix[i]+ix[j]*n];

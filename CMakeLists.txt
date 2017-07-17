@@ -55,7 +55,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/arc_ceres/include
     /usr/include/eigen3
 )
-add_subdirectory(arc_plot)
+
 add_subdirectory(arc_log)
 add_subdirectory(arc_pf)
 add_subdirectory(arc_ceres)

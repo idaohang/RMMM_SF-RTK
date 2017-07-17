@@ -114,6 +114,12 @@ CERES_EXPORT void ceres_stock_loss_function(void* user_data,
 struct ceres_problem_s;
 typedef struct ceres_problem_s ceres_problem_t;
 
+struct ceres_summary_s;
+typedef struct ceres_summary_s ceres_summary_t;
+
+struct ceres_option_s;
+typedef struct ceres_option_s ceres_option_t;
+
 struct ceres_residual_block_id_s;
 typedef struct ceres_residual_block_id_s ceres_residual_block_id_t;
 
@@ -121,6 +127,12 @@ typedef struct ceres_residual_block_id_s ceres_residual_block_id_t;
 /* TODO(keir): Add options for the problem. */
 CERES_EXPORT ceres_problem_t* arc_ceres_create_problem();
 CERES_EXPORT void arc_ceres_free_problem(ceres_problem_t *problem);
+
+CERES_EXPORT ceres_option_t* arc_ceres_create_option();
+CERES_EXPORT ceres_summary_t* arc_ceres_create_summary();
+
+CERES_EXPORT void arc_ceres_free_option(ceres_option_t *option);
+CERES_EXPORT void arc_ceres_free_summary(ceres_summary_t *summay);
 
 /* Add a residual block. */
 CERES_EXPORT ceres_residual_block_id_t* arc_ceres_problem_add_residual_block(
@@ -135,6 +147,8 @@ CERES_EXPORT ceres_residual_block_id_t* arc_ceres_problem_add_residual_block(
         double **parameters);
 
 CERES_EXPORT void arc_ceres_solve(ceres_problem_t *problem);
+
+CERES_EXPORT void arc_ceres_solvex(ceres_problem_t *problem,ceres_summary_t* summay,ceres_option_t* option);
 
 CERES_EXPORT void arc_ceres_set_para_const(ceres_problem_t* problem,double *val);
 

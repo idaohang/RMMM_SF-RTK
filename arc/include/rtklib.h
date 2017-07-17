@@ -746,10 +746,11 @@ typedef struct {        /* processing options type */
     double odisp[2][6*11]; /* ocean tide loading parameters {rov,base} */
     exterr_t exterr;       /* extended receiver error model */
     int freqopt;           /* disable L2-AR */
+
+    /* ceres solver */
     int ceres;             /* use ceres to sovle single rtk */
-    int cholesky;          /* ceres problem use cholesky decomposition */
+    int ceres_cholesky;    /* cholesky */
     int ceres_prior;       /* ceres problem add states prior information */
-    int single_epoch;      /* every epoch ambguity is initaial,but the rover station is using kalman filter propagate */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -871,10 +872,13 @@ typedef struct {         /* RTK control/result type */
     int neb;             /* bytes in error message buffer */
     char errbuf[MAXERRMSG]; /* error message buffer */
     prcopt_t opt;           /* processing options */
+
+    /* ceres solver */
     ceres_problem_t *ceres_problem;
                             /* solve the single rtk position problem */
-    ceres_cost_function_t *loss_function;
+    ceres_cost_function_t *ceres_cost_function;
                             /* solve the single rtk position loss function */
+    int *ceres_active_x;    /* ceres solver active states index in states list */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */
