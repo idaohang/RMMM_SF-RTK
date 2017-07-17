@@ -35,8 +35,8 @@ int main()
     arc_opt.elmin = 15.0 * D2R;
     arc_opt.navsys = SYS_GPS;
     arc_opt.dynamics=0;
-    arc_opt.ceres=1;
-    arc_opt.ceres_cholesky=1;
+    arc_opt.ceres=0;
+    arc_opt.ceres_cholesky=0;
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */

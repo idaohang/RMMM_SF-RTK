@@ -156,6 +156,8 @@ CERES_EXPORT void arc_ceres_set_para_var(ceres_problem_t* problem,double *val);
 
 CERES_EXPORT void arc_ceres_add_para_block(ceres_problem_t* problem,int nblock,double **para);
 
+CERES_EXPORT double * arc_ceres_get_jacobis(ceres_summary_t* problem,int *row,int *col);
+
 /* TODO(keir): Figure out a way to pass a config in. */
 
 #ifdef __cplusplus

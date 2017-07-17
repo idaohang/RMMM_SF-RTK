@@ -62,6 +62,7 @@ static int _NCP_=0;                                 /* ceres problem const param
 static double *_XP_=NULL;                           /* ceres problem prior states */
 static double *_PP_=NULL;                           /* ceres problem prior covariance matrix */
 static double *_X_=NULL;                            /* ceres problem states */
+static double *_R_=NULL;                            /* ceres problem measurement covariance matrix */
 
 /* single-differenced observable ---------------------------------------------*/
 static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
@@ -977,7 +978,7 @@ static int arc_valpos(rtk_t *rtk, const double *v, const double *R, const int *v
 static void arc_ceres_init(double *H,const prcopt_t* opt,int nv,double* rs,
                            double *dts,double *y,double *azel,int nu,int nr,
                            double *e,int *svh,int *vflag,rtk_t *rtk,
-                           const obsd_t *obs,const nav_t* nav)
+                           const obsd_t *obs,const nav_t* nav,double *R)
 {
     int i;
     /* set the jacobi matric pointor to ceres problem */
@@ -1002,6 +1003,9 @@ static void arc_ceres_init(double *H,const prcopt_t* opt,int nv,double* rs,
     _VFLAG_=vflag;
     /* observation data/navigation data pointor */
     _RTK_=rtk; _OBS_=obs; _NAV_=nav;
+
+    /* measurements covariance matrix */
+    _R_=R;
 
     /* initial parameters block list */
     if (_ParaBlock_==NULL) {
@@ -1104,8 +1108,29 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
     free(v); free(R);
     return 1;
 }
+/* ceres sovel problem covariance matrix -------------------------------------*/
+static int arc_ceres_cov(ceres_summary_t* summay,double *P)
+{
+    int i,j,k,col,row,*ix;
+    double *J=arc_ceres_get_jacobis(summay,&row,&col),*Pp,*JR;
+
+    ix=arc_imat(_NX_,1); for (i=0,k=0;i<_NX_;i++) if (_RTK_->ceres_active_x[i]) ix[k++]=i;
+
+    /* compute the covariance matrix */
+    Pp=arc_mat(row,row);
+    if (_RTK_->opt.ceres_cholesky) {
+        arc_matmul("TN",col,col,row,1.0,J,J,0.0,Pp);
+    }
+    else if (_RTK_->opt.ceres_cholesky==0) {
+        JR=arc_mat(col,row);
+        arc_matmul("TN",col,row,row,1.0,J,_R_,0.0,JR);
+        arc_matmul("NN",col,col,row,1.0,JR,J,0.0,Pp);
+    }
+    for (i=0;i<k;i++) for (j=0;j<k;j++) P[ix[i]*_NX_+ix[j]]=Pp[i*k+j];
+    return 1;
+}
 /* relative positioning ------------------------------------------------------*/
-ofstream fp_pf_ceres("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_ceres_pos6");
+ofstream fp_pf_ceres("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_ceres_pos");
 static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                       const nav_t *nav)
 {
@@ -1133,7 +1158,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     }
     /* reset ceres problem solver active states index list */
     for (i=0;i<rtk->nx;i++) rtk->ceres_active_x[i]=0;
-    
+
     /* satellite positions/clocks */
     satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
 
@@ -1209,9 +1234,11 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         }
         /* build a ceres solve problem */
         ceres_problem_t *ceres_problem=arc_ceres_create_problem();
+        ceres_option_t  *ceres_option=arc_ceres_create_option();
+        ceres_summary_t *ceres_summary=arc_ceres_create_summary();
 
         /* ceres problem initial */
-        arc_ceres_init(H,opt,nv,rs,dts,y,azel,nu,nr,e,svh,vflg,rtk,obs,nav);
+        arc_ceres_init(H,opt,nv,rs,dts,y,azel,nu,nr,e,svh,vflg,rtk,obs,nav,R);
 
         /* get the ceres problem parameter pointor */
         _Para_=arc_ceres_para(rtk);
@@ -1235,13 +1262,16 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                 _ParaBlock_,           /* NUmber of parameter size */
                 _Para_);               /* Parameters pointor */
         /* solve the problem */
-        arc_ceres_solve(ceres_problem);
+        arc_ceres_solvex(ceres_problem,ceres_summary,ceres_option);
 
-        /* copy ceres problem states to xp */
+        /* copy ceres problem states to xp and covariance matrix to Pp */
         if (xp) arc_matcpy(xp,_X_,_NX_,1);
+        if (Pp) arc_ceres_cov(ceres_summary,Pp);
 
         /* free ceres problem */
         arc_ceres_free_problem(ceres_problem);
+        arc_ceres_free_option(ceres_option);
+        arc_ceres_free_summary(ceres_summary);
 
         fp_pf_ceres<<setiosflags(ios::fixed)<<setprecision(10);
         for (int i=0;i<3;i++) fp_pf_ceres<<_X_[i]<<"  ";

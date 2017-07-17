@@ -60,6 +60,8 @@ void arc_ceres_free_option(ceres_option_t *option) {
 }
 
 void arc_ceres_free_summary(ceres_summary_t *summay) {
+    ceres::Solver::Summary * psum=reinterpret_cast<ceres::Solver::Summary *>(summay);
+    if (psum->J) psum->FreeJ();
     delete reinterpret_cast<ceres::Solver::Summary *>(summay);
 }
 
@@ -212,6 +214,13 @@ void arc_ceres_set_para_var(ceres_problem_t* problem_c,double *val)
     if (problem&&val) problem->SetParameterBlockVariable(val);
 }
 
+double* arc_ceres_get_jacobis(ceres_summary_t* c_summary,int *row,int *col)
+{
+    ceres::Solver::Summary *summary=reinterpret_cast<ceres::Solver::Summary*>(c_summary);
+    *row=summary->num_residuals_reduced;
+    *col=summary->num_parameters_reduced;
+    return summary->J;
+}
 void arc_ceres_solvex(ceres_problem_t *c_problem,ceres_summary_t* c_summay,ceres_option_t* c_option)
 {
     ceres::Solver::Options *option=reinterpret_cast<ceres::Solver::Options*>(c_option);
@@ -219,7 +228,7 @@ void arc_ceres_solvex(ceres_problem_t *c_problem,ceres_summary_t* c_summay,ceres
     Problem* problem = reinterpret_cast<Problem*>(c_problem);
 
     option->max_num_iterations = 100;
-    option->linear_solver_type = ceres::DENSE_SCHUR;
+    option->linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
     option->minimizer_progress_to_stdout = true;
 
     ceres::Solve(*option,problem,summary);
