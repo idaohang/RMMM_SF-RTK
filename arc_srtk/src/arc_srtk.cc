@@ -1150,8 +1150,7 @@ static int arc_adap_M(const rtk_t* rtk,const double *H,const double *P,
     arc_matmul("NN",n,m,n,1.0,P,H,0.0,F);
     arc_matmul("TN",m,m,n,1.0,H,F,0.0,M);
     
-    free(F);
-    return 1;
+    free(F); return 1;
 }
 /* N matrix for adaptive Kaman filter-----------------------------------------*/
 static int arc_adap_N(const rtk_t* rtk,const double *H,const double *Q,
@@ -1182,8 +1181,7 @@ extern int adap_kaman_filter(rtk_t* rtk,double *x, double *P, const double *H,
     }
     C0=arc_mat(m,m);
     if (!arc_adap_C0(rtk,v,C0,m,rtk->lam)) {
-        free(ix); free(Q); free(C0);
-        return 0;
+        free(ix); free(Q); free(C0); return 0;
     }
     H_=arc_mat(k,m); M=arc_mat(m,m); P_=arc_mat(k,k);
     for (i=0;i<k;i++) {
