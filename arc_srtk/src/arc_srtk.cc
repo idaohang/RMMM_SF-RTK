@@ -2,7 +2,6 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
-#include <rtklib.h>
 
 using namespace std;
 
@@ -40,6 +39,7 @@ using namespace std;
 #define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1)      /* phase bias (s:satno,f:freq) */
 
 /* constants/global variables for ceres problem--------------------------------------------*/
+#define  _WINDOWSSIZE_   10                         /* ceres problem sovler windows size */
 static double *_H_=NULL;                            /* ceres problem jacobi matrix pointor */
 static int _NX_=0;                                  /* ceres problem parameters block numbers*/
 static int _NV_=0;                                  /* ceres problem residual block numbers */
@@ -63,6 +63,10 @@ static double *_XP_=NULL;                           /* ceres problem prior state
 static double *_PP_=NULL;                           /* ceres problem prior covariance matrix */
 static double *_X_=NULL;                            /* ceres problem states */
 static double *_R_=NULL;                            /* ceres problem measurement covariance matrix */
+
+static double _WINDOWS_X_[_WINDOWSSIZE_][_WINDOWSSIZE_*3+MAXSAT];
+                                                    /* ceres problem solver windows sates */
+static int _WINDOWS_FREAME_COUNT=0;                 /* ceres problem how many frame in cunrrent time */
 
 /* single-differenced observable ---------------------------------------------*/
 static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
@@ -115,6 +119,130 @@ static void arc_initx(rtk_t *rtk, double xi, double var, int i)
         rtk->P[i+j*rtk->nx]=rtk->P[j+i*rtk->nx]=i==j?var:0.0;
     }
 }
+/* exclude meas of eclipsing satellite (block IIA) ---------------------------*/
+static void arc_testeclipse(const obsd_t *obs, int n, const nav_t *nav, double *rs)
+{
+    double rsun[3],esun[3],r,ang,erpv[5]={0},cosa;
+    int i,j;
+    const char *type;
+
+    arc_log(3,"testeclipse:\n");
+
+    /* unit vector of sun direction (ecef) */
+    sunmoonpos(gpst2utc(obs[0].time),erpv,rsun,NULL,NULL);
+    arc_normv3(rsun,esun);
+
+    for (i=0;i<n;i++) {
+        type=nav->pcvs[obs[i].sat-1].type;
+
+        if ((r=arc_norm(rs+i*6,3))<=0.0) continue;
+
+        /* only block IIA */
+        if (*type&&!strstr(type,"BLOCK IIA")) continue;
+
+        /* sun-earth-satellite angle */
+        cosa=arc_dot(rs+i*6,esun,3)/r;
+        cosa=cosa<-1.0?-1.0:(cosa>1.0?1.0:cosa);
+        ang=acos(cosa);
+
+        /* test eclipse */
+        if (ang<PI/2.0||r*sin(ang)>RE_WGS84) continue;
+
+        arc_log(3,"eclipsing sat excluded %s sat=%2d\n",time_str(obs[0].time,0),
+                obs[i].sat);
+        for (j=0;j<3;j++) rs[j+i*6]=0.0;
+    }
+}
+/* nominal yaw-angle ---------------------------------------------------------*/
+static double arc_yaw_nominal(double beta, double mu)
+{
+    if (fabs(beta)<1E-12&&fabs(mu)<1E-12) return PI;
+    return atan2(-tan(beta),sin(mu))+PI;
+}
+/* yaw-angle of satellite ----------------------------------------------------*/
+extern int arc_yaw_angle(int sat, const char *type, int opt, double beta, double mu,
+                         double *yaw)
+{
+    *yaw=arc_yaw_nominal(beta,mu);
+    return 1;
+}
+/* satellite attitude model --------------------------------------------------*/
+static int arc_sat_yaw(gtime_t time, int sat, const char *type, int opt,
+                       const double *rs, double *exs, double *eys)
+{
+    double rsun[3],ri[6],es[3],esun[3],n[3],p[3],en[3],ep[3],ex[3],E,beta,mu;
+    double yaw,cosy,siny,erpv[5]={0};
+    int i;
+
+    sunmoonpos(gpst2utc(time),erpv,rsun,NULL,NULL);
+
+    /* beta and orbit angle */
+    arc_matcpy(ri,rs,6,1);
+    ri[3]-=OMGE*ri[1];
+    ri[4]+=OMGE*ri[0];
+    arc_cross3(ri,ri+3,n);
+    arc_cross3(rsun,n,p);
+    if (!arc_normv3(rs,es)||!arc_normv3(rsun,esun)||!arc_normv3(n,en)||
+        !arc_normv3(p,ep)) return 0;
+    beta=PI/2.0-acos(arc_dot(esun,en,3));
+    E=acos(arc_dot(es,ep,3));
+    mu=PI/2.0+(arc_dot(es,esun,3)<=0?-E:E);
+    if      (mu<-PI/2.0) mu+=2.0*PI;
+    else if (mu>=PI/2.0) mu-=2.0*PI;
+
+    /* yaw-angle of satellite */
+    if (!arc_yaw_angle(sat,type,opt,beta,mu,&yaw)) return 0;
+
+    /* satellite fixed x,y-vector */
+    arc_cross3(en,es,ex);
+    cosy=cos(yaw);
+    siny=sin(yaw);
+    for (i=0;i<3;i++) {
+        exs[i]=-siny*en[i]+cosy*ex[i];
+        eys[i]=-cosy*en[i]-siny*ex[i];
+    }
+    return 1;
+}
+/* phase windup model --------------------------------------------------------*/
+static int model_phw(gtime_t time, int sat, const char *type, int opt,
+                     const double *rs, const double *rr, double *phw)
+{
+    double exs[3],eys[3],ek[3],exr[3],eyr[3],eks[3],ekr[3],E[9];
+    double dr[3],ds[3],drs[3],r[3],pos[3],cosp,ph;
+    int i;
+
+    if (opt<=0) return 1; /* no phase windup */
+
+    /* satellite yaw attitude model */
+    if (!arc_sat_yaw(time,sat,type,opt,rs,exs,eys)) return 0;
+
+    /* unit vector satellite to receiver */
+    for (i=0;i<3;i++) r[i]=rr[i]-rs[i];
+    if (!arc_normv3(r,ek)) return 0;
+
+    /* unit vectors of receiver antenna */
+    ecef2pos(rr,pos);
+    xyz2enu(pos,E);
+    exr[0]= E[1]; exr[1]= E[4]; exr[2]= E[7]; /* x = north */
+    eyr[0]=-E[0]; eyr[1]=-E[3]; eyr[2]=-E[6]; /* y = west  */
+
+    /* phase windup effect */
+    arc_cross3(ek,eys,eks);
+    arc_cross3(ek,eyr,ekr);
+    for (i=0;i<3;i++) {
+        ds[i]=exs[i]-ek[i]*arc_dot(ek,exs,3)-eks[i];
+        dr[i]=exr[i]-ek[i]*arc_dot(ek,exr,3)+ekr[i];
+    }
+    cosp=arc_dot(ds,dr,3)/arc_norm(ds,3)/arc_norm(dr,3);
+    if      (cosp<-1.0) cosp=-1.0;
+    else if (cosp> 1.0) cosp= 1.0;
+    ph=acos(cosp)/2.0/PI;
+    arc_cross3(ds,dr,drs);
+    if (arc_dot(ek,drs,3)<0.0) ph=-ph;
+
+    *phw=ph+floor(*phw-ph+0.5); /* in cycle */
+    return 1;
+}
 /* select common satellites between rover and reference station --------------*/
 static int arc_selsat(const obsd_t *obs, double *azel, int nu, int nr,
                       const prcopt_t *opt, int *sat, int *iu, int *ir)
@@ -154,6 +282,9 @@ static void arc_udpos(rtk_t *rtk, double tt)
     
     /* update ceres solver problem active states index list */
     for (i=0;i<3;i++) rtk->ceres_active_x[i]=1;
+
+    /* add velecity noise to position variance */
+    for (i=0;i<3;i++) rtk->P[i+i*rtk->nx]+=SQR(rtk->opt.prn[5])*tt;
 }
 /* temporal update of ionospheric parameters ---------------------------------*/
 static void arc_udion(rtk_t *rtk, double tt, double bl, const int *sat, int ns)
@@ -360,7 +491,7 @@ static void arc_udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,
 /* undifferenced phase/code residual for satellite ---------------------------*/
 static void arc_zdres_sat(int base, double r, const obsd_t *obs, const nav_t *nav,
                           const double *azel, const double *dant,double dion,
-                          double vion,const prcopt_t *opt, double *y)
+                          double vion,const prcopt_t *opt, double *y,const rtk_t *rtk)
 {
     const double *lam=nav->lam[obs->sat-1];
     int i=0,nf=1;
@@ -368,18 +499,17 @@ static void arc_zdres_sat(int base, double r, const obsd_t *obs, const nav_t *na
     if (lam[i]==0.0) return;
 
     /* check snr mask */
-    if (testsnr(base,i,azel[1],obs->SNR[i]*0.25,
-                &opt->snrmask)) return;
+    if (testsnr(base,i,azel[1],obs->SNR[i]*0.25,&opt->snrmask)) return;
 
-    /* residuals = observable - pseudorange */
-    if (obs->L[i]!=0.0) y[i   ]=obs->L[i]*lam[i]-r-dant[i]+dion;
+    /* residuals = observable - pseudorange,think about phase windup correction */
+    if (obs->L[i]!=0.0) y[i   ]=obs->L[i]*lam[i]-r-dant[i]+dion-rtk->ssat[obs->sat-1].phw*lam[i];
     if (obs->P[i]!=0.0) y[i+nf]=obs->P[i]       -r-dant[i]-dion;
 }
 /* undifferenced phase/code residuals ----------------------------------------*/
 static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
                      const double *dts, const int *svh, const nav_t *nav,
                      const double *rr, const prcopt_t *opt, int index, double *y,
-                     double *e, double *azel)
+                     double *e, double *azel, rtk_t* rtk)
 {
     double r,rr_[3],pos[3],dant[NFREQ]={0},disp[3];
     double zhd,zazel[]={0.0,90.0*D2R},dion,vion;
@@ -420,10 +550,15 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
         if (!ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
                       IONOOPT_BRDC,&dion,&vion)) continue;
         /* receiver antenna phase center correction */
-        antmodel(opt->pcvr+index,opt->antdel[index],azel+i*2,opt->posopt[1],
-                 dant);
+        antmodel(opt->pcvr+index,opt->antdel[index],azel+i*2,opt->posopt[1],dant);
+        
+        /* phase windup model */
+        if (!model_phw(rtk->sol.time,obs[i].sat,nav->pcvs[obs[i].sat-1].type,
+                       opt->posopt[2]?2:0,rs+i*6,rr,&rtk->ssat[obs[i].sat-1].phw)) {
+            continue;
+        }
         /* undifferenced phase/code residual for satellite */
-        arc_zdres_sat(base,r,obs+i,nav,azel+i*2,dant,dion,vion,opt,y+i*nf*2);
+        arc_zdres_sat(base,r,obs+i,nav,azel+i*2,dant,dion,vion,opt,y+i*nf*2,rtk);
     }
     arc_log(ARC_INFO, "arc_zdres : rr_=%.3f %.3f %.3f\n", rr_[0], rr_[1], rr_[2]);
     arc_log(ARC_INFO, "arc_zdres : pos=%.9f %.9f %.3f\n", pos[0] * R2D, pos[1] * R2D, pos[2]);
@@ -723,7 +858,7 @@ static double arc_intpres(gtime_t time, const obsd_t *obs, int n, const nav_t *n
 
     satposs(time,obsb,nb,nav,opt->sateph,rs,dts,var,svh);
 
-    if (!arc_zdres(1,obsb,nb,rs,dts,svh,nav,rtk->rb,opt,1,yb,e,azel)) {
+    if (!arc_zdres(1,obsb,nb,rs,dts,svh,nav,rtk->rb,opt,1,yb,e,azel,rtk)) {
         return tt;
     }
     for (i=0;i<n;i++) {
@@ -1066,7 +1201,7 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
     dt=timediff(time,_OBS_[_NU_].time);
 
     /* undifferenced residuals for rover */
-    if (!arc_zdres(0,_OBS_,_NU_,_RS_,_DTS_,_SVH_,_NAV_,_X_,opt,0,_Y_,_E_,_AZEL_)) {
+    if (!arc_zdres(0,_OBS_,_NU_,_RS_,_DTS_,_SVH_,_NAV_,_X_,opt,0,_Y_,_E_,_AZEL_,_RTK_)) {
         arc_log(ARC_WARNING, "ceres_residual : rover initial position error\n");
         free(v); free(R);
         return 0;
@@ -1092,13 +1227,13 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
     }
     if (jacobians) {
         if (opt->ceres_cholesky) {
-            /* asignmenr jacobi matrix , this case is thinking about the covariance */
+            /* asignment jacobi matrix , this case is thinking about the covariance */
             for (i=0;i<_NX_;i++) for (j=0;j<_NV_;j++) {
                 if (jacobians[i]) jacobians[i][j]=-H[i*_NV_+j];
             }
         }
         else for (i=0;i<_NX_;i++) {
-            /* asignmenr jacobi matrix , don't think about the covariance */
+            /* asignment jacobi matrix , don't think about the covariance */
             if (jacobians[i]) for (j=0;j<_NV_;j++) jacobians[i][j]=-H[j*_NX_+i];
         }
     }
@@ -1111,8 +1246,8 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
 /* ceres sovel problem covariance matrix -------------------------------------*/
 static int arc_ceres_cov(ceres_summary_t* summay,double *P)
 {
-    int i,j,k,col,row,*ix;
-    double *J=arc_ceres_get_jacobis(summay,&row,&col),*Pp,*JR;
+    int i,j,k,col,row,*ix=NULL;
+    double *J=arc_ceres_get_jacobis(summay,&row,&col),*Pp=NULL,*JR=NULL,*R=NULL;
 
     ix=arc_imat(_NX_,1); for (i=0,k=0;i<_NX_;i++) if (_RTK_->ceres_active_x[i]) ix[k++]=i;
 
@@ -1122,11 +1257,16 @@ static int arc_ceres_cov(ceres_summary_t* summay,double *P)
         arc_matmul("TN",col,col,row,1.0,J,J,0.0,Pp);
     }
     else if (_RTK_->opt.ceres_cholesky==0) {
-        JR=arc_mat(col,row);
-        arc_matmul("TN",col,row,row,1.0,J,_R_,0.0,JR);
-        arc_matmul("NN",col,col,row,1.0,JR,J,0.0,Pp);
+        JR=arc_mat(col,row); R=arc_mat(_NV_,_NV_);
+        arc_matcpy(R,_R_,_NV_,_NV_);
+        if (!arc_matinv(R,_NV_)) {
+            arc_matmul("TN",col,row,row,1.0,J,_R_,0.0,JR);
+            arc_matmul("NN",col,col,row,1.0,JR,J,0.0,Pp);
+        }
     }
     for (i=0;i<k;i++) for (j=0;j<k;j++) P[ix[i]*_NX_+ix[j]]=Pp[i*k+j];
+    if (ix) free(ix); if (Pp) free(Pp);
+    if (JR) free(JR); if (R)  free(R);
     return 1;
 }
 /* relative positioning ------------------------------------------------------*/
@@ -1162,9 +1302,14 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* satellite positions/clocks */
     satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
 
+    /* exclude measurements of eclipsing satellite (block IIA) */
+    if (rtk->opt.posopt[3]) {
+        arc_testeclipse(obs,n,nav,rs);
+    }
+
     /* undifferenced residuals for base station */
     if (!arc_zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,rtk->rb,opt,1,
-               y+nu*nf*2,e+nu*3,azel+nu*2)) {
+               y+nu*nf*2,e+nu*3,azel+nu*2,rtk)) {
         arc_log(ARC_WARNING, "arc_relpos : initial base station position error\n");
 
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
@@ -1197,7 +1342,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 
     if (opt->ceres==0) for (i=0;i<niter;i++) {
         /* undifferenced residuals for rover */
-        if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
+        if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk)) {
             arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
             stat=SOLQ_NONE;
             break;
@@ -1217,13 +1362,13 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         }
         arc_log(ARC_INFO, "arc_relpos : x(%d)=", i+1);
     }
-    else if (opt->ceres) {
+    else if (opt->ceres==ARC_CERES_SINGLE) {
 
         /* initial ceres problem covariance matrix */
         arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
 
         /* undifferenced residuals for rover */
-        if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
+        if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk)) {
             arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
             stat=SOLQ_NONE;
         }
@@ -1268,6 +1413,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         if (xp) arc_matcpy(xp,_X_,_NX_,1);
         if (Pp) arc_ceres_cov(ceres_summary,Pp);
 
+        arc_tracemat(ARC_MATPRINTF,Pp,rtk->nx,rtk->nx,10,4);
+
         /* free ceres problem */
         arc_ceres_free_problem(ceres_problem);
         arc_ceres_free_option(ceres_option);
@@ -1277,7 +1424,11 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         for (int i=0;i<3;i++) fp_pf_ceres<<_X_[i]<<"  ";
         fp_pf_ceres<<std::endl;
     }
-    if (stat!=SOLQ_NONE&&arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel)) {
+    else if (opt->ceres_windows==ARC_CERES_WINDOWS) {
+        
+
+    }
+    if (stat!=SOLQ_NONE&&arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk)) {
 
         /* post-fit residuals for float solution */
         nv=arc_ddres(rtk,nav,dt,xp,Pp,sat,y,e,azel,iu,ir,ns,v,NULL,R,vflg);
@@ -1305,7 +1456,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* resolve integer ambiguity by LAMBDA */
     if (stat!=SOLQ_NONE&&arc_resamb_LAMBDA(rtk,bias,xa)>1) {
 
-        if (arc_zdres(0,obs,nu,rs,dts,svh,nav,xa,opt,0,y,e,azel)) {
+        if (arc_zdres(0,obs,nu,rs,dts,svh,nav,xa,opt,0,y,e,azel,rtk)) {
 
             /* post-fit reisiduals for fixed solution */
             nv=arc_ddres(rtk,nav,dt,xa,NULL,sat,y,e,azel,iu,ir,ns,v,NULL,R,vflg);

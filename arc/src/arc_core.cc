@@ -30,6 +30,8 @@
 #include "arc_MovementModel.h"
 #include <iomanip>
 #include <fstream>
+#include <rtklib.h>
+
 using namespace std;
 /* constants/global variables ------------------------------------------------*/
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))
@@ -284,7 +286,9 @@ static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
     rtkfree(&rtk);
 }
 /* process positioning -------------------------------------------------------*/
-FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/rtklib_pos5","w");
+#ifdef ARC_TEST
+FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/03-base.bds-gps-b1-l1-res-c","w");
+#endif
 static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
                         int mode)
 {
@@ -314,10 +318,18 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
         if (navs.nf>0) {
             arc_corr_phase_bias_fcb(obs,n,&navs);
         }
-        if (!arc_srtkpos(&rtk, obs, n, &navs)) continue;
-
-        fprintf(fp,"%10.6lf  %10.6lf  %10.6lf \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2]);
+        if (!arc_srtkpos(&rtk,obs,n,&navs)) continue;
         
+#ifdef ARC_TEST
+
+        for (int i=0;i<MAXSAT;i++) {
+            fprintf(fp,"%10.6lf   ",rtk.ssat[i].resc[0]);
+        }
+        fprintf(fp,"\n");
+        //fprintf(fp,"%10.6lf    %10.6lf    %10.6lf   \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2]);
+        //fprintf(fp,"%10.6lf   \n",rtk.sol.ratio);
+
+#endif
         if (mode==0) { /* forward/backward */
             if (time.time==0||pri[rtk.sol.stat]<=pri[sol.stat]) {
                 sol=rtk.sol;
@@ -598,7 +610,7 @@ static int arc_antpos(prcopt_t *opt, int rcvno, const obs_t *obs, const nav_t *n
         }
     }
     else if (postype==POSOPT_RINEX) { /* get from rinex header */
-        if (arc_norm(stas[rcvno == 1 ? 0 : 1].pos, 3)<=0.0) {
+        if (arc_norm(stas[rcvno==1?0:1].pos,3)<=0.0) {
             arc_log(ARC_WARNING, "no position position in rinex header\n");
             return 0;
         }
@@ -653,14 +665,14 @@ static void arc_closeses(nav_t *nav, pcvs_t *pcvs, pcvs_t *pcvr)
     arc_log(ARC_INFO, "arc_closeses:\n");
     
     /* free antenna parameters */
-    free(pcvs->pcv); pcvs->pcv=NULL; pcvs->n=pcvs->nmax=0;
-    free(pcvr->pcv); pcvr->pcv=NULL; pcvr->n=pcvr->nmax=0;
+    if (pcvs->pcv) free(pcvs->pcv); pcvs->pcv=NULL; pcvs->n=pcvs->nmax=0;
+    if (pcvs->pcv) free(pcvr->pcv); pcvr->pcv=NULL; pcvr->n=pcvr->nmax=0;
     
     /* free erp data */
-    free(nav->erp.data); nav->erp.data=NULL; nav->erp.n=nav->erp.nmax=0;
+    if (nav->erp.data) free(nav->erp.data);
+    nav->erp.data=NULL; nav->erp.n=nav->erp.nmax=0;
     
     /* close solution statistics and debug arc_log */
-
     arc_traceclose();
 }
 /* set antenna parameters ----------------------------------------------------*/
@@ -827,7 +839,6 @@ static int arc_execses_r(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt
 
     /* execute processing session */
     stat=arc_execses(ts,te,ti,popt,sopt,fopt,flag,infile,index,n,outfile);
-    
     return stat;
 }
 /* execute processing session for each base station --------------------------*/
@@ -848,54 +859,9 @@ static int arc_execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt
     
     /* free prec ephemeris and sbas data */
     arc_freepreceph(&navs);
-    
     return stat;
 }
-/* post-processing positioning -------------------------------------------------
-* post-processing positioning
-* args   : gtime_t ts       I   processing start time (ts.time==0: no limit)
-*        : gtime_t te       I   processing end time   (te.time==0: no limit)
-*          double ti        I   processing interval  (s) (0:all)
-*          double tu        I   processing unit time (s) (0:all)
-*          prcopt_t *popt   I   processing options
-*          solopt_t *sopt   I   solution options
-*          filopt_t *fopt   I   file options
-*          char   **infile  I   input files (see below)
-*          int    n         I   number of input files
-*          char   *outfile  I   output file ("":stdout, see below)
-*          char   *rov      I   rover id list        (separated by " ")
-*          char   *base     I   base station id list (separated by " ")
-* return : status (0:ok,0>:error,1:aborted)
-* notes  : input files should contain observation data, navigation data, precise 
-*          ephemeris/clock (optional), sbas log file (optional), ssr message
-*          log file (optional) and tec grid file (optional). only the first 
-*          observation data file in the input files is recognized as the rover
-*          data.
-*
-*          the type of an input file is recognized by the file extention as ]
-*          follows:
-*              .sp3,.SP3,.eph*,.EPH*: precise ephemeris (sp3c)
-*              .sbs,.SBS,.ems,.EMS  : sbas message log files (rtklib or ems)
-*              .lex,.LEX            : qzss lex message log files
-*              .rtcm3,.RTCM3        : ssr message log files (rtcm3)
-*              .*i,.*I              : tec grid files (ionex)
-*              .fcb,.FCB            : satellite fcb
-*              others               : rinex obs, nav, gnav, hnav, qnav or clock
-*
-*          inputs files can include wild-cards (*). if an file includes
-*          wild-cards, the wild-card expanded multiple files are used.
-*
-*          inputs files can include keywords. if an file includes keywords,
-*          the keywords are replaced by date, time, rover id and base station
-*          id and multiple session analyses run. refer reppath() for the
-*          keywords.
-*
-*          the output file can also include keywords. if the output file does
-*          not include keywords. the results of all multiple session analyses
-*          are output to a single output file.
-*
-*          ssr corrections are valid only for forward estimation.
-*-----------------------------------------------------------------------------*/
+/* post-processing positioning ------------------------------------------------*/
 extern int arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
                        const prcopt_t *popt, const solopt_t *sopt,
                        const filopt_t *fopt, char **infile, int n, char *outfile,
@@ -903,7 +869,7 @@ extern int arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
 {
     int i,stat=0,index[MAXINFILE]={0};
 
-    arc_log(ARC_INFO, "arc_postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n", ti, tu, n, outfile);
+    arc_log(ARC_INFO,"arc_postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n", ti,tu,n,outfile);
     
     /* open processing session */
     if (!arc_openses(popt,sopt,fopt,&navs,&pcvss,&pcvsr)) return -1;

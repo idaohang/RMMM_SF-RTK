@@ -56,6 +56,7 @@ extern "C" {
 #define EXPORT
 #endif
 #define TRACE
+#define ENACMP
 /* constants -----------------------------------------------------------------*/
 #define ARC_SRTK    "ARC-SRTK v1.0"
 #define PI          3.1415926535897932  /* pi */
@@ -751,6 +752,7 @@ typedef struct {        /* processing options type */
     int ceres;             /* use ceres to sovle single rtk */
     int ceres_cholesky;    /* cholesky */
     int ceres_prior;       /* ceres problem add states prior information */
+    int ceres_windows;     /* choose the ceres problem windows solver */
 } prcopt_t;
 
 typedef struct {        /* solution options type */

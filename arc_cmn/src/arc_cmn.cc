@@ -77,7 +77,7 @@ const prcopt_t prcopt_default={ /* defaults processing options */
     {100.0,100.0},              /* eratio[] */
     {100.0,0.003,0.003,0.0,1.0}, /* err[] */
     {30.0,0.03,0.3},            /* std[] */
-    {1E-1,1E-2,1E-2,1E-1,1E-2,0.0}, /* prn[] */
+    {1E-1,1E-2,1E-2,1E-1,1E-2,0.5}, /* prn[] */
     5E-12,                      /* sclkstab */
     {3.0,0.9999,0.25,0.1,0.05}, /* thresar */
     0.0,0.0,0.05,               /* elmaskar,almaskhold,thresslip */
@@ -3157,7 +3157,7 @@ extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
     double e[3],off[3],cosel=cos(azel[1]);
     int i,j;
 
-    arc_log(ARC_INFO, "antmodel: azel=%6.1f %4.1f opt=%d\n", azel[0] * R2D, azel[1] * R2D, opt);
+    arc_log(ARC_INFO, "antmodel: azel=%6.1f %4.1f opt=%d\n", azel[0]*R2D,azel[1]*R2D,opt);
     
     e[0]=sin(azel[0])*cosel;
     e[1]=cos(azel[0])*cosel;
@@ -3166,9 +3166,9 @@ extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
     for (i=0;i<NFREQ;i++) {
         for (j=0;j<3;j++) off[j]=pcv->off[i][j]+del[j];
         
-        dant[i]=-arc_dot(off, e, 3)+(opt?interpvar(90.0-azel[1]*R2D,pcv->var[i]):0.0);
+        dant[i]=-arc_dot(off,e,3)+(opt?interpvar(90.0-azel[1]*R2D,pcv->var[i]):0.0);
     }
-    arc_log(ARC_INFO, "antmodel: dant=%6.3f %6.3f\n", dant[0], dant[1]);
+    arc_log(ARC_INFO, "antmodel: dant=%6.3f %6.3f\n",dant[0],dant[1]);
 }
 /* satellite antenna model ------------------------------------------------------
 * compute satellite antenna phase center parameters

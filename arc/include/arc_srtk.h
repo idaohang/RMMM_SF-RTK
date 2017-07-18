@@ -42,6 +42,9 @@ extern "C" {
 #define ARC_LOGFILE     4 				  /* recore log information to file */
 #define ARC_MATPRINTF   5                 /* matrix printf flag */
 #define ARC_SOLVALTHRES 4.0               /* validation of solution thres */
+#define ARC_CERES_SINGLE      1           /* ceres solver single epoch solution */
+#define ARC_CERES_WINDOWS     2           /* ceres solver windows solution */
+#define ARC_TEST                          /* arc-srtk test define */
 /* single frequency rtk position post-processing ------------------------------*/
 extern int  arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,
