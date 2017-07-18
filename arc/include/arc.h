@@ -28,7 +28,5 @@
 #include "rtklib.h"
 #include "arc_srtk.h"
 #include "arc_PF.h"
-#include "f2c.h"
-#include "Eigen/Core"
 
 #endif

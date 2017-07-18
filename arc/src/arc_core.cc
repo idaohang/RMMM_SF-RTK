@@ -183,7 +183,7 @@ static void arc_corr_phase_bias_fcb(obsd_t *obs,int n,const nav_t *nav)
     }
 }
 /* particle process positioning ------------------------------------------------*/
-ofstream fp_pf("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_pf_pos");
+ofstream fp_pf("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_akf_pos");
 static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
                            int mode)
 {
@@ -287,7 +287,7 @@ static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
 }
 /* process positioning -------------------------------------------------------*/
 #ifdef ARC_TEST
-FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/03-base.bds-gps-b1-l1-res-c","w");
+FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/akf.pos","w");
 #endif
 static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
                         int mode)
@@ -322,11 +322,11 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
         
 #ifdef ARC_TEST
 
-        for (int i=0;i<MAXSAT;i++) {
-            fprintf(fp,"%10.6lf   ",rtk.ssat[i].resc[0]);
-        }
-        fprintf(fp,"\n");
-        //fprintf(fp,"%10.6lf    %10.6lf    %10.6lf   \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2]);
+        //for (int i=0;i<MAXSAT;i++) {
+        //    fprintf(fp,"%10.6lf   ",rtk.ssat[i].resc[0]);
+        //}
+        //fprintf(fp,"\n");
+        fprintf(fp,"%10.6lf    %10.6lf    %10.6lf   \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2]);
         //fprintf(fp,"%10.6lf   \n",rtk.sol.ratio);
 
 #endif

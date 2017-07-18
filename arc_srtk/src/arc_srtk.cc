@@ -2,12 +2,14 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
+#include <rtklib.h>
 
 using namespace std;
 
 /* constants/macros ----------------------------------------------------------*/
 #define SQR(x)      ((x)*(x))
 #define SQRT(x)     ((x)<=0.0?0.0:sqrt(x))
+#define MAX(x,y)    ((x)>(y)?(x):(y))
 #define MIN(x,y)    ((x)<=(y)?(x):(y))
 #define ROUND(x)    (int)floor((x)+0.5)
 #define MAXSTATES   80         /* max numbers of states */
@@ -1109,6 +1111,120 @@ static int arc_valpos(rtk_t *rtk, const double *v, const double *R, const int *v
     }
     return stat;
 }
+/* Q parameters for adaptive Kaman filter-------------------------------------*/
+static int arc_adap_Q(const rtk_t *rtk,double *Q,int n)
+{
+    int i,k;
+    /* rover station position noise */
+    for (i=0;i<3;i++) Q[i+n*i]=SQR(rtk->opt.prn[5]);
+    /* ambguity noise */
+    for (i=3,k=0;i<rtk->nx;i++) {
+        if (rtk->ceres_active_x[i]) Q[(3+k)*n+(3+(k++))]=SQR(rtk->opt.prn[0]);
+    }
+    /* Q is positive definite matrix,and its col is equal to n */
+    if ((k+3)!=n) return 0;
+    return 1;
+}
+/* C0 matrix for adaptive Kaman filter----------------------------------------*/
+static int arc_adap_C0(const rtk_t* rtk ,const double *v,double *C0,int m,
+                       double lam)
+{
+    static int first=1;
+    static double lamk;
+
+    if (first) {
+        arc_matmul("NT",m,m,1,0.5,v,v,0.0,C0); return 1; first=0;
+    }
+    if (lam<1.0) return 0;
+    lamk=lam/(1.0+lam);
+    arc_matmul("NT",m,m,1,lamk,v,v,0.0,C0);
+    return 1;   
+}
+/* M matrix for adaptive Kaman filter-----------------------------------------*/
+static int arc_adap_M(const rtk_t* rtk,const double *H,const double *P,
+                      const double *R,int m,int n,double *M)
+{
+    double *F;
+
+    F=arc_mat(n,m);
+    arc_matmul("NN",n,m,n,1.0,P,H,0.0,F);
+    arc_matmul("TN",m,m,n,1.0,H,F,0.0,M);
+    
+    free(F);
+    return 1;
+}
+/* N matrix for adaptive Kaman filter-----------------------------------------*/
+static int arc_adap_N(const rtk_t* rtk,const double *H,const double *Q,
+                      const double *R,const double *C0,int m,int n,double *N)
+{
+    int i,j;
+    double *F;
+    
+    F=arc_mat(n,m);
+    arc_matcpy(N,R,m,m);
+    arc_matmul("NN",n,m,n,1.0,Q,H,0.0,F);
+    arc_matmul("TN",m,m,n,1.0,H,F,1.0,N);
+    for (i=0;i<m;i++) for (j=0;j<m;j++) N[i+j*m]=C0[i+j*m]-N[i+j*m];
+    return 1;
+}
+/* adaptive Kaman filter------------------------------------------------------*/
+extern int adap_kaman_filter(rtk_t* rtk,double *x, double *P, const double *H,
+                             const double *v,const double *R,int n,int m)
+{
+    int i,j,*ix,k;
+    double *C0,*M,*N,*Q,*H_,*P_;
+
+    ix=arc_imat(n,1);
+    for (i=0,k=0;i<rtk->nx;i++) if (rtk->ceres_active_x[i]) ix[k++]=i;
+    Q=arc_zeros(k,k);
+    if (!arc_adap_Q(rtk,Q,k)) {
+        free(ix); free(Q); return 0;
+    }
+    C0=arc_mat(m,m);
+    if (!arc_adap_C0(rtk,v,C0,m,rtk->lam)) {
+        free(ix); free(Q); free(C0);
+        return 0;
+    }
+    H_=arc_mat(k,m); M=arc_mat(m,m); P_=arc_mat(k,k);
+    for (i=0;i<k;i++) {
+        for (j=0;j<m;j++) H_[i+j*k]=H[ix[i]+j*n];
+        for (j=0;j<k;j++) P_[i+j*k]=P[ix[i]+ix[j]*n];
+    }
+    if (!arc_adap_M(rtk,H_,P_,R,m,k,M)) {
+        free(ix); free(Q); free(P_); free(C0); free(H_); free(M);
+        return 0;
+    }
+    N=arc_mat(m,m);
+    if (!arc_adap_N(rtk,H_,Q,R,C0,m,k,N)) {
+        free(ix); free(Q); free(P_);
+        free(C0); free(H_); free(M); free(N);
+        return 0;
+    }
+    rtk->lam=MAX(1.0,arc_mattrace(N,m)/arc_mattrace(M,m));
+
+    double *F=arc_mat(k,m),*_Q_=arc_mat(m,m),*K=arc_mat(k,m),
+            *I=arc_eye(k),*xp=arc_mat(k,1),*Pp=arc_zeros(k,k);
+    arc_matcpy(_Q_,R,m,m);
+    arc_matcpy(Pp,P_,k,k);
+    for (i=0;i<k;i++) xp[i]=x[ix[i]];
+    
+    arc_matmul("NN",k,m,k,1.0,P_,H_,0.0,F);            /* Q=H'*P*H+R */
+    arc_matmul("TN",m,m,k,1.0,H_,F,1.0,_Q_);
+    if (!(arc_matinv(_Q_,m))) {
+        arc_matmul("NN",k,m,m,1.0,F,_Q_,0.0,K);        /* K=P*H*Q^-1 */
+        arc_matmul("NN",k,1,m,rtk->lam,K,v,1.0,xp);    /* xp=x+K*v */
+        arc_matmul("NT",k,k,m,-1.0,K,H_,1.0,I);        /* Pp=(I-K*H')*P */
+        arc_matmul("NN",k,k,k,1.0,I,P_,0.0,Pp);
+    }
+    for (i=0;i<k;i++) {
+        if (x) x[ix[i]]=xp[i];
+        if (P) for (j=0;j<k;j++) P[ix[i]+ix[j]*n]=Pp[i+j*k];
+    }
+    free(F);  free(_Q_); free(K); free(I); free(xp); free(Pp);
+    free(ix); free(Q); free(P_);
+    free(C0); free(H_); free(M); free(N);
+    return 1;
+}
 /* ceres problem pointor asignment -------------------------------------------*/
 static void arc_ceres_init(double *H,const prcopt_t* opt,int nv,double* rs,
                            double *dts,double *y,double *azel,int nu,int nr,
@@ -1353,14 +1469,24 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             stat=SOLQ_NONE;
             break;
         }
-        /* kalman filter measurement update */
         arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
-        if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv))) {
-            arc_log(ARC_WARNING, "arc_relpos : filter error (info=%d)\n", info);
-            stat=SOLQ_NONE;
-            break;
+        /* adaptive Kaman filter */
+        if (opt->adapt_filter) {
+            if (!adap_kaman_filter(rtk,xp,Pp,H,v,R,rtk->nx,nv)) {
+                arc_log(ARC_WARNING, "arc_relpos : adaptive filter error (info=%d)\n", info);
+                stat=SOLQ_NONE;
+                break;
+            }
         }
-        arc_log(ARC_INFO, "arc_relpos : x(%d)=", i+1);
+        /* kalman filter measurement update */
+        else {
+            if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv))) {
+                arc_log(ARC_WARNING, "arc_relpos : filter error (info=%d)\n", info);
+                stat=SOLQ_NONE;
+                break;
+            }
+            arc_log(ARC_INFO, "arc_relpos : x(%d)=", i+1);
+        }
     }
     else if (opt->ceres==ARC_CERES_SINGLE) {
 

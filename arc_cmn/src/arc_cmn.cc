@@ -689,11 +689,11 @@ extern int arc_matinv(double *A, int n)
 extern int arc_solve(const char *tr, const double *A, const double *Y, int n,
                      int m, double *X)
 {
-    double *B= arc_mat(n, n);
+    double *B=arc_mat(n,n);
     int info;
 
-    arc_matcpy(B, A, n, n);
-    if (!(info= arc_matinv(B, n))) arc_matmul(tr[0] == 'N' ? "NN" : "TN", n, m, n, 1.0, B, Y, 0.0, X);
+    arc_matcpy(B,A,n,n);
+    if (!(info= arc_matinv(B,n))) arc_matmul(tr[0]=='N'?"NN":"TN",n,m,n,1.0,B,Y,0.0,X);
     free(B);
     return info;
 }
@@ -769,18 +769,18 @@ static int filter_(const double *x, const double *P, const double *H,
                    const double *v, const double *R, int n, int m,
                    double *xp, double *Pp)
 {
-    double *F= arc_mat(n, m),*Q= arc_mat(m, m),*K= arc_mat(n, m),*I= arc_eye(n);
+    double *F= arc_mat(n,m),*Q= arc_mat(m,m),*K=arc_mat(n,m),*I=arc_eye(n);
     int info;
 
-    arc_matcpy(Q, R, m, m);
-    arc_matcpy(xp, x, n, 1);
-    arc_matmul("NN", n, m, n, 1.0, P, H, 0.0, F);       /* Q=H'*P*H+R */
-    arc_matmul("TN", m, m, n, 1.0, H, F, 1.0, Q);
+    arc_matcpy(Q,R,m,m);
+    arc_matcpy(xp,x,n,1);
+    arc_matmul("NN",n,m,n,1.0,P,H,0.0,F);       /* Q=H'*P*H+R */
+    arc_matmul("TN",m,m,n,1.0,H,F,1.0,Q);
     if (!(info= arc_matinv(Q, m))) {
-        arc_matmul("NN", n, m, m, 1.0, F, Q, 0.0, K);   /* K=P*H*Q^-1 */
-        arc_matmul("NN", n, 1, m, 1.0, K, v, 1.0, xp);  /* xp=x+K*v */
-        arc_matmul("NT", n, n, m, -1.0, K, H, 1.0, I);  /* Pp=(I-K*H')*P */
-        arc_matmul("NN", n, n, n, 1.0, I, P, 0.0, Pp);
+        arc_matmul("NN",n,m,m,1.0,F,Q,0.0,K);   /* K=P*H*Q^-1 */
+        arc_matmul("NN",n,1,m,1.0,K,v,1.0,xp);  /* xp=x+K*v */
+        arc_matmul("NT",n,n,m,-1.0,K,H,1.0,I);  /* Pp=(I-K*H')*P */
+        arc_matmul("NN",n,n,n,1.0,I,P,0.0,Pp);
     }
     free(F); free(Q); free(K); free(I);
     return info;
@@ -3680,6 +3680,14 @@ extern int execcmd(const char *cmd)
     
     return system(cmd);
 #endif
+}
+/* computethe trace of matrix---------------------------------------------------*/
+extern double arc_mattrace(double *A,int n)
+{
+    int i;
+    double trace=0.0;
+    if (A==NULL||n<=0) trace=0.0;
+    for (i=0;i<n;i++) trace+=A[i*n+i]; return trace;
 }
 /* dummy functions for lex extentions ----------------------------------------*/
 #ifndef EXTLEX

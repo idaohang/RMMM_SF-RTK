@@ -73,6 +73,11 @@ extern void arc_traceb(int level, const unsigned char *p, int n);
 extern void arc_tracebuf(int buffcount);
 /* arc cholesky functions ------------------------------------------------------*/
 extern double *arc_cholesky(double *A,int n);
+/* computethe trace of matrix---------------------------------------------------*/
+extern double arc_mattrace(double *A,int n);
+/* adaptive Kaman filter -------------------------------------------------------*/
+extern int adap_kaman_filter(rtk_t* rtk,double *x, double *P, const double *H,
+                             const double *v,const double *R,int n,int m);
 
 #ifdef __cplusplus
 }

@@ -747,12 +747,14 @@ typedef struct {        /* processing options type */
     double odisp[2][6*11]; /* ocean tide loading parameters {rov,base} */
     exterr_t exterr;       /* extended receiver error model */
     int freqopt;           /* disable L2-AR */
-
-    /* ceres solver */
+                           /* ceres solver */
     int ceres;             /* use ceres to sovle single rtk */
     int ceres_cholesky;    /* cholesky */
     int ceres_prior;       /* ceres problem add states prior information */
     int ceres_windows;     /* choose the ceres problem windows solver */
+
+    int adapt_filter;      /* adaptive Kaman filter */
+
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -881,6 +883,9 @@ typedef struct {         /* RTK control/result type */
     ceres_cost_function_t *ceres_cost_function;
                             /* solve the single rtk position loss function */
     int *ceres_active_x;    /* ceres solver active states index in states list */
+
+    /* adaptive Kaman filter */
+    double lam;
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */
