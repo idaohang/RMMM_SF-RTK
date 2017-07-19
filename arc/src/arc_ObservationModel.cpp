@@ -92,17 +92,17 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
 
     /* earth tide correction */
     if (opt->tidecorr) {
-        tidedisp(gpst2utc(obs[0].time),
-                 rr_,opt->tidecorr,&nav->erp,
-                 opt->odisp[base],disp);
+        arc_tidedisp(gpst2utc(obs[0].time),
+                     rr_, opt->tidecorr, &nav->erp,
+                     opt->odisp[base], disp);
         for (i=0;i<3;i++) rr_[i]+=disp[i];
     }
     ecef2pos(rr_,pos);
 
     for (i=0;i<n;i++) {
         /* compute geometric-range and azimuth/elevation angle */
-        if ((r=geodist(rs+i*6,rr_,e+i*3))<=0.0) continue;
-        if (satazel(pos,e+i*3,azel+i*2)<opt->elmin) continue;
+        if ((r= arc_geodist(rs + i * 6, rr_, e + i * 3))<=0.0) continue;
+        if (arc_satazel(pos, e + i * 3, azel + i * 2)<opt->elmin) continue;
 
         /* excluded satellite? */
         if (satexclude(obs[i].sat,svh[i],opt)) continue;
@@ -111,16 +111,16 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
         r+=-CLIGHT*dts[i*2];
 
         /* troposphere delay model (hydrostatic) */
-        zhd=tropmodel(obs[0].time,pos,zazel,0.0);
-        r+=tropmapf(obs[i].time,pos,azel+i*2,NULL)*zhd;
+        zhd= arc_tropmodel(obs[0].time, pos, zazel, 0.0);
+        r+= arc_tropmapf(obs[i].time, pos, azel + i * 2, NULL)*zhd;
 
         /* ionospheric corrections */
-        if (!ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
-                      IONOOPT_BRDC,&dion,&vion)) continue;
+        if (!arc_ionocorr(obs[i].time, nav, obs[i].sat, pos, azel + i * 2,
+                          IONOOPT_BRDC, &dion, &vion)) continue;
 
         /* receiver antenna phase center correction */
-        antmodel(opt->pcvr+index,opt->antdel[index],azel+i*2,opt->posopt[1],
-                 dant);
+        arc_antmodel(opt->pcvr + index, opt->antdel[index], azel + i * 2, opt->posopt[1],
+                     dant);
         /* undifferenced phase/code residual for satellite */
         arc_zdres_sat(base,r,obs+i,nav,azel+i*2,dant,opt,y+i*nf*2,dion);
     }
@@ -217,7 +217,7 @@ static double arc_intpres(gtime_t time, const obsd_t *obs, int n, const nav_t *n
     ttb=timediff(time,obsb[0].time);
     if (fabs(ttb)>opt->maxtdiff*2.0||ttb==tt) return tt;
 
-    satposs(time,obsb,nb,nav,opt->sateph,rs,dts,var,svh);
+    arc_satposs(time, obsb, nb, nav, opt->sateph, rs, dts, var, svh);
 
     if (!arc_zdres(1,obsb,nb,rs,dts,svh,nav,rtk->rb,opt,1,yb,e,azel)) {
         return tt;
@@ -297,7 +297,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         rtk->ssat[i].snr [0]=0;
     }
     /* compute the satellite position and velecitys */
-    satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
+    arc_satposs(time, obs, n, nav, opt->sateph, rs, dts, var, svh);
 
     if (!arc_zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,opt->rb,opt,1,
                   y+nu*nf*2,e+nu*3,azel+nu*2)) {

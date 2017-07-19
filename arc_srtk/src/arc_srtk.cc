@@ -44,10 +44,10 @@ using namespace std;
 #define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1)      /* phase bias (s:satno,f:freq) */
 
 /* constants/global variables for ceres problem--------------------------------------------*/
-#define  _WINDOWSSIZE_   10                         /* ceres problem sovler windows size */
-static double *_H_=NULL;                            /* ceres problem jacobi matrix pointor */
-static int _NX_=0;                                  /* ceres problem parameters block numbers*/
-static int _NV_=0;                                  /* ceres problem residual block numbers */
+#define  _WINDOWSSIZE_  10                          /* ceres problem sovler windows size */
+static double *_H_     =NULL;                       /* ceres problem jacobi matrix pointor */
+static int _NX_        =0;                          /* ceres problem parameters block numbers*/
+static int _NV_        =0;                          /* ceres problem residual block numbers */
 static rtk_t *_RTK_;                                /* ceres problem rtk data type */
 static const obsd_t*_OBS_;                          /* ceres problem observation data */
 static const nav_t *_NAV_;                          /* ceres problem navigation data */
@@ -61,26 +61,26 @@ static double *_E_;                                 /* ceres problem rover stati
 static int *_SVH_;                                  /* ceres problem satellite health flag */
 static int *_VFLAG_;                                /* ceres problem satellite valid flag */
 static int *_ParaBlock_=NULL;                       /* ceres problem parameters block list */
-static double **_Para_=NULL;                        /* ceres problem parameters block pointor */
+static double **_Para_ =NULL;                       /* ceres problem parameters block pointor */
 static int _Para_Const_List_[MAXSTATES]={-1};       /* ceres problem const parameters list */
-static int _NCP_=0;                                 /* ceres problem const parameters numbers */
-static double *_XP_=NULL;                           /* ceres problem prior states */
-static double *_PP_=NULL;                           /* ceres problem prior covariance matrix */
-static double *_X_=NULL;                            /* ceres problem states */
-static double *_R_=NULL;                            /* ceres problem measurement covariance matrix */
+static int _NCP_       =0;                          /* ceres problem const parameters numbers */
+static double *_XP_    =NULL;                       /* ceres problem prior states */
+static double *_PP_    =NULL;                       /* ceres problem prior covariance matrix */
+static double *_X_     =NULL;                       /* ceres problem states */
+static double *_R_     =NULL;                       /* ceres problem measurement covariance matrix */
 
 static double _WINDOWS_X_[_WINDOWSSIZE_][_WINDOWSSIZE_*3+MAXSAT];
                                                     /* ceres problem solver windows sates */
 static int _WINDOWS_FREAME_COUNT=0;                 /* ceres problem how many frame in cunrrent time */
 
 /* constants/global variables for ukf problem--------------------------------------------*/
-static int _UKF_NX_=0;                              /* ukf problem statec numbers */
-static int _UKF_NV_=0;                              /* ukf problem measurements numbers */
+static int _UKF_NX_      =0;                        /* ukf problem statec numbers */
+static int _UKF_NV_      =0;                        /* ukf problem measurements numbers */
 static rtk_t *_UKF_RTK_  =NULL;                     /* ukf problem rtk data struct pointor */
-static nav_t *_UKF_NAV_  =NULL;                     /* ukf problem navigation data struct pointor */
-static obsd_t*_UKF_OBS_  =NULL;                     /* ukf problem observation data pointor */
-static int _UKF_NU_=0;                              /* ukf problem rover station observation data numbers */
-static int _UKF_NR_=0;                              /* ukf problem base station observation data numbers */
+static const nav_t *_UKF_NAV_=NULL;                 /* ukf problem navigation data struct pointor */
+static const obsd_t*_UKF_OBS_=NULL;                 /* ukf problem observation data pointor */
+static int _UKF_NU_      =0;                        /* ukf problem rover station observation data numbers */
+static int _UKF_NR_      =0;                        /* ukf problem base station observation data numbers */
 static double *_UKF_RS_  =NULL;                     /* ukf problem satellite position/velecity pointor */
 static double *_UKF_DTS_ =NULL;                     /* ukf problem satellite clock/clock drift pointor */
 static double *_UKF_AZEL_=NULL;                     /* ukf problem base and rover station - satellite azel */
@@ -90,6 +90,13 @@ static int *_UKF_VFLAG_  =NULL;                     /* ukf problem atellite vali
 static double *_UKF_R_   =NULL;                     /* ukf problem measurements variance */
 static double *_UKF_Y_   =NULL;                     /* ukf problem sigma point's single-difference measurement vector */
 static double *_UKF_DY_  =NULL;                     /* ukf problem sigma point's double-difference measurement vector */
+static int    *_UKF_IX_  =NULL;                     /* ukf problem record the active states index */
+static int     _UKF_ANX_ =0;                        /* ukf problem active state numbers */
+static double *_UKF_Q_   =NULL;                     /* ukf problem system noise matrix */
+static double *_UKF_XP_  =NULL;                     /* ukf problem prior states value */
+static double *_UKF_PP_  =NULL;                     /* ukf problem prior states covariance matrix */
+static double *_UKF_MEAS_=NULL;                     /* ukf problem measurements vector */
+static int _UKF_NMEAS_   =0;                        /* ukf problem measurements vector dim */
 
 /* single-differenced observable ---------------------------------------------*/
 static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
@@ -152,7 +159,7 @@ static void arc_testeclipse(const obsd_t *obs,int n,const nav_t *nav,double *rs)
     arc_log(3,"testeclipse:\n");
 
     /* unit vector of sun direction (ecef) */
-    sunmoonpos(gpst2utc(obs[0].time),erpv,rsun,NULL,NULL);
+    arc_sunmoonpos(gpst2utc(obs[0].time), erpv, rsun, NULL, NULL);
     arc_normv3(rsun,esun);
 
     for (i=0;i<n;i++) {
@@ -341,7 +348,7 @@ static int arc_sat_yaw(gtime_t time,int sat,const char *type,int opt,
     double yaw,cosy,siny,erpv[5]={0};
     int i;
 
-    sunmoonpos(gpst2utc(time),erpv,rsun,NULL,NULL);
+    arc_sunmoonpos(gpst2utc(time), erpv, rsun, NULL, NULL);
 
     /* beta and orbit angle */
     arc_matcpy(ri,rs,6,1);
@@ -700,16 +707,16 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
 
     /* earth tide correction */
     if (opt->tidecorr) {
-        tidedisp(gpst2utc(obs[0].time),rr_,opt->tidecorr,&nav->erp,
-                 opt->odisp[base],disp);
+        arc_tidedisp(gpst2utc(obs[0].time),rr_,opt->tidecorr,&nav->erp,
+                     opt->odisp[base],disp);
         for (i=0;i<3;i++) rr_[i]+=disp[i];
     }
     ecef2pos(rr_,pos);
 
     for (i=0;i<n;i++) {
         /* compute geometric-range and azimuth/elevation angle */
-        if ((r=geodist(rs+i*6,rr_,e+i*3))<=0.0) continue;
-        if (satazel(pos,e+i*3,azel+i*2)<opt->elmin) continue;
+        if ((r= arc_geodist(rs+i*6,rr_,e+i*3))<=0.0) continue;
+        if (arc_satazel(pos,e+i*3,azel+i*2)<opt->elmin) continue;
 
         /* excluded satellite? */
         if (satexclude(obs[i].sat,svh[i],opt)) continue;
@@ -718,14 +725,14 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
         r+=-CLIGHT*dts[i*2];
 
         /* troposphere delay model (hydrostatic) */
-        zhd=tropmodel(obs[0].time,pos,zazel,0.0);
-        r+=tropmapf(obs[i].time,pos,azel+i*2,NULL)*zhd;
+        zhd= arc_tropmodel(obs[0].time,pos,zazel,0.0);
+        r+= arc_tropmapf(obs[i].time,pos,azel+i*2,NULL)*zhd;
 
         /* ionospheric corrections */
-        if (!ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
-                      IONOOPT_BRDC,&dion,&vion)) continue;
+        if (!arc_ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
+                          IONOOPT_BRDC,&dion,&vion)) continue;
         /* receiver antenna phase center correction */
-        antmodel(opt->pcvr+index,opt->antdel[index],azel+i*2,opt->posopt[1],dant);
+        arc_antmodel(opt->pcvr+index,opt->antdel[index],azel+i*2,opt->posopt[1],dant);
         
         /* phase windup model */
         if (!arc_model_phw(rtk->sol.time,obs[i].sat,nav->pcvs[obs[i].sat-1].type,
@@ -823,7 +830,7 @@ static double arc_prectrop(gtime_t time, const double *pos, int r,
     int i=IT(r,opt);
 
     /* wet mapping function */
-    tropmapf(time,pos,azel,&m_w);
+    arc_tropmapf(time,pos,azel,&m_w);
 
     if (opt->tropopt>=TROPOPT_ESTG&&azel[1]>0.0) {
 
@@ -875,7 +882,7 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
     /* compute factors of ionospheric and tropospheric delay */
     for (i=0;i<ns;i++) {
         if (opt->ionoopt>=IONOOPT_EST) {
-            im[i]=(ionmapf(posu,azel+iu[i]*2)+ionmapf(posr,azel+ir[i]*2))/2.0;
+            im[i]=(arc_ionmapf(posu,azel+iu[i]*2)+arc_ionmapf(posr,azel+ir[i]*2))/2.0;
         }
         if (opt->tropopt>=TROPOPT_EST) {
             tropu[i]=arc_prectrop(rtk->sol.time,posu,0,azel+iu[i]*2,opt,x,dtdxu+i*3);
@@ -890,6 +897,7 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
         for (i=-1,j=0;j<ns;j++) {
             sysi=rtk->ssat[sat[j]-1].sys;
             if (!arc_test_sys(sysi,m)) continue;
+            /* y[i] may be zero,so must check out,this step is importance */
             if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
             if (i<0||azel[1+iu[j]*2]>=azel[1+iu[i]*2]) i=j;
         }
@@ -903,6 +911,9 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
             if (!arc_test_sys(sysj,m)) continue;
             if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
 
+            /* save double-difference satellite pair */
+            rtk->sat[nv*2]=ir[j]; rtk->sat[nv*2+1]=iu[j];
+
             ff=f%nf;
             lami=nav->lam[sat[i]-1][ff];
             lamj=nav->lam[sat[j]-1][ff];
@@ -914,6 +925,7 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
             /* double-differenced residual */
             if (v) v[nv]=(y[f+iu[i]*nf*2]-y[f+ir[i]*nf*2])
                          -(y[f+iu[j]*nf*2]-y[f+ir[j]*nf*2]);
+
             /* ukf sigma point measurement */
             if (ukf_y&&ukf_dy) {
                 ukf_dy[nv]=(ukf_y[f+iu[i]*nf*2]-ukf_y[f+ir[i]*nf*2])-
@@ -931,15 +943,17 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
                 didxi=(f<nf?-1.0:1.0)*fi*fi*im[i];
                 didxj=(f<nf?-1.0:1.0)*fj*fj*im[j];
                 if (v) v[nv]-=didxi*x[II(sat[i],opt)]-didxj*x[II(sat[j],opt)];
+
                 /* compute the ukf sigma point measurements */
                 if (ukf_dy) ukf_dy[nv]-=didxi*x[II(sat[i],opt)]-didxj*x[II(sat[j],opt)];
+                
                 /* design matrix */
                 if (H) {
                     Hi[II(sat[i],opt)]= didxi;
                     Hi[II(sat[j],opt)]=-didxj;
                 }
                 /* updates ceres solver active states index list */
-                rtk->ceres_active_x[II(sat[i],opt)]=1;
+                rtk->ceres_active_x[II(sat[i],opt)]=1;  /* this is important */
                 rtk->ceres_active_x[II(sat[j],opt)]=1;
             }
             /* double-differenced tropospheric delay term */
@@ -1001,7 +1015,7 @@ static int arc_ddres(rtk_t *rtk, const nav_t *nav, double dt, const double *x,
             else {
                 rtk->ssat[sat[i]-1].vsat[f-nf]=rtk->ssat[sat[j]-1].vsat[f-nf]=1;
             }
-            arc_log(ARC_INFO,"arc_ddres : sat=%3d-%3d %s%d v=%13.3f R=%8.6f %8.6f\n", sat[i],
+            arc_log(ARC_INFO,"arc_ddres : sat=%3d-%3d %s%d v=%13.3f R=%8.6f %8.6f\n",sat[i],
                     sat[j],f<nf?"L":"P",f%nf+1,v[nv],Ri[nv],Rj[nv]);
             vflg[nv]=(sat[i]<<16)|(sat[j]<<8)|((f<nf?0:1)<<4)|(f%nf);
             nb[b]++; nv++;  /* increase double-residual index */
@@ -1049,7 +1063,7 @@ static double arc_intpres(gtime_t time, const obsd_t *obs, int n, const nav_t *n
     ttb=timediff(time,obsb[0].time);
     if (fabs(ttb)>opt->maxtdiff*2.0||ttb==tt) return tt;
 
-    satposs(time,obsb,nb,nav,opt->sateph,rs,dts,var,svh);
+    arc_satposs(time, obsb, nb, nav, opt->sateph, rs, dts, var, svh);
 
     if (!arc_zdres(1,obsb,nb,rs,dts,svh,nav,rtk->rb,opt,1,yb,e,azel,rtk,NULL)) {
         return tt;
@@ -1151,7 +1165,7 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
 
     arc_log(ARC_INFO, "arc_holdamb :\n");
 
-    v= arc_mat(nb,1); H=arc_zeros(nb,rtk->nx);
+    v=arc_mat(nb,1); H=arc_zeros(nb,rtk->nx);
 
     for (m=0;m<4;m++) for (f=0;f<nf;f++) {
 
@@ -1225,7 +1239,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk, double *bias, double *xa)
     arc_tracemat(ARC_MATPRINTF,y+na,1,nb,10,3);
 
     /* lambda/mlambda integer least-square estimation */
-    if (!(info=lambda(nb,2,y+na,Qb,b,s))) {
+    if (!(info= arc_lambda(nb, 2, y + na, Qb, b, s))) {
 
         arc_tracemat(ARC_MATPRINTF,Qb,nb,nb,10,3);
         arc_log(ARC_INFO, "N(1)=");
@@ -1415,14 +1429,14 @@ extern int adap_kaman_filter(rtk_t* rtk,double *x, double *P, const double *H,
     return 1;
 }
 /* ukf: Propagate the sigma points through the dynamic model-----------------*/
-static void arc_ukf_filterfunc(ukf_t *ukf,double *input_X,double *output_X)
+static void arc_ukf_filterfunc(int states_dim,double *input_X,double *output_X)
 {
     int i;
     arc_log(ARC_INFO,"arc_ukf_filterfunc : \n");
-    for (i=0;i<ukf->state_dim;i++) output_X[i]=input_X[i];
+    for (i=0;i<states_dim;i++) output_X[i]=input_X[i];
 }
 /* ukf: Propagate sigma points through the measurement model -----------------*/
-static void arc_ukf_measfunc(ukf_t *ukf,double *input_X,double *output_Y)
+static void arc_ukf_measfunc(double *input_X,double *output_Y)
 {
     /* input_X's dim is equal to rtk->nx */
     int i,ns,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT];
@@ -1450,9 +1464,10 @@ static void arc_ukf_measfunc(ukf_t *ukf,double *input_X,double *output_Y)
     if (output_Y) arc_matcpy(output_Y,_UKF_DY_,_UKF_NV_,1);
 }
 /* ukf: set the all needed paranmeter pointor,just for initial ukf process----*/
-static void arc_ukf_initial(rtk_t *rtk,nav_t* nav,obsd_t* obs,int nu,int nr,
+static void arc_ukf_initial(rtk_t *rtk,const nav_t* nav,const obsd_t* obs,int nu,int nr,
                             double *rs,double *dts,double *e,int *svh,int *vflag)
 {
+    int i,k;
     /* before using ukf,must use this function to initial all data and struct */
     _UKF_RTK_  =rtk;       /* rtk data struct */
     _UKF_NAV_  =nav;       /* navigation data */
@@ -1464,14 +1479,129 @@ static void arc_ukf_initial(rtk_t *rtk,nav_t* nav,obsd_t* obs,int nu,int nr,
     _UKF_SVH_  =svh;       /* satellite health flag */
     _UKF_VFLAG_=vflag;     /* satellite valid flag */
     if (_UKF_R_==NULL) {   /* initial double-difference measurements variance */
-        _UKF_R_=arc_mat(MAXSAT,MAXSAT);   /* todo:may be allocate too large memory */
+        _UKF_R_=arc_zeros(MAXSAT,MAXSAT);   /* todo:may be allocate too large memory */
     }
     if (_UKF_Y_==NULL) {   /* initial sigma point single-difference measurements vector */
-        _UKF_Y_=arc_mat(MAXSAT*2*2,1);    /* todo:may be allocate too large memory */
+        _UKF_Y_=arc_zeros(MAXSAT*2*2,1);    /* todo:may be allocate too large memory */
     }
     if (_UKF_DY_==NULL) {  /* initial sigma point double-difference measurements vector */
-        _UKF_DY_=arc_mat(MAXSAT*2,1);     /* todo:may be allocate too large memory,can be modified */
+        _UKF_DY_=arc_mat(MAXSAT*2,1);       /* todo:may be allocate too large memory,can be modified */
     }
+    if (_UKF_IX_==NULL) {  /* initial active states index list */
+        _UKF_IX_=arc_imat(rtk->nx,1); 
+    }
+    if (_UKF_Q_==NULL) {   /* initial states system noise matrix */
+        _UKF_Q_=arc_zeros(rtk->nx,rtk->nx);
+    }
+    if (_UKF_XP_==NULL) {  /* initial prior states */
+        _UKF_XP_=arc_zeros(rtk->nx,1);
+    }
+    if (_UKF_PP_==NULL) {  /* initial prior states covariance matrix */
+        _UKF_PP_=arc_zeros(rtk->nx,rtk->nx);
+    }
+    if (_UKF_MEAS_==NULL) { /* initial measurements vector */
+        _UKF_MEAS_=arc_zeros(MAXSAT,1); _UKF_NMEAS_=0;
+    }
+}
+/* ukf: count active states index list----------------------------------------*/
+static void arc_ukf_activex(const rtk_t *rtk)
+{
+    int i,k=0; for (i=0;i<rtk->nx;i++) if (rtk->ceres_active_x[i]) _UKF_IX_[k++]=i;
+    _UKF_ANX_=k;
+}
+/* get the active states index given raw index in rtk->x----------------------*/
+static int arc_get_activex_index(const rtk_t *rtk,int index)
+{
+    int i;
+    if (index<0) return -1;
+    for (i=0;i<rtk->nx;i++) {
+        if (rtk->ceres_active_x[i]==index) return rtk->ceres_active_x[i];
+    }
+    return -1;
+}
+/* ukf: states system noise matrix--------------------------------------------*/
+static void arc_ukf_Q(const rtk_t *rtk)
+{
+    int i,k,indx;
+    if (_UKF_Q_) {
+        for (i=0;i<3;i++) _UKF_Q_[i+_UKF_ANX_*i]=SQR(rtk->opt.prn[5]);
+        if (rtk->opt.tropopt==TROPOPT_EST
+            ||rtk->opt.tropopt==TROPOPT_ESTG) {  /* troposphere model states */
+            for (k=0;k<(rtk->opt.tropopt<TROPOPT_ESTG?1:3);k++) {
+                /* updates Q matrix */
+                if ((indx=arc_get_activex_index(rtk,IT(0,&rtk->opt)+k))<0)
+                    continue;
+                _UKF_Q_[indx+indx*_UKF_ANX_]=SQR(rtk->opt.prn[2]);
+                if ((indx=arc_get_activex_index(rtk,IT(1,&rtk->opt)+k))<0)
+                    continue;
+                _UKF_Q_[indx+indx*_UKF_ANX_]=SQR(rtk->opt.prn[2]);
+            }
+        }
+        if (rtk->opt.ionoopt==IONOOPT_EST) {
+            /* updates inon states system noise */
+            for (i=0;i<MAXSAT;i++) {
+                if (rtk->ceres_active_x[II(i+1,&rtk->opt)]) {
+                    if ((indx=(arc_get_activex_index(rtk,II(i+1,&rtk->opt))))<0)
+                        continue;
+                    /* iono states process noise */
+                    _UKF_Q_[indx+indx*_UKF_ANX_]=SQR(rtk->opt.prn[1]);
+                }
+            }
+        }
+        /* ambguity process noise */
+        for (i=0;i<MAXSAT;i++) {
+            if (rtk->ceres_active_x[IB(i+1,1,&rtk->opt)]==0)
+                continue;
+            if ((indx=arc_get_activex_index(rtk,IB(i+1,1,&rtk->opt)))<0)
+                continue;
+            _UKF_Q_[indx+indx*_UKF_ANX_]=SQR(rtk->opt.prn[0]);
+        }
+    }
+}
+/* ukf:set the states prior value and states covariance matrix----------------*/
+static void arc_ukf_get_prior_XP(const rtk_t *rtk,double *xp,double *Pp)
+{
+    int i,j,k;
+    for (i=0;i<_UKF_ANX_;i++) {
+        if (xp) xp[i]=rtk->x[_UKF_IX_[i]];
+        if (Pp) {
+            for (j=0;j<_UKF_ANX_;j++)
+                Pp[i*_UKF_ANX_+j]=rtk->P[rtk->nx*_UKF_IX_[i]+_UKF_IX_[j]];
+        }
+    }
+}
+/* given sat no and return its observation index------------------------------*/
+static int arc_ukf_get_dd_obsind(const rtk_t* rtk,int *ir, int*iu,const obsd_t*obs,
+                                  int rsat,int usat)
+{
+    int i,j;
+    for (i=0,j=0;i<_UKF_NR_+_UKF_NU_;i++) if (obs[i].sat==rsat) ir[j++]=i;
+    for (i=0,j=0;i<_UKF_NR_+_UKF_NU_;i++) if (obs[i].sat==usat) iu[j++]=i;
+    if (j==0) return 1;  /* no double-difference measurements */
+    return 0;            /* success,return double-difference measurements pair */
+}
+/* make double-differnce measurements-----------------------------------------*/
+static int arc_ukf_dd_meas(const rtk_t *rtk,const nav_t* nav,const obsd_t* obs)
+{
+    int i,j,k=0,iu[2]={0},ir[2]={0};
+
+    if (_UKF_MEAS_==NULL) return 0;  /* ukf struct must be initial */
+
+    for (j=0;j<2;j++)
+    for (i=0,k=0;i<_UKF_NV_*2;i++) {
+        if (arc_ukf_get_dd_obsind(rtk,ir,iu,obs,
+                                  rtk->sat[2*i],rtk->sat[2*i+1]))
+            continue;
+        if (j==0)    /* carry phase observation */
+            _UKF_MEAS_[k++]=obs[iu[0]].L[0]-obs[iu[1]].L[0]-
+                           (obs[ir[0]].L[0]-obs[ir[1]].L[0]);  /* just think about first frequency */
+        else if (j==1) {  /* pseudorange observation */
+            _UKF_MEAS_[k++]=obs[iu[0]].P[0]-obs[iu[1]].P[0]-
+                            (obs[ir[0]].P[0]-obs[ir[1]].P[0]); /* just think about first frequency */
+        }
+    }
+    if (k!=_UKF_NV_*2) return 0;  /* todo:this condition may be not best */
+    return 1;
 }
 /* ceres problem pointor asignment -------------------------------------------*/
 static void arc_ceres_init(double *H,const prcopt_t* opt,int nv,double* rs,
@@ -1527,7 +1657,7 @@ static double** arc_ceres_para(const rtk_t* rtk)
     int i;
     double **para;
 
-    /* allocate memeory */
+    /* allocate memory */
     for (i=0;i<MAXSTATES;i++) para[i]=(double*)malloc(sizeof(double));
 
     /* asigne parameter pointor */
@@ -1591,13 +1721,13 @@ static int arc_ceres_residual(void* m,double** parameters,double* residuals,
     }
     if (jacobians) {
         if (opt->ceres_cholesky) {
-            /* asignment jacobi matrix , this case is thinking about the covariance */
+            /* asignment jacobi matrix,this case is thinking about the covariance */
             for (i=0;i<_NX_;i++) for (j=0;j<_NV_;j++) {
                 if (jacobians[i]) jacobians[i][j]=-H[i*_NV_+j];
             }
         }
         else for (i=0;i<_NX_;i++) {
-            /* asignment jacobi matrix , don't think about the covariance */
+            /* asignment jacobi matrix,don't think about the covariance */
             if (jacobians[i]) for (j=0;j<_NV_;j++) jacobians[i][j]=-H[j*_NX_+i];
         }
     }
@@ -1664,7 +1794,10 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     for (i=0;i<rtk->nx;i++) rtk->ceres_active_x[i]=0;
 
     /* satellite positions/clocks */
-    satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
+    arc_satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
+
+    /* initial ukf solution needed data struct */
+    if (opt->ukf) arc_ukf_initial(rtk,nav,obs,nu,nr,rs,dts,e,svh,vflg);
 
     /* exclude measurements of eclipsing satellite (block IIA) */
     if (rtk->opt.posopt[3]) {
@@ -1672,7 +1805,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     }
     /* undifferenced residuals for base station */
     if (!arc_zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,rtk->rb,opt,1,
-               y+nu*nf*2,e+nu*3,azel+nu*2,rtk,NULL)) {
+                   y+nu*nf*2,e+nu*3,azel+nu*2,rtk,_UKF_Y_)) {
         arc_log(ARC_WARNING, "arc_relpos : initial base station position error\n");
 
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
@@ -1703,36 +1836,69 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* add 2 iterations for baseline-constraint moving-base */
     niter=opt->niter+(opt->mode==PMODE_MOVEB&&opt->baseline[0]>0.0?2:0);
 
-    if (opt->ceres==0) for (i=0;i<niter;i++) {
-        /* undifferenced residuals for rover */
-        if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk,NULL)) {
-            arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
-            stat=SOLQ_NONE;
-            break;
-        }
-        /* double-differenced residuals and partial derivatives */
-        if ((nv=arc_ddres(rtk,nav,dt,xp,Pp,sat,y,e,azel,iu,ir,ns,v,H,R,vflg,NULL,NULL))<1) {
-            arc_log(ARC_WARNING, "arc_relpos : no double-differenced residual\n");
-            stat=SOLQ_NONE;
-            break;
-        }
-        arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
-        /* adaptive Kaman filter */
-        if (opt->adapt_filter) {
-            if (!adap_kaman_filter(rtk,xp,Pp,H,v,R,rtk->nx,nv)) {
-                arc_log(ARC_WARNING, "arc_relpos : adaptive filter error (info=%d)\n", info);
+    if (opt->ceres==0) {
+        if (opt->ukf==0) for (i=0;i<niter;i++) {  /* iterations compute */
+            /* undifferenced residuals for rover */
+            if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk,NULL)) {
+                arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
                 stat=SOLQ_NONE;
                 break;
             }
-        }
-        /* kalman filter measurement update */
-        else {
-            if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv))) {
-                arc_log(ARC_WARNING, "arc_relpos : filter error (info=%d)\n", info);
+            /* double-differenced residuals and partial derivatives */
+            if ((nv=arc_ddres(rtk,nav,dt,xp,Pp,sat,y,e,azel,iu,ir,ns,v,H,R,vflg,NULL,NULL))<1) {
+                arc_log(ARC_WARNING, "arc_relpos : no double-differenced residual\n");
                 stat=SOLQ_NONE;
                 break;
             }
-            arc_log(ARC_INFO, "arc_relpos : x(%d)=", i+1);
+            arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
+            /* adaptive Kaman filter */
+            if (opt->adapt_filter) {
+                if (!adap_kaman_filter(rtk,xp,Pp,H,v,R,rtk->nx,nv)) {
+                    arc_log(ARC_WARNING, "arc_relpos : adaptive filter error (info=%d)\n",info);
+                    stat=SOLQ_NONE;
+                    break;
+                }
+            }
+            /* kalman filter measurement update */
+            else {
+                if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv))) {
+                    arc_log(ARC_WARNING, "arc_relpos : filter error (info=%d)\n",info);
+                    stat=SOLQ_NONE;
+                    break;
+                }
+                arc_log(ARC_INFO, "arc_relpos : x(%d)=",i+1);
+            }
+        }
+        else if (opt->ukf) {
+            /* undifferenced residuals for rover */
+            if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk,NULL)) {
+                arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
+                stat=SOLQ_NONE;
+            }
+            /* double-differenced residuals and partial derivatives */
+            if ((_UKF_NV_=arc_ddres(rtk,nav,dt,xp,Pp,sat,y,e,azel,iu,ir,
+                                    ns,v,NULL,_UKF_R_,vflg,NULL,NULL))<1) {
+                arc_log(ARC_WARNING, "arc_relpos : no double-differenced residual\n");
+                stat=SOLQ_NONE;
+            }
+            /* count active states index list */
+            arc_ukf_activex(rtk);
+            /* compute the states system noise matrix */
+            arc_ukf_Q(rtk);
+            /* creates a new unscented kalman filter structure */
+            arc_ukf_filter_new(_UKF_ANX_,_UKF_NV_,_UKF_Q_,_UKF_R_,
+                               arc_ukf_filterfunc,arc_ukf_measfunc,&rtk->ukf);
+            /* set the prior states and its covariance matrix */
+            arc_ukf_get_prior_XP(rtk,_UKF_XP_,_UKF_PP_);
+            arc_ukf_filter_reset(&rtk->ukf,_UKF_XP_,_UKF_PP_);
+
+            /* compute weight of ukf */
+            arc_ukf_filter_compute_weights(&rtk->ukf,rtk->opt.ukf_alpha,
+                                           rtk->opt.ukf_ZCount,rtk->opt.ukf_beta);
+            /* make double-difference measurements */
+
+            /* states filter */
+            arc_ukf_filter_update();
         }
     }
     else if (opt->ceres==ARC_CERES_SINGLE) {
@@ -1887,7 +2053,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     return stat!=SOLQ_NONE;
 }
 /* number of estimated states ------------------------------------------------*/
-extern int pppnx(const prcopt_t *opt)
+extern int arc_pppnx(const prcopt_t *opt)
 {
     return NX(opt);
 }
@@ -1908,8 +2074,8 @@ extern void arc_rtkinit(rtk_t *rtk, const prcopt_t *opt)
 
     rtk->sol=sol0;
     for (i=0;i<6;i++) rtk->rb[i]=0.0;
-    rtk->nx=opt->mode<=PMODE_FIXED?NX(opt):pppnx(opt);
-    rtk->na=opt->mode<=PMODE_FIXED?NR(opt):pppnx(opt);
+    rtk->nx=opt->mode<=PMODE_FIXED?NX(opt): arc_pppnx(opt);
+    rtk->na=opt->mode<=PMODE_FIXED?NR(opt): arc_pppnx(opt);
     rtk->tt=0.0;
     rtk->x=arc_zeros(rtk->nx,1);
     rtk->P=arc_zeros(rtk->nx,rtk->nx);

@@ -758,7 +758,10 @@ typedef struct {        /* processing options type */
     int ceres_windows;     /* choose the ceres problem windows solver */
 
     int adapt_filter;      /* adaptive Kaman filter */
-
+    int ukf;               /* Unscented Kalman filter */
+    double ukf_alpha;      /* ukf compute weight parameter-1 */
+    double ukf_ZCount;     /* ukf compute weight parameter-2 */
+    double ukf_beta;       /* ukf compute weight parameter-3 */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -867,7 +870,7 @@ typedef struct {        /* ambiguity control type */
 } ambc_t;
 
 /* ukf ---------------------------------------------*/
-typedef void (*filter_function)(double*, double *,double *);
+typedef void (*filter_function)(int, double *,double *);
 typedef void (*measure_function)(double *, double *);
 
 typedef struct                 /* filter structure */
@@ -924,6 +927,7 @@ typedef struct {         /* RTK control/result type */
     int *ceres_active_x;    /* ceres solver active states index in states list */
     double lam;             /* adaptive Kaman filter parameters */
     ukf_t ukf;              /* unscented Kalman filter */
+    int sat[MAXSAT];        /* hold the double-difference satellite pair,sat[2*i] is reference satellite */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */
@@ -1048,79 +1052,79 @@ extern int  geterp (const erp_t *erp, gtime_t time, double *val);
 extern int expath (const char *path, char *paths[], int nmax);
 
 /* positioning models --------------------------------------------------------*/
-extern double satwavelen(int sat, int frq, const nav_t *nav);
-extern double satazel(const double *pos, const double *e, double *azel);
-extern double geodist(const double *rs, const double *rr, double *e);
-extern void dops(int ns, const double *azel, double elmin, double *dop);
-extern void csmooth(obs_t *obs, int ns);
+extern double arc_satwavelen(int sat, int frq, const nav_t *nav);
+extern double arc_satazel(const double *pos, const double *e, double *azel);
+extern double arc_geodist(const double *rs, const double *rr, double *e);
+extern void arc_dops(int ns, const double *azel, double elmin, double *dop);
+extern void arc_csmooth(obs_t *obs, int ns);
 
 /* atmosphere models ---------------------------------------------------------*/
-extern double ionmodel(gtime_t t, const double *ion, const double *pos,
-                       const double *azel);
-extern double ionmapf(const double *pos, const double *azel);
-extern double ionppp(const double *pos, const double *azel, double re,
-                     double hion, double *pppos);
-extern double tropmodel(gtime_t time, const double *pos, const double *azel,
-                        double humi);
-extern double tropmapf(gtime_t time, const double *pos, const double *azel,
-                       double *mapfw);
-extern int ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
-                    const double *azel, int ionoopt, double *ion, double *var);
-extern int tropcorr(gtime_t time, const nav_t *nav, const double *pos,
-                    const double *azel, int tropopt, double *trp, double *var);
+extern double arc_ionmodel(gtime_t t, const double *ion, const double *pos,
+                           const double *azel);
+extern double arc_ionmapf(const double *pos, const double *azel);
+extern double arc_ionppp(const double *pos, const double *azel, double re,
+                         double hion, double *pppos);
+extern double arc_tropmodel(gtime_t time, const double *pos, const double *azel,
+                            double humi);
+extern double arc_tropmapf(gtime_t time, const double *pos, const double *azel,
+                           double *mapfw);
+extern int arc_ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
+                        const double *azel, int ionoopt, double *ion, double *var);
+extern int arc_tropcorr(gtime_t time, const nav_t *nav, const double *pos,
+                        const double *azel, int tropopt, double *trp, double *var);
 
 /* antenna models ------------------------------------------------------------*/
-extern int  readpcv(const char *file, pcvs_t *pcvs);
-extern pcv_t *searchpcv(int sat, const char *type, gtime_t time,
-                        const pcvs_t *pcvs);
-extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
-                     int opt, double *dant);
-extern void antmodel_s(const pcv_t *pcv, double nadir, double *dant);
+extern int  arc_readpcv(const char *file, pcvs_t *pcvs);
+extern pcv_t *arc_searchpcv(int sat, const char *type, gtime_t time,
+                            const pcvs_t *pcvs);
+extern void arc_antmodel(const pcv_t *pcv, const double *del, const double *azel,
+                         int opt, double *dant);
+extern void arc_antmodel_s(const pcv_t *pcv, double nadir, double *dant);
 
 /* earth tide models ---------------------------------------------------------*/
-extern void sunmoonpos(gtime_t tutc, const double *erpv, double *rsun,
-                       double *rmoon, double *gmst);
-extern void tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
-                     const double *odisp, double *dr);
+extern void arc_sunmoonpos(gtime_t tutc, const double *erpv, double *rsun,
+                           double *rmoon, double *gmst);
+extern void arc_tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
+                         const double *odisp, double *dr);
 
 /* rinex functions -----------------------------------------------------------*/
-extern int readrnx (const char *file, int rcv, const char *opt, obs_t *obs,
-                    nav_t *nav, sta_t *sta);
-extern int readrnxt(const char *file, int rcv, gtime_t ts, gtime_t te,
-                    double tint, const char *opt, obs_t *obs, nav_t *nav,
-                    sta_t *sta);
-extern int readrnxc(const char *file, nav_t *nav);
-extern int rtk_uncompress(const char *file, char *uncfile);
+extern int arc_readrnx(const char *file, int rcv, const char *opt, obs_t *obs,
+                       nav_t *nav, sta_t *sta);
+extern int arc_readrnxt(const char *file, int rcv, gtime_t ts, gtime_t te,
+                        double tint, const char *opt, obs_t *obs, nav_t *nav,
+                        sta_t *sta);
+extern int arc_readrnxc(const char *file, nav_t *nav);
+extern int arc_rtk_uncompress(const char *file, char *uncfile);
 
 /* ephemeris and clock functions ---------------------------------------------*/
-extern double eph2clk (gtime_t time, const eph_t  *eph);
-extern double geph2clk(gtime_t time, const geph_t *geph);
-extern double seph2clk(gtime_t time, const seph_t *seph);
-extern void eph2pos (gtime_t time, const eph_t  *eph,  double *rs, double *dts,
-                     double *var);
-extern void geph2pos(gtime_t time, const geph_t *geph, double *rs, double *dts,
-                     double *var);
-extern void seph2pos(gtime_t time, const seph_t *seph, double *rs, double *dts,
-                     double *var);
-extern int  peph2pos(gtime_t time, int sat, const nav_t *nav, int opt,
-                     double *rs, double *dts, double *var);
-extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
-                      double *dant);
-extern int  satpos(gtime_t time, gtime_t teph, int sat, int ephopt,
-                   const nav_t *nav, double *rs, double *dts, double *var,
-                   int *svh);
-extern void satposs(gtime_t time, const obsd_t *obs, int n, const nav_t *nav,
-                    int sateph, double *rs, double *dts, double *var, int *svh);
-extern void readsp3(const char *file, nav_t *nav, int opt);
-extern int  readsap(const char *file, gtime_t time, nav_t *nav);
-extern int  readdcb(const char *file, nav_t *nav, const sta_t *sta);
-extern int  readfcb(const char *file, nav_t *nav);
-extern void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts);
-extern int pppnx(const prcopt_t *opt);
+extern double arc_eph2clk(gtime_t time, const eph_t *eph);
+extern double arc_geph2clk(gtime_t time, const geph_t *geph);
+extern double arc_seph2clk(gtime_t time, const seph_t *seph);
+extern void arc_eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
+                        double *var);
+extern void arc_geph2pos(gtime_t time, const geph_t *geph, double *rs, double *dts,
+                         double *var);
+extern void arc_seph2pos(gtime_t time, const seph_t *seph, double *rs, double *dts,
+                         double *var);
+extern int  arc_peph2pos(gtime_t time, int sat, const nav_t *nav, int opt,
+                         double *rs, double *dts, double *var);
+extern void arc_satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
+                          double *dant);
+extern int  arc_satpos(gtime_t time, gtime_t teph, int sat, int ephopt,
+                       const nav_t *nav, double *rs, double *dts, double *var,
+                       int *svh);
+extern void arc_satposs(gtime_t time, const obsd_t *obs, int n, const nav_t *nav,
+                        int sateph, double *rs, double *dts, double *var, int *svh);
+extern void arc_readsp3(const char *file, nav_t *nav, int opt);
+extern int  arc_readsap(const char *file, gtime_t time, nav_t *nav);
+extern int  arc_readdcb(const char *file, nav_t *nav, const sta_t *sta);
+extern int  arc_readfcb(const char *file, nav_t *nav);
+extern void arc_alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts);
+extern int arc_pppnx(const prcopt_t *opt);
 
 /* integer ambiguity resolution ----------------------------------------------*/
-extern int lambda(int n, int m, const double *a, const double *Q, double *F,
-                  double *s);
+extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
+                      double *s);
 extern int lambda_reduction(int n, const double *Q, double *Z);
 extern int lambda_search(int n, int m, const double *a, const double *Q,
                          double *F, double *s);

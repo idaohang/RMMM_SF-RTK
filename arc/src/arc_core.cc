@@ -470,19 +470,19 @@ static void arc_readpreceph(char **infile, int n, const prcopt_t *prcopt,
     /* read precise ephemeris files */
     for (i=0;i<n;i++) {
         if (strstr(infile[i],"%r")||strstr(infile[i],"%b")) continue;
-        readsp3(infile[i],nav,0);
+        arc_readsp3(infile[i], nav, 0);
     }
     /* read precise clock files */
     for (i=0;i<n;i++) {
         if (strstr(infile[i],"%r")||strstr(infile[i],"%b")) continue;
-        readrnxc(infile[i],nav);
+        arc_readrnxc(infile[i], nav);
     }
     /* read satellite fcb files */
     for (i=0;i<n;i++) {
         if (strstr(infile[i],"%r")||strstr(infile[i],"%b")) continue;
         if ((ext=strrchr(infile[i],'.'))&&
             (!strcmp(ext,".fcb")||!strcmp(ext,".FCB"))) {
-            readfcb(infile[i],nav);
+            arc_readfcb(infile[i], nav);
         }
     }
     /* allocate sbas ephemeris */
@@ -527,8 +527,8 @@ static int arc_readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
             ind=index[i]; nobs=obs->n; 
         }
         /* read rinex obs and nav file */
-        if (readrnxt(infile[i],rcv,ts,te,ti,prcopt->rnxopt[rcv<=1?0:1],obs,nav,
-                     rcv<=2?sta+rcv-1:NULL)<0) {
+        if (arc_readrnxt(infile[i], rcv, ts, te, ti, prcopt->rnxopt[rcv <= 1 ? 0 : 1], obs, nav,
+                         rcv <= 2 ? sta + rcv - 1 : NULL)<0) {
             arc_log(ARC_WARNING, "insufficient memory\n");
             return 0;
         }
@@ -637,12 +637,12 @@ static int arc_openses(const prcopt_t *popt, const solopt_t *sopt,
     arc_log(ARC_INFO, "arc_openses :\n");
     
     /* read satellite antenna parameters */
-    if (*fopt->satantp&&!(readpcv(fopt->satantp,pcvs))) {
+    if (*fopt->satantp&&!(arc_readpcv(fopt->satantp, pcvs))) {
         arc_log(ARC_WARNING, "sat antenna pcv read error: %s\n", fopt->satantp);
         return 0;
     }
     /* read receiver antenna parameters */
-    if (*fopt->rcvantp&&!(readpcv(fopt->rcvantp,pcvr))) {
+    if (*fopt->rcvantp&&!(arc_readpcv(fopt->rcvantp, pcvr))) {
         arc_log(ARC_WARNING, "rec antenna pcv read error: %s\n", fopt->rcvantp);
         return 0;
     }
@@ -687,7 +687,7 @@ static void arc_setpcv(gtime_t time, prcopt_t *popt, nav_t *nav, const pcvs_t *p
     /* set satellite antenna parameters */
     for (i=0;i<MAXSAT;i++) {
         if (!(satsys(i+1,NULL)&popt->navsys)) continue;
-        if (!(pcv=searchpcv(i+1,"",time,pcvs))) {
+        if (!(pcv= arc_searchpcv(i + 1, "", time, pcvs))) {
             satno2id(i+1,id);
             arc_log(ARC_WARNING, "no satellite antenna pcv: %s\n", id);
             continue;
@@ -708,7 +708,7 @@ static void arc_setpcv(gtime_t time, prcopt_t *popt, nav_t *nav, const pcvs_t *p
                 for (j=0;j<3;j++) popt->antdel[i][j]=stas[i].del[j];
             }
         }
-        if (!(pcv=searchpcv(0,popt->anttype[i],time,pcvr))) {
+        if (!(pcv= arc_searchpcv(0, popt->anttype[i], time, pcvr))) {
             arc_log(ARC_ERROR, "no receiver antenna pcv: %s\n", popt->anttype[i]);
             *popt->anttype[i]='\0';
             continue;
@@ -753,7 +753,7 @@ static int arc_execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
     arc_log(ARC_INFO, "read dcb parameters : %s \n", fopt->dcb);
     if (*fopt->dcb) {
         reppath(fopt->dcb,path,ts,"","");
-        readdcb(path,&navs,stas);
+        arc_readdcb(path, &navs, stas);
     }
     /* set antenna paramters */
     arc_log(ARC_INFO, "set antenna paramters \n");

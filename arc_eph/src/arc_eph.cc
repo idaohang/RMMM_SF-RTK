@@ -59,7 +59,7 @@ static double var_urassr(int ura)
 * return : none
 * notes  : see ref [1],[7],[8]
 *-----------------------------------------------------------------------------*/
-extern void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts)
+extern void arc_alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts)
 {
     double tk,M,E,Ek,sinE,cosE,u,r,i,O,x,y,sinO,cosO,cosi,mu;
     int n;
@@ -101,7 +101,7 @@ extern void alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts)
 * notes  : see ref [1],[7],[8]
 *          satellite clock does not include relativity correction and tdg
 *-----------------------------------------------------------------------------*/
-extern double eph2clk(gtime_t time, const eph_t *eph)
+extern double arc_eph2clk(gtime_t time, const eph_t *eph)
 {
     double t;
     int i;
@@ -128,8 +128,8 @@ extern double eph2clk(gtime_t time, const eph_t *eph)
 *          satellite clock includes relativity correction without code bias
 *          (tgd or bgd)
 *-----------------------------------------------------------------------------*/
-extern void eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
-                    double *var)
+extern void arc_eph2pos(gtime_t time, const eph_t *eph, double *rs, double *dts,
+                        double *var)
 {
     double tk,M,E,Ek,sinE,cosE,u,r,i,O,sin2u,cos2u,x,y,sinO,cosO,cosi,mu,omge;
     double xg,yg,zg,sino,coso;
@@ -235,7 +235,7 @@ static void glorbit(double t, double *x, const double *acc)
 * return : satellite clock bias (s)
 * notes  : see ref [2]
 *-----------------------------------------------------------------------------*/
-extern double geph2clk(gtime_t time, const geph_t *geph)
+extern double arc_geph2clk(gtime_t time, const geph_t *geph)
 {
     double t;
     int i;
@@ -259,8 +259,8 @@ extern double geph2clk(gtime_t time, const geph_t *geph)
 * return : none
 * notes  : see ref [2]
 *-----------------------------------------------------------------------------*/
-extern void geph2pos(gtime_t time, const geph_t *geph, double *rs, double *dts,
-                     double *var)
+extern void arc_geph2pos(gtime_t time, const geph_t *geph, double *rs, double *dts,
+                         double *var)
 {
     double t,tt,x[6];
     int i;
@@ -290,7 +290,7 @@ extern void geph2pos(gtime_t time, const geph_t *geph, double *rs, double *dts,
 * return : satellite clock bias (s)
 * notes  : see ref [3]
 *-----------------------------------------------------------------------------*/
-extern double seph2clk(gtime_t time, const seph_t *seph)
+extern double arc_seph2clk(gtime_t time, const seph_t *seph)
 {
     double t;
     int i;
@@ -314,8 +314,8 @@ extern double seph2clk(gtime_t time, const seph_t *seph)
 * return : none
 * notes  : see ref [3]
 *-----------------------------------------------------------------------------*/
-extern void seph2pos(gtime_t time, const seph_t *seph, double *rs, double *dts,
-                     double *var)
+extern void arc_seph2pos(gtime_t time, const seph_t *seph, double *rs, double *dts,
+                         double *var)
 {
     double t;
     int i;
@@ -417,7 +417,7 @@ static int ephclk(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     
     if (sys==SYS_GPS||sys==SYS_GAL||sys==SYS_QZS||sys==SYS_CMP) {
         if (!(eph=seleph(teph,sat,-1,nav))) return 0;
-        *dts=eph2clk(time,eph);
+        *dts= arc_eph2clk(time, eph);
     }
     else return 0;
     
@@ -441,10 +441,10 @@ static int ephpos(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     
     if (sys==SYS_GPS||sys==SYS_GAL||sys==SYS_QZS||sys==SYS_CMP) {
         if (!(eph=seleph(teph,sat,iode,nav))) return 0;
-        
-        eph2pos(time,eph,rs,dts,var);
+
+        arc_eph2pos(time, eph, rs, dts, var);
         time=timeadd(time,tt);
-        eph2pos(time,eph,rst,dtst,var);
+        arc_eph2pos(time, eph, rst, dtst, var);
         *svh=eph->svh;
     }
     else return 0;
@@ -471,9 +471,9 @@ static int ephpos(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
 * notes  : satellite position is referenced to antenna phase center
 *          satellite clock does not include code bias correction (tgd or bgd)
 *-----------------------------------------------------------------------------*/
-extern int satpos(gtime_t time, gtime_t teph, int sat, int ephopt,
-                  const nav_t *nav, double *rs, double *dts, double *var,
-                  int *svh)
+extern int arc_satpos(gtime_t time, gtime_t teph, int sat, int ephopt,
+                      const nav_t *nav, double *rs, double *dts, double *var,
+                      int *svh)
 {
     arc_log(ARC_INFO, "satpos  : time=%s sat=%2d ephopt=%d\n", time_str(time, 3), sat, ephopt);
     
@@ -482,7 +482,7 @@ extern int satpos(gtime_t time, gtime_t teph, int sat, int ephopt,
     switch (ephopt) {
         case EPHOPT_BRDC  : return ephpos     (time,teph,sat,nav,-1,rs,dts,var,svh);
         case EPHOPT_PREC  :
-            if (!peph2pos(time,sat,nav,1,rs,dts,var)) break; else return 1;
+            if (!arc_peph2pos(time, sat, nav, 1, rs, dts, var)) break; else return 1;
     }
     *svh=-1;
     return 0;
@@ -659,8 +659,8 @@ static int pephclk(gtime_t time, int sat, const nav_t *nav, double *dts,
 *          any pseudorange and broadcast ephemeris are always needed to get
 *          signal transmission time
 *-----------------------------------------------------------------------------*/
-extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
-                    int ephopt, double *rs, double *dts, double *var, int *svh)
+extern void arc_satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
+                        int ephopt, double *rs, double *dts, double *var, int *svh)
 {
     gtime_t time[2*MAXOBS]={{0}};
     double dt,pr;
@@ -691,8 +691,8 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
         time[i]=timeadd(time[i],-dt);
         
         /* satellite position and clock at transmission time */
-        if (!satpos(time[i],teph,obs[i].sat,ephopt,nav,rs+i*6,dts+i*2,var+i,
-                    svh+i)) {
+        if (!arc_satpos(time[i], teph, obs[i].sat, ephopt, nav, rs + i * 6, dts + i * 2, var + i,
+                        svh + i)) {
             arc_log(ARC_INFO, "no ephemeris %s sat=%2d\n", time_str(time[i], 3), obs[i].sat);
             continue;
         }
@@ -720,8 +720,8 @@ extern void satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav,
 *                                 {dx,dy,dz} (m) (iono-free LC value)
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
-                      double *dant)
+extern void arc_satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
+                          double *dant)
 {
     const double *lam=nav->lam[sat-1];
     const pcv_t *pcv=nav->pcvs+sat-1;
@@ -732,7 +732,7 @@ extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
     arc_log(ARC_INFO, "satantoff: time=%s sat=%2d\n", time_str(time, 3), sat);
     
     /* sun position in ecef */
-    sunmoonpos(gpst2utc(time),erpv,rsun,NULL,&gmst);
+    arc_sunmoonpos(gpst2utc(time), erpv, rsun, NULL, &gmst);
     
     /* unit vectors of satellite fixed coordinates */
     for (i=0;i<3;i++) r[i]=-rs[i];
@@ -776,8 +776,8 @@ extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
 *          nav->nc must be set by calling readsp3(), readrnx() or readrnxt()
 *          if precise clocks are not set, clocks in sp3 are used instead
 *-----------------------------------------------------------------------------*/
-extern int peph2pos(gtime_t time, int sat, const nav_t *nav, int opt,
-                    double *rs, double *dts, double *var)
+extern int arc_peph2pos(gtime_t time, int sat, const nav_t *nav, int opt,
+                        double *rs, double *dts, double *var)
 {
     gtime_t time_tt;
     double rss[3],rst[3],dtss[1],dtst[1],dant[3]={0},vare=0.0,varc=0.0,tt=1E-3;
@@ -797,7 +797,7 @@ extern int peph2pos(gtime_t time, int sat, const nav_t *nav, int opt,
     
     /* satellite antenna offset correction */
     if (opt) {
-        satantoff(time,rss,sat,nav,dant);
+        arc_satantoff(time, rss, sat, nav, dant);
     }
     for (i=0;i<3;i++) {
         rs[i  ]=rss[i]+dant[i];

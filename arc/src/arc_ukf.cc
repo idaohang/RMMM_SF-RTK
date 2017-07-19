@@ -21,6 +21,7 @@
  * @brief ARC-SRTK Particle Filter Some Const-Variable and Marco
  * @author sujinglan
  */
+#include <rtklib.h>
 #include "arc.h"
 
 #define MAXSTATES 100
@@ -317,7 +318,7 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     /* ================================= */
     /* propagate sigma points:y=f(xi) ,return khi[]*/
     for (i=0;i<2*l+1;i++) {  /* sigma point numbers */
-        filter->ffun(&(filter->khi[i*l]),&(filter->sigma_point[i*l]),u);
+        filter->ffun(filter->state_dim,&(filter->khi[i*l]),&(filter->sigma_point[i*l]));
     }
     /* compute state prediction xm */
     for (i=0;i<l;i++) {  /* states numbers */

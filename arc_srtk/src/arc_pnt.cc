@@ -75,21 +75,21 @@ static double arc_prange(const obsd_t *obs, const nav_t *nav, const double *azel
 *          double *var      O   ionospheric delay (L1) variance (m^2)
 * return : status(1:ok,0:error)
 *-----------------------------------------------------------------------------*/
-extern int ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
-                    const double *azel, int ionoopt, double *ion, double *var)
+extern int arc_ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
+                        const double *azel, int ionoopt, double *ion, double *var)
 {
     arc_log(ARC_INFO, "ionocorr: time=%s opt=%d sat=%2d pos=%.3f %.3f azel=%.3f %.3f\n",
             time_str(time, 3), ionoopt, sat, pos[0] * R2D, pos[1] * R2D, azel[0] * R2D,
             azel[1] * R2D);
     /* broadcast model */
     if (ionoopt==IONOOPT_BRDC) {
-        *ion=ionmodel(time,nav->ion_gps,pos,azel);
+        *ion= arc_ionmodel(time, nav->ion_gps, pos, azel);
         *var=SQR(*ion*ERR_BRDCI);
         return 1;
     }
     /* qzss broadcast model */
     if (ionoopt==IONOOPT_QZS&& arc_norm(nav->ion_qzs, 8)>0.0) {
-        *ion=ionmodel(time,nav->ion_qzs,pos,azel);
+        *ion= arc_ionmodel(time, nav->ion_qzs, pos, azel);
         *var=SQR(*ion*ERR_BRDCI);
         return 1;
     }
@@ -108,8 +108,8 @@ extern int ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
 *          double *var      O   tropospheric delay variance (m^2)
 * return : status(1:ok,0:error)
 *-----------------------------------------------------------------------------*/
-extern int tropcorr(gtime_t time, const nav_t *nav, const double *pos,
-                    const double *azel, int tropopt, double *trp, double *var)
+extern int arc_tropcorr(gtime_t time, const nav_t *nav, const double *pos,
+                        const double *azel, int tropopt, double *trp, double *var)
 {
     arc_log(ARC_INFO, "tropcorr: time=%s opt=%d pos=%.3f %.3f azel=%.3f %.3f\n",
             time_str(time, 3), tropopt, pos[0] * R2D, pos[1] * R2D, azel[0] * R2D,
@@ -118,7 +118,7 @@ extern int tropcorr(gtime_t time, const nav_t *nav, const double *pos,
     /* saastamoinen model */
     if (tropopt==TROPOPT_SAAS
         ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
-        *trp=tropmodel(time,pos,azel,REL_HUMI);
+        *trp= arc_tropmodel(time, pos, azel, REL_HUMI);
         *var=SQR(ERR_SAAS/(sin(azel[1])+0.1));
         return 1;
     }
@@ -198,8 +198,8 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
             continue;
         }
         /* geometric distance/azimuth/elevation angle */
-        if ((r=geodist(rs+i*6,rr,e))<=0.0||
-            satazel(pos,e,azel+i*2)<opt->elmin) continue;
+        if ((r= arc_geodist(rs + i * 6, rr, e))<=0.0||
+                arc_satazel(pos, e, azel + i * 2)<opt->elmin) continue;
         
         /* psudorange with code bias correction */
         if ((P=arc_prange(obs+i,nav,azel+i*2,iter,opt,&vmeas))==0.0) continue;
@@ -208,16 +208,16 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
         if (satexclude(obs[i].sat,svh[i],opt)) continue;
         
         /* ionospheric corrections */
-        if (!ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
-                      iter>0?opt->ionoopt:IONOOPT_BRDC,&dion,&vion)) continue;
+        if (!arc_ionocorr(obs[i].time, nav, obs[i].sat, pos, azel + i * 2,
+                          iter > 0 ? opt->ionoopt : IONOOPT_BRDC, &dion, &vion)) continue;
         
         /* GPS-L1 -> L1/B1 */
         if ((lam_L1=nav->lam[obs[i].sat-1][0])>0.0) {
             dion*=SQR(lam_L1/lam_carr[0]);
         }
         /* tropospheric corrections */
-        if (!tropcorr(obs[i].time,nav,pos,azel+i*2,
-                      iter>0?opt->tropopt:TROPOPT_SAAS,&dtrp,&vtrp)) {
+        if (!arc_tropcorr(obs[i].time, nav, pos, azel + i * 2,
+                          iter > 0 ? opt->tropopt : TROPOPT_SAAS, &dtrp, &vtrp)) {
             continue;
         }
         /* pseudorange residual */
@@ -273,7 +273,7 @@ static int arc_valsol(const double *azel, const int *vsat, int n,
         azels[1+ns*2]=azel[1+i*2];
         ns++;
     }
-    dops(ns,azels,opt->elmin,dop);
+    arc_dops(ns, azels, opt->elmin, dop);
     if (dop[0]<=0.0||dop[0]>opt->maxgdop) {
         sprintf(msg,"gdop error nv=%d gdop=%.1f",nv,dop[0]);
         return 0;
@@ -534,7 +534,7 @@ extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
         opt_.tropopt=TROPOPT_SAAS;
     }
     /* satellite positons, velocities and clocks */
-    satposs(sol->time,obs,n,nav,opt_.sateph,rs,dts,var,svh);
+    arc_satposs(sol->time, obs, n, nav, opt_.sateph, rs, dts, var, svh);
     
     /* estimate receiver position with pseudorange */
     stat=arc_estpos(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);

@@ -116,6 +116,9 @@ extern void arc_ukf_filter_reset(ukf_t *filter, double *x0,double *PO);
 extern void arc_ukf_filter_get_state(ukf_t *filter, double *x, double *P);
 extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,double*F,
                                   double *G);
+extern int arc_ukf_filter_new(unsigned int state_dim,unsigned int measure_dim,
+                              double *Q,double *R,filter_function ffun,
+                              measure_function mfun,ukf_t *ukf);
 #ifdef __cplusplus
 }
 #endif

@@ -1874,7 +1874,7 @@ static int readantex(const char *file, pcvs_t *pcvs)
 *          see reference [3]
 *          only support non-azimuth-depedent parameters
 *-----------------------------------------------------------------------------*/
-extern int readpcv(const char *file, pcvs_t *pcvs)
+extern int arc_readpcv(const char *file, pcvs_t *pcvs)
 {
     pcv_t *pcv;
     char *ext,file_[1024];
@@ -1907,8 +1907,8 @@ extern int readpcv(const char *file, pcvs_t *pcvs)
 *          pcvs_t *pcvs       IO  antenna parameters
 * return : antenna parameter (NULL: no antenna)
 *-----------------------------------------------------------------------------*/
-extern pcv_t *searchpcv(int sat, const char *type, gtime_t time,
-                        const pcvs_t *pcvs)
+extern pcv_t *arc_searchpcv(int sat, const char *type, gtime_t time,
+                            const pcvs_t *pcvs)
 {
     pcv_t *pcv;
     char buff[MAXANT],*types[2],*p;
@@ -2268,7 +2268,7 @@ extern void uniqnav(nav_t *nav)
     
     /* update carrier wave length */
     for (i=0;i<MAXSAT;i++) for (j=0;j<NFREQ;j++) {
-        nav->lam[i][j]=satwavelen(i+1,j,nav);
+        nav->lam[i][j]= arc_satwavelen(i + 1, j, nav);
     }
 }
 /* compare observation data -------------------------------------------------*/
@@ -2813,7 +2813,7 @@ extern int reppaths(const char *path, char *rpath[], int nmax, gtime_t ts,
 *          nav_t  *nav      I   navigation messages
 * return : carrier wave length (m) (0.0: error)
 *-----------------------------------------------------------------------------*/
-extern double satwavelen(int sat, int frq, const nav_t *nav)
+extern double arc_satwavelen(int sat, int frq, const nav_t *nav)
 {
     const double freq_glo[]={FREQ1_GLO,FREQ2_GLO};
     const double dfrq_glo[]={DFRQ1_GLO,DFRQ2_GLO};
@@ -2854,7 +2854,7 @@ extern double satwavelen(int sat, int frq, const nav_t *nav)
 * return : geometric distance (m) (0>:error/no satellite position)
 * notes  : distance includes sagnac effect correction
 *-----------------------------------------------------------------------------*/
-extern double geodist(const double *rs, const double *rr, double *e)
+extern double arc_geodist(const double *rs, const double *rr, double *e)
 {
     double r;
     int i;
@@ -2873,7 +2873,7 @@ extern double geodist(const double *rs, const double *rr, double *e)
 *                               (0.0<=azel[0]<2*pi,-pi/2<=azel[1]<=pi/2)
 * return : elevation angle (rad)
 *-----------------------------------------------------------------------------*/
-extern double satazel(const double *pos, const double *e, double *azel)
+extern double arc_satazel(const double *pos, const double *e, double *azel)
 {
     double az=0.0,el=PI/2.0,enu[3];
     
@@ -2897,7 +2897,7 @@ extern double satazel(const double *pos, const double *e, double *azel)
 *-----------------------------------------------------------------------------*/
 #define SQRT(x)     ((x)<0.0?0.0:sqrt(x))
 
-extern void dops(int ns, const double *azel, double elmin, double *dop)
+extern void arc_dops(int ns, const double *azel, double elmin, double *dop)
 {
     double H[4*MAXSAT],Q[16],cosel,sinel;
     int i,n;
@@ -2930,8 +2930,8 @@ extern void dops(int ns, const double *azel, double elmin, double *dop)
 *          double *azel     I   azimuth/elevation angle {az,el} (rad)
 * return : ionospheric delay (L1) (m)
 *-----------------------------------------------------------------------------*/
-extern double ionmodel(gtime_t t, const double *ion, const double *pos,
-                       const double *azel)
+extern double arc_ionmodel(gtime_t t, const double *ion, const double *pos,
+                           const double *azel)
 {
     const double ion_default[]={ /* 2004/1/1 */
         0.1118E-07,-0.7451E-08,-0.5961E-07, 0.1192E-06,
@@ -2977,7 +2977,7 @@ extern double ionmodel(gtime_t t, const double *ion, const double *pos,
 *          double *azel     I   azimuth/elevation angle {az,el} (rad)
 * return : ionospheric mapping function
 *-----------------------------------------------------------------------------*/
-extern double ionmapf(const double *pos, const double *azel)
+extern double arc_ionmapf(const double *pos, const double *azel)
 {
     if (pos[2]>=HION) return 1.0;
     return 1.0/cos(asin((RE_WGS84+pos[2])/(RE_WGS84+HION)*sin(PI/2.0-azel[1])));
@@ -2993,8 +2993,8 @@ extern double ionmapf(const double *pos, const double *azel)
 * notes  : see ref [2], only valid on the earth surface
 *          fixing bug on ref [2] A.4.4.10.1 A-22,23
 *-----------------------------------------------------------------------------*/
-extern double ionppp(const double *pos, const double *azel, double re,
-                     double hion, double *posp)
+extern double arc_ionppp(const double *pos, const double *azel, double re,
+                         double hion, double *posp)
 {
     double cosaz,rp,ap,sinap,tanap;
     
@@ -3022,8 +3022,8 @@ extern double ionppp(const double *pos, const double *azel, double re,
 *          double humi      I   relative humidity
 * return : tropospheric delay (m)
 *-----------------------------------------------------------------------------*/
-extern double tropmodel(gtime_t time, const double *pos, const double *azel,
-                        double humi)
+extern double arc_tropmodel(gtime_t time, const double *pos, const double *azel,
+                            double humi)
 {
     const double temp0=15.0; /* temparature at sea level */
     double hgt,pres,temp,e,z,trph,trpw;
@@ -3045,19 +3045,19 @@ extern double tropmodel(gtime_t time, const double *pos, const double *azel,
 }
 #ifndef IERS_MODEL
 
-static double interpc(const double coef[], double lat)
+static double arc_interpc(const double coef[], double lat)
 {
     int i=(int)(lat/15.0);
     if (i<1) return coef[0]; else if (i>4) return coef[4];
     return coef[i-1]*(1.0-lat/15.0+i)+coef[i]*(lat/15.0-i);
 }
-static double mapf(double el, double a, double b, double c)
+static double arc_mapf(double el, double a, double b, double c)
 {
     double sinel=sin(el);
     return (1.0+a/(1.0+b/(1.0+c)))/(sinel+(a/(sinel+b/(sinel+c))));
 }
-static double nmf(gtime_t time, const double pos[], const double azel[],
-                  double *mapfw)
+static double arc_nmf(gtime_t time, const double pos[], const double azel[],
+                      double *mapfw)
 {
     /* ref [5] table 3 */
     /* hydro-ave-a,b,c, hydro-amp-a,b,c, wet-a,b,c at latitude 15,30,45,60,75 */
@@ -3090,15 +3090,15 @@ static double nmf(gtime_t time, const double pos[], const double azel[],
     lat=fabs(lat);
     
     for (i=0;i<3;i++) {
-        ah[i]=interpc(coef[i  ],lat)-interpc(coef[i+3],lat)*cosy;
-        aw[i]=interpc(coef[i+6],lat);
+        ah[i]=arc_interpc(coef[i  ],lat)-arc_interpc(coef[i+3],lat)*cosy;
+        aw[i]=arc_interpc(coef[i+6],lat);
     }
     /* ellipsoidal height is used instead of height above sea level */
-    dm=(1.0/sin(el)-mapf(el,aht[0],aht[1],aht[2]))*hgt/1E3;
+    dm=(1.0/sin(el)-arc_mapf(el,aht[0],aht[1],aht[2]))*hgt/1E3;
     
-    if (mapfw) *mapfw=mapf(el,aw[0],aw[1],aw[2]);
+    if (mapfw) *mapfw=arc_mapf(el,aw[0],aw[1],aw[2]);
     
-    return mapf(el,ah[0],ah[1],ah[2])+dm;
+    return arc_mapf(el,ah[0],ah[1],ah[2])+dm;
 }
 #endif /* !IERS_MODEL */
 
@@ -3114,8 +3114,8 @@ static double nmf(gtime_t time, const double pos[], const double azel[],
 *          paper is obtained from:
 *          ftp://web.haystack.edu/pub/aen/nmf/NMF_JGR.pdf
 *-----------------------------------------------------------------------------*/
-extern double tropmapf(gtime_t time, const double pos[], const double azel[],
-                       double *mapfw)
+extern double arc_tropmapf(gtime_t time, const double pos[], const double azel[],
+                           double *mapfw)
 {
 #ifdef IERS_MODEL
     const double ep[]={2000,1,1,12,0,0};
@@ -3161,8 +3161,8 @@ static double interpvar(double ang, const double *var)
 * return : none
 * notes  : current version does not support azimuth dependent terms
 *-----------------------------------------------------------------------------*/
-extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
-                     int opt, double *dant)
+extern void arc_antmodel(const pcv_t *pcv, const double *del, const double *azel,
+                         int opt, double *dant)
 {
     double e[3],off[3],cosel=cos(azel[1]);
     int i,j;
@@ -3187,7 +3187,7 @@ extern void antmodel(const pcv_t *pcv, const double *del, const double *azel,
 *          double *dant     O   range offsets for each frequency (m)
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void antmodel_s(const pcv_t *pcv, double nadir, double *dant)
+extern void arc_antmodel_s(const pcv_t *pcv, double nadir, double *dant)
 {
     int i;
 
@@ -3253,8 +3253,8 @@ static void sunmoonpos_eci(gtime_t tut, double *rsun, double *rmoon)
 *          double *gmst     O   gmst (rad)
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void sunmoonpos(gtime_t tutc, const double *erpv, double *rsun,
-                       double *rmoon, double *gmst)
+extern void arc_sunmoonpos(gtime_t tutc, const double *erpv, double *rsun,
+                           double *rmoon, double *gmst)
 {
     gtime_t tut;
     double rs[3],rm[3],U[9],gmst_;
@@ -3280,7 +3280,7 @@ extern void sunmoonpos(gtime_t tutc, const double *erpv, double *rsun,
 *          int    ns        I   smoothing window size (epochs)
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void csmooth(obs_t *obs, int ns)
+extern void arc_csmooth(obs_t *obs, int ns)
 {
     double Ps[2][MAXSAT][NFREQ]={{{0}}},Lp[2][MAXSAT][NFREQ]={{{0}}},dcp;
     int i,j,s,r,n[2][MAXSAT][NFREQ]={{{0}}};
@@ -3496,8 +3496,8 @@ static void arc_tide_pole(gtime_t tut, const double *pos, const double *erpv,
 *          see ref [4] 5.2.1, 5.2.2, 5.2.3
 *          ver.2.4.0 does not use ocean loading and pole tide corrections
 *-----------------------------------------------------------------------------*/
-extern void tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
-                     const double *odisp, double *dr)
+extern void arc_tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
+                         const double *odisp, double *dr)
 {
     gtime_t tut;
     double pos[2],E[9],drt[3],denu[3],rs[3],rm[3],gmst,erpv[5]={0};
@@ -3525,7 +3525,7 @@ extern void tidedisp(gtime_t tutc, const double *rr, int opt, const erp_t *erp,
     if (opt&1) { /* solid earth tides */
         
         /* sun and moon position in ecef */
-        sunmoonpos(tutc,erpv,rs,rm,&gmst);
+        arc_sunmoonpos(tutc, erpv, rs, rm, &gmst);
         
 #ifdef IERS_MODEL
         time2epoch(tutc,ep);
@@ -3593,7 +3593,7 @@ extern void settime(gtime_t time) {}
 * note   : creates uncompressed file in tempolary directory
 *          gzip and crx2rnx commands have to be installed in commands path
 *-----------------------------------------------------------------------------*/
-extern int rtk_uncompress(const char *file, char *uncfile)
+extern int arc_rtk_uncompress(const char *file, char *uncfile)
 {
     int stat=0;
     char *p,cmd[2048]="",tmpfile[1024]="",buff[1024],*fname,*dir="";

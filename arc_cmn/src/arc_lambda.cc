@@ -145,8 +145,8 @@ static int search(int n, int m, const double *L, const double *D,
 * return : status (0:ok,other:error)
 * notes  : matrix stored by column-major order (fortran convension)
 *-----------------------------------------------------------------------------*/
-extern int lambda(int n, int m, const double *a, const double *Q, double *F,
-                  double *s)
+extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
+                      double *s)
 {
     int info;
     double *L,*D,*Z,*z,*E;

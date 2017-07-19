@@ -1388,7 +1388,7 @@ static int readrnxfile(const char *file, gtime_t ts, gtime_t te, double tint,
     if (sta) init_sta(sta);
     
     /* uncompress file */
-    if ((cstat=rtk_uncompress(file,tmpfile))<0) {
+    if ((cstat= arc_rtk_uncompress(file, tmpfile))<0) {
         arc_log(ARC_WARNING, "rinex file uncompact error: %s\n", file);
         return 0;
     }
@@ -1440,9 +1440,9 @@ static int readrnxfile(const char *file, gtime_t ts, gtime_t te, double tint,
 *                               (sys=G:GPS,R:GLO,E:GAL,J:QZS,C:BDS,I:IRN,S:SBS)
 *
 *-----------------------------------------------------------------------------*/
-extern int readrnxt(const char *file, int rcv, gtime_t ts, gtime_t te,
-                    double tint, const char *opt, obs_t *obs, nav_t *nav,
-                    sta_t *sta)
+extern int arc_readrnxt(const char *file, int rcv, gtime_t ts, gtime_t te,
+                        double tint, const char *opt, obs_t *obs, nav_t *nav,
+                        sta_t *sta)
 {
     int i,n,stat=0;
     const char *p;
@@ -1477,14 +1477,14 @@ extern int readrnxt(const char *file, int rcv, gtime_t ts, gtime_t te,
     
     return stat;
 }
-extern int readrnx(const char *file, int rcv, const char *opt, obs_t *obs,
-                   nav_t *nav, sta_t *sta)
+extern int arc_readrnx(const char *file, int rcv, const char *opt, obs_t *obs,
+                       nav_t *nav, sta_t *sta)
 {
     gtime_t t={0};
 
     arc_log(ARC_INFO, "readrnx : file=%s rcv=%d\n", file, rcv);
     
-    return readrnxt(file,rcv,t,t,0.0,opt,obs,nav,sta);
+    return arc_readrnxt(file, rcv, t, t, 0.0, opt, obs, nav, sta);
 }
 /* compare precise clock -----------------------------------------------------*/
 static int cmppclk(const void *p1, const void *p2)
@@ -1533,7 +1533,7 @@ static void combpclk(nav_t *nav)
 *          nav_t *nav    IO     navigation data    (NULL: no input)
 * return : number of precise clock
 *-----------------------------------------------------------------------------*/
-extern int readrnxc(const char *file, nav_t *nav)
+extern int arc_readrnxc(const char *file, nav_t *nav)
 {
     gtime_t t={0};
     int i,n,index=0,stat=1;
@@ -1766,7 +1766,7 @@ static void combpeph(nav_t *nav, int opt)
 *          function
 *          only files with extensions of .sp3, .SP3, .eph* and .EPH* are read
 *-----------------------------------------------------------------------------*/
-extern void readsp3(const char *file, nav_t *nav, int opt)
+extern void arc_readsp3(const char *file, nav_t *nav, int opt)
 {
     FILE *fp;
     gtime_t time={0};
@@ -1816,7 +1816,7 @@ extern void readsp3(const char *file, nav_t *nav, int opt)
 * return : status (1:ok,0:error)
 * notes  : only support antex format for the antenna parameter file
 *-----------------------------------------------------------------------------*/
-extern int readsap(const char *file, gtime_t time, nav_t *nav)
+extern int arc_readsap(const char *file, gtime_t time, nav_t *nav)
 {
     pcvs_t pcvs={0};
     pcv_t pcv0={0},*pcv;
@@ -1824,10 +1824,10 @@ extern int readsap(const char *file, gtime_t time, nav_t *nav)
 
     arc_log(ARC_INFO, "readsap : file=%s time=%s\n", file, time_str(time, 0));
     
-    if (!readpcv(file,&pcvs)) return 0;
+    if (!arc_readpcv(file, &pcvs)) return 0;
     
     for (i=0;i<MAXSAT;i++) {
-        pcv=searchpcv(i+1,"",time,&pcvs);
+        pcv= arc_searchpcv(i + 1, "", time, &pcvs);
         nav->pcvs[i]=pcv?*pcv:pcv0;
     }
     free(pcvs.pcv);
@@ -1883,7 +1883,7 @@ static int readdcbf(const char *file, nav_t *nav, const sta_t *sta)
 * return : status (1:ok,0:error)
 * notes  : currently only p1-c1 bias of code *.dcb file
 *-----------------------------------------------------------------------------*/
-extern int readdcb(const char *file, nav_t *nav, const sta_t *sta)
+extern int arc_readdcb(const char *file, nav_t *nav, const sta_t *sta)
 {
     int i,j,n;
     char *efiles[MAXEXFILE]={0};
@@ -1984,7 +1984,7 @@ static int cmpfcb(const void *p1, const void *p2)
 * return : status (1:ok,0:error)
 * notes  : fcb data appended to navigation data
 *-----------------------------------------------------------------------------*/
-extern int readfcb(const char *file, nav_t *nav)
+extern int arc_readfcb(const char *file, nav_t *nav)
 {
     char *efiles[MAXEXFILE]={0};
     int i,n;
