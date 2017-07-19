@@ -1,6 +1,6 @@
 
 #include "arc.h"
-#include "glog/logging.h"
+
 /* constants -----------------------------------------------------------------*/
 #define SQR(x)      ((x)*(x))
 
@@ -311,7 +311,7 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
             for (k=0;k<NX;k++) H[k+j*NX]/=sig;
         }
         /* least square estimation */
-        if ((info= arc_lsq(H, v, NX, nv, dx, Q))) {
+        if ((info= arc_lsq(H,v,NX,nv,dx,Q))) {
             sprintf(msg,"lsq error info=%d",info);
             break;
         }
@@ -357,11 +357,11 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
     double *rs_e,*dts_e,*vare_e,*azel_e,*resp_e,rms_e,rms=100.0;
     int i,j,k,nvsat,stat=0,*svh_e,*vsat_e,sat=0;
 
-    arc_log(ARC_INFO, "raim_fde: %s n=%2d\n", time_str(obs[0].time, 0), n);
+    arc_log(ARC_INFO, "raim_fde: %s n=%2d\n", time_str(obs[0].time,0),n);
     
     if (!(obs_e=(obsd_t *)malloc(sizeof(obsd_t)*n))) return 0;
-    rs_e= arc_mat(6, n); dts_e= arc_mat(2, n); vare_e= arc_mat(1, n); azel_e= arc_zeros(2, n);
-    svh_e= arc_imat(1, n); vsat_e= arc_imat(1, n); resp_e= arc_mat(1, n);
+    rs_e=arc_mat(6,n); dts_e=arc_mat(2,n);vare_e=arc_mat(1,n); azel_e=arc_zeros(2,n);
+    svh_e=arc_imat(1,n); vsat_e= arc_imat(1,n); resp_e= arc_mat(1,n);
     
     for (i=0;i<n;i++) {
         
@@ -369,8 +369,8 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
         for (j=k=0;j<n;j++) {
             if (j==i) continue;
             obs_e[k]=obs[j];
-            arc_matcpy(rs_e + 6 * k, rs + 6 * j, 6, 1);
-            arc_matcpy(dts_e + 2 * k, dts + 2 * j, 2, 1);
+            arc_matcpy(rs_e+6*k,rs+6*j,6,1);
+            arc_matcpy(dts_e+2*k,dts+2*j,2,1);
             vare_e[k]=vare[j];
             svh_e[k++]=svh[j];
         }
@@ -387,18 +387,18 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
         }
         if (nvsat<5) {
             arc_log(ARC_ERROR, "raim_fde: exsat=%2d lack of satellites nvsat=%2d\n",
-                    obs[i].sat, nvsat);
+                    obs[i].sat,nvsat);
             continue;
         }
         rms_e=sqrt(rms_e/nvsat);
 
-        arc_log(ARC_INFO, "raim_fde: exsat=%2d rms=%8.3f\n", obs[i].sat, rms_e);
+        arc_log(ARC_INFO, "raim_fde: exsat=%2d rms=%8.3f\n", obs[i].sat,rms_e);
         if (rms_e>rms) continue;
         
         /* save result */
         for (j=k=0;j<n;j++) {
             if (j==i) continue;
-            arc_matcpy(azel + 2 * j, azel_e + 2 * k, 2, 1);
+            arc_matcpy(azel+2*j,azel_e+2*k,2,1);
             vsat[j]=vsat_e[k];
             resp[j]=resp_e[k++];
         }
@@ -411,7 +411,7 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
     }
     if (stat) {
         time2str(obs[0].time,tstr,2); satno2id(sat,name);
-        arc_log(ARC_WARNING, "%s: %s excluded by raim\n", tstr + 11, name);
+        arc_log(ARC_WARNING, "%s: %s excluded by raim\n", tstr+11,name);
     }
     free(obs_e);
     free(rs_e ); free(dts_e ); free(vare_e); free(azel_e);
@@ -470,7 +470,7 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
 
     arc_log(ARC_INFO, "estvel  : n=%d\n", n);
     
-    v= arc_mat(n, 1); H= arc_mat(4, n);
+    v=arc_mat(n,1); H=arc_mat(4,n);
     
     for (i=0;i<MAXITR;i++) {
         
@@ -480,11 +480,11 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
             break;
         }
         /* least square estimation */
-        if (arc_lsq(H, v, 4, nv, dx, Q)) {
+        if (arc_lsq(H,v,4,nv,dx,Q)) {
 			break;
 		}
         for (j=0;j<4;j++) x[j]+=dx[j];
-        if (arc_norm(dx, 4)<1E-6) {
+        if (arc_norm(dx,4)<1E-6) {
             for (i=0;i<3;i++) sol->rr[i+3]=x[i];
             break;
         }
@@ -507,9 +507,9 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
 *          receiver bias are negligible (only involving glonass-gps time offset
 *          and receiver bias)
 *-----------------------------------------------------------------------------*/
-extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
-                  const prcopt_t *opt, sol_t *sol, double *azel, ssat_t *ssat,
-                  char *msg)
+extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
+                      const prcopt_t *opt, sol_t *sol, double *azel, ssat_t *ssat,
+                      char *msg)
 {
     prcopt_t opt_=*opt;
     double *rs,*dts,*var,*azel_,*resp;
@@ -523,7 +523,8 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
     
     sol->time=obs[0].time; if (msg) msg[0]='\0';
     
-    rs= arc_mat(6, n); dts= arc_mat(2, n); var= arc_mat(1, n); azel_= arc_zeros(2, n); resp= arc_mat(1, n);
+    rs=arc_mat(6,n); dts=arc_mat(2,n); var=arc_mat(1,n);
+    azel_=arc_zeros(2,n); resp=arc_mat(1,n);
     
     if (opt_.mode!=PMODE_SINGLE) { /* for precise positioning */
 #if 0

@@ -196,7 +196,7 @@ static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
     arc_log(ARC_INFO, "arc_procpos : mode=%d\n", mode);
 
     /* rtk struct date type initial */
-    rtkinit(&rtk,popt);
+    arc_rtkinit(&rtk, popt);
 
     /* arc-srtk observation model and states movement model  */
     ARC::ARC_ObservationModel ObsModel;
@@ -232,7 +232,7 @@ static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
 
 #if USEPNTINI
         /* rover position by single point positioning */
-        if (!pntpos(obs,nu,&navs,&rtk.opt,&rtk.sol,NULL,rtk.ssat,msg)) {
+        if (!arc_pntpos(obs, nu, &navs, &rtk.opt, &rtk.sol, NULL, rtk.ssat, msg)) {
             arc_log(ARC_WARNING, "arc-srtk point pos error (%s)\n", msg);
             continue;
         }
@@ -283,7 +283,7 @@ static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
                  <<PF.getMmseEstimate().getStateValue(1)<<"   "
                  <<PF.getMmseEstimate().getStateValue(2);
     }
-    rtkfree(&rtk);
+    arc_rtkfree(&rtk);
 }
 /* process positioning -------------------------------------------------------*/
 #ifdef ARC_TEST
@@ -301,7 +301,7 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
 
     arc_log(ARC_INFO, "arc_procpos : mode=%d\n", mode);
 
-    rtkinit(&rtk,popt);
+    arc_rtkinit(&rtk, popt);
 
     while ((nobs=arc_inputobs(obs,rtk.sol.stat,popt,&nu,&nr))>=0) {
         /*abort */
@@ -352,7 +352,7 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
             isolb++;
         }
     }
-    rtkfree(&rtk);
+    arc_rtkfree(&rtk);
 }
 /* validation of combined solutions ------------------------------------------*/
 static int arc_valcomb(const sol_t *solf, const sol_t *solb)
@@ -581,7 +581,7 @@ static int arc_avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
         }
         if (j<=0||!screent(data[0].time,ts,ts,1.0)) continue; /* only 1 hz */
         
-        if (!pntpos(data,j,nav,opt,&sol,NULL,NULL,msg)) continue;
+        if (!arc_pntpos(data, j, nav, opt, &sol, NULL, NULL, msg)) continue;
         
         for (i=0;i<3;i++) ra[i]+=sol.rr[i];
         n++;

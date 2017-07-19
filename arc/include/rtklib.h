@@ -1126,12 +1126,12 @@ extern int lambda_search(int n, int m, const double *a, const double *Q,
                          double *F, double *s);
 
 /* standard positioning ------------------------------------------------------*/
-extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
-                  const prcopt_t *opt, sol_t *sol, double *azel,
-                  ssat_t *ssat, char *msg);
+extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
+                      const prcopt_t *opt, sol_t *sol, double *azel,
+                      ssat_t *ssat, char *msg);
 /* precise positioning -------------------------------------------------------*/
-extern void rtkinit(rtk_t *rtk, const prcopt_t *opt);
-extern void rtkfree(rtk_t *rtk);
+extern void arc_rtkinit(rtk_t *rtk, const prcopt_t *opt);
+extern void arc_rtkfree(rtk_t *rtk);
 
 /* application defined functions ---------------------------------------------*/
 extern int showmsg(char *format,...);
