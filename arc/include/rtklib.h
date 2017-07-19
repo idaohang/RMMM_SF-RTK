@@ -377,6 +377,12 @@ extern "C" {
 #define TROPOPT_EST 3                   /* troposphere option: ZTD estimation */
 #define TROPOPT_ESTG 4                  /* troposphere option: ZTD+grad estimation */
 #define TROPOPT_ZTD 5                   /* troposphere option: ZTD correction */
+#define TROPOPT_HOPF 6                  /* troposphere option: hopf model */
+#define TROPOPT_UNB3 7                  /* troposphere option: unb3 model */
+#define TROPOPT_MOPS 8                  /* troposphere option: mops model */
+#define TROPOPT_GCAT 9                  /* troposphere option: gcat model */
+#define TROPOPT_BALCK 10                /* troposphere option: black model */
+#define TROPOPT_WAAS  11                /* troposphere option: waas model */
 
 #define EPHOPT_BRDC 0                   /* ephemeris option: broadcast ephemeris */
 #define EPHOPT_PREC 1                   /* ephemeris option: precise ephemeris */
@@ -385,8 +391,6 @@ extern "C" {
 #define ARMODE_CONT 1                   /* AR mode: continuous */
 #define ARMODE_INST 2                   /* AR mode: instantaneous */
 #define ARMODE_FIXHOLD 3                /* AR mode: fix and hold */
-#define ARMODE_WLNL 4                   /* AR mode: wide lane/narrow lane */
-#define ARMODE_TCAR 5                   /* AR mode: triple carrier ar */
 
 #define POSOPT_POS   0                  /* pos option: LLH/XYZ */
 #define POSOPT_SINGLE 1                 /* pos option: average of single pos */

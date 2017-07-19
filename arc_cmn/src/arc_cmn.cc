@@ -138,6 +138,16 @@ static char codepris[7][MAXFREQ][16]={  /* code priority table */
     {"IQX"     ,"IQX"       ,"IQX"     ,"IQX"    ,"IQX"    ,""      ,""    }, /* BDS */
     {""        ,""          ,"ABCX"    ,""       ,""       ,""      ,"ABCX"}  /* IRN */
 };
+static const double amt_avg[5][6]={{15.0,1013.25,299.65,26.31,6.30E-3,2.77},
+                                   {30.0,1017.25,294.15,21.79,6.05E-3,3.15},
+                                   {45.0,1015.75,283.15,11.66,5.58E-3,2.57},
+                                   {60.0,1011.75,272.15, 6.78,5.39E-3,1.81},
+                                   {75.0,1013.00,263.65, 4.11,4.53E-3,1.55}};
+static const double amt_amp[5][6]={{15.0,0.0,0.0,0.0,0.0,0.0},
+                                   {30.0,-3.75,7.0,8.85,0.25E-3,0.33},
+                                   {45.0,-2.25,11.0,7.24,0.32E-3,0.46},
+                                   {60.0,-1.75,15.0,5.36,0.81E-3,0.74},
+                                   {75.0,-0.50,14.5,3.39,0.62E-3,0.30}};
 static fatalfunc_t *fatalfunc=NULL; /* fatal callback function */
 
 #ifdef IERS_MODEL
@@ -3688,6 +3698,417 @@ extern double arc_mattrace(double *A,int n)
     double trace=0.0;
     if (A==NULL||n<=0) trace=0.0;
     for (i=0;i<n;i++) trace+=A[i*n+i]; return trace;
+}
+/*----------------------------------------------------------------------------*/
+static double arc_K2C(const double K)
+{
+    return K-273.16;
+}
+/*----------------------------------------------------------------------------*/
+static double arc_C2K(const double C)
+{
+    return C+273.16;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmodel_hopf(gtime_t time, const double *pos, const double *azel,
+                                 double humi)
+{
+    const double temp0=15.0; /* temparature at sea level */
+    double hgt,pres,temp,e,z,trph=0.0,trpw=0.0,hd,hw,sink=0.0,sinp=0.0;
+
+    if (pos[2]<-100.0||1E4<pos[2]||azel[1]<=0) return 0.0;
+
+    /* standard atmosphere */
+    hd=hw=hgt=pos[2]<0.0?0.0:pos[2];
+
+    pres=1013.25*pow(1.0-2.2557E-5*hgt,5.2568);
+    temp=temp0-6.5E-3*hgt+273.15;
+    e=6.108*humi*exp((17.15*temp-4684.0)/(temp-38.45));
+
+    /* hopfield model */
+    hd=40136.0+148.72*(temp-273.16); hw=7508.0+0.002421*exp(temp/22.9);
+
+    sink=sin(SQRT(SQR(azel[1])+(6.25*D2R)));
+    sinp=sin(SQRT(SQR(azel[1])+(2.25*D2R)));
+
+    trph=155.2E-7*pres/temp*(hd-hgt)/sink;
+    trpw=155.2E-7*4810/SQR(temp)*e*(hw-hgt)/sinp;
+
+    return trph+trpw;
+}
+/*----------------------------------------------------------------------------*/
+static int arc_get_amtf(const double*pos,double*args,gtime_t time)
+{
+    int ilon=0,i;
+    double lat,m,doy;
+
+    if (fabs(pos[0])<=15.0*D2R) {
+        for (i=0;i<5;i++) {
+            args[i]=amt_avg[0][i+1];
+            args[5+i]=(pos[1]<0.0?-1.0:1.0)*amt_amp[0][i+1];
+        }
+        return 1;
+    }
+
+    if (fabs(pos[0])>=75.0*D2R) {
+        for (i=0;i<5;i++) {
+            args[i]=amt_avg[4][i+1];
+            args[5+i]=(pos[1]<0.0?-1.0:1.0)*amt_amp[4][i+1];
+        }
+        return 1;
+    }
+    else {
+        lat=fabs(pos[0]*R2D); ilon=lat/15.0;
+        m=(lat-amt_avg[ilon-1][0])/(amt_avg[ilon][0]-amt_avg[ilon-1][0]);
+
+        doy=time2doy(time)+(pos[0]<0.0?182.625:0.0);
+
+        for (i=0;i<5;i++) {
+            args[i]=amt_avg[ilon-1][i+1]+
+                    (amt_avg[ilon][i+1]-amt_avg[ilon-1][i+1])*m-
+                    (amt_amp[ilon-1][i+1]+(amt_avg[ilon][i+1]-
+                                           amt_avg[ilon-1][i+1])*m)*cos(2*PI*(doy-28.0)/365.25);
+        }
+        return 1;
+    }
+    return 0;
+}
+/* zenith tatol tropospheric delay (m),using unb3 model----------------------- */
+extern double arc_tropmodel_unb3(gtime_t time, const double *pos, const double *azel,
+                                double humi,double *zhd,double *zwd)
+{
+    const double g=9.80665,Rd=287.054,k1=77.604,k3_=382000.0;
+    double hs,z,kd,args[10]={0.0},td2,tw2,gm,kw,zhd_=0.0,zwd_=0.0;
+
+    if (pos[2]<-100.0||1E4<pos[2]||azel[1]<=0) return 0.0;
+
+    hs=pos[2]<0.0?0.0:pos[2];
+    if (zhd&&zwd) *zhd=*zwd=0.0;
+
+    arc_get_amtf(pos,args,time);
+
+    kd=pow(1.0-args[3]*hs/args[1],g/(Rd*args[3]));
+    gm=9.782*(1.0-2.66E-3*cos(2.0*args[4])-2.8E-7*hs);
+    td2=1E-6*k1*Rd/gm;
+    zhd_=td2*kd*args[0];
+
+    kw=pow(1.0-args[3]*hs/args[1],(1.0+args[4])*g/(Rd*args[3])-1.0);
+    tw2=1E-6*k3_*Rd/(gm*(1.0+args[4])-args[3]*Rd);
+    zwd_=tw2*kw*args[2]/args[1]; if (humi==0.0) zwd_=0.0;
+
+    if (zhd) *zhd=zhd_; if (zwd) *zwd=zwd_;
+
+    return zhd_+zwd_;
+}
+/* zenith tatol tropospheric delay (m),using unb3 model----------------------- */
+extern double arc_tropmodel_mops(gtime_t time, const double *pos, const double *azel,
+                                 double humi,double *zhd,double *zwd)
+{
+    const double g=9.80665,Rd=287.054,k1=77.604,k2=382000.0,gm=9.784;
+    double hs,amt[10]={0.0},zhd_=0.0,zwd_=0.0;
+
+    if (pos[2]<-100.0||1E4<pos[2]||azel[1]<=0) return 0.0;
+
+    hs=pos[2]<0.0?0.0:pos[2];
+    if (zhd&&zwd) *zhd=*zwd=0.0;
+
+    arc_get_amtf(pos,amt,time);
+
+    zhd_=1E-6*k1*amt[0]*Rd/gm*pow(1.0-amt[3]*hs/amt[1],g/(Rd*amt[3]));
+    zwd_=1E-6*k2*Rd/(gm*(amt[4]+1.0)-amt[3]*Rd)*amt[2]/amt[1]*
+         pow(1.0-amt[3]*hs/amt[1],(amt[4]+1.0)*g/(Rd*amt[3])-1.0);
+    if (humi==0.0) zwd_=0.0;
+
+    if (zhd) *zhd=zhd_; if (zwd) *zwd=zwd_;
+
+    return zhd_+zwd_;
+}
+/*----------------------------------------------------------------------------*/
+/* path tatol tropospheric delay (m),using GCAT model----------------------- */
+extern double arc_tropmodel_gcat(gtime_t time, const double *pos, const double *azel,
+                                 double humi)
+{
+    double hs,zhd,zwd=0.1,mf=1.0;
+
+    if (pos[2]<-100.0||1E4<pos[2]||azel[1]<=0) return 0.0;
+
+    hs=pos[2]<0.0?0.0:pos[2];
+
+    mf=1.001/SQRT(0.002001+SQR(sin(azel[1])));
+
+    zhd=2.3*exp(-0.116E-3*hs);
+    if (humi==0.0) zwd=0.0;
+
+    return (zhd+zwd)*mf;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmodel_black(gtime_t time, const double *pos, const double *azel,
+                                  double humi,double *zhd,double *zwd)
+{
+    const double RE=RE_WGS84;
+    double hs,zhd_=0.0,zwd_=0.0,hd,hw,lo,b,kd,kw;
+    double T,P,e;
+
+    if (pos[2]<-100.0||1E4<pos[2]||azel[1]<=0) return 0.0;
+
+    hs=pos[2]<0.0?0.0:pos[2];
+
+    /* atmosphere parameters */
+    T=288.15-0.0068*hs;
+    P=1013.25*pow(1.0-0.0068/288.15*hs,5);
+    e=11.691*pow(1.0-0.0068/288.15*hs,4);
+
+    hd=148.98*(T-3.96); hw=11000.0;
+    lo=0.167+pow(0.076+0.15E-3*(T-273.16),-0.3*azel[1]);
+    b=1.92/(SQR(azel[1]*R2D)+6);
+
+    zhd_=0.002312*(T-3.96)*P/T; zwd_=0.00746542*e*hw/SQR(T);
+    if (humi==0.0) zwd_=0.0;
+
+    kd=SQRT(1.0-SQR(cos(azel[1])/(1.0+lo*hd/RE)))-b;
+    kw=SQRT(1.0-SQR(cos(azel[1])/(1.0+lo*hw/RE)))-b;
+
+    if (zhd) *zhd=zhd_; if (zwd) *zwd=zwd_;
+
+    return zhd_/kd+zwd_/kw;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmodel_waas(gtime_t time, const double *pos, const double *azel,
+                                 double humi)
+{
+    const double a0=1.264E-4,a15=1.509E-4,an=2.133E-4;
+    double dh,dw,hs,Ns,t0v,t15v,lat,doy=time2doy(time);
+
+    if (pos[2]<-100.0||1E4<pos[2]||azel[1]<=0) return 0.0;
+
+    hs=pos[2]<0.0?0.0:pos[2]; lat=fabs(pos[0])*R2D;
+    dh=pos[0]<0.0?335:152; dw=pos[0]<0.0?30:213;
+
+    Ns=3.61E-3*hs*cos(2*PI*(doy-dh)/365)+lat*(-0.8225+0.1*cos(2*PI*(doy-dw)/365));
+    t0v=2.506*(1.0+0.00125*Ns);
+    t15v=2.484*(1.0+0.0015363*exp(-an*hs)*Ns);
+
+    if (hs<=1500.0) {
+        return t0v/sin(azel[1]+0.35*D2R)*(1.0-a0*hs);
+    }
+    else if (hs>1500.0) {
+        return t15v/sin(azel[1]+0.35*D2R)*(1.0-a0*hs)*exp(1.0-a15*hs);
+    }
+    return 0.0;
+
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmapf_cfa2_2(gtime_t time, const double *pos, const double *azel,
+                                  double *mapfw)
+{
+    const double temp0=15.0; /* temparature at sea level */
+    const double humi=0.7;
+    double A,B,C,hgt,pres,temp,e,mh,mw,E=azel[1];
+
+    if (pos[2]<-1000.0||pos[2]>20000.0) {
+        if (mapfw) *mapfw=0.0;
+        return 0.0;
+    }
+    /* standard atmosphere */
+    hgt=pos[2]<0.0?0.0:pos[2];
+
+    pres=1013.25*pow(1.0-2.2557E-5*hgt,5.2568);
+    temp=temp0-6.5E-3*hgt+273.15;
+    e=6.108*humi*exp((17.15*temp-4684.0)/(temp-38.45));
+
+    A=0.00185*(1.0+6.071E-5*(pres-1000.0)-1.471E-4*e+3.072E-3*(temp-20.0));
+    B=0.001144*(1.0+1.164E-5*(pres-1000.0)-2.795E-4*e+3.109E-3*(temp-20.0));
+    C=-0.009;
+
+    mw=mh=1.0/(sin(E)+A/(tan(E)+B/(sin(E)+C)));
+
+    if (mapfw) *mapfw=mw;
+    return mh;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmapf_chao(gtime_t time, const double *pos, const double *azel,
+                                double *mapfw)
+{
+    double A,B,C,mh,mw;
+
+    if (pos[2]<-1000.0||pos[2]>20000.0) {
+        if (mapfw) *mapfw=0.0;
+        return 0.0;
+    }
+    A=0.001433; B=0.0445;
+    mh=1.0/(sin(azel[1])+A/(tan(azel[1])+B));
+
+    A=0.00035; B=0.017;
+    mw=1.0/(sin(azel[1])+A/(tan(azel[1])+B));
+
+    if (mapfw) *mapfw=mw;
+    return mh;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmapf_mtt(gtime_t time, const double *pos, const double *azel,
+                               double *mapfw)
+{
+    const double temp0=15.0; /* temparature at sea level */
+    const double humi=0.7;
+    double A,B,C,hgt,pres,temp,e,mh,mw,E=azel[1];
+
+    if (pos[2]<-1000.0||pos[2]>20000.0) {
+        if (mapfw) *mapfw=0.0;
+        return 0.0;
+    }
+    /* standard atmosphere */
+    hgt=pos[2]<0.0?0.0:pos[2];
+
+    pres=1013.25*pow(1.0-2.2557E-5*hgt,5.2568);
+    temp=temp0-6.5E-3*hgt+273.15;
+    e=6.108*humi*exp((17.15*temp-4684.0)/(temp-38.45));
+
+    A=1.25003E-3*(1.0+6.258E-5*(pres-1000.0)+1.67337E-5*e+3.36152E-3*(temp-10.0));
+    B=3.12108E-3*(1.0+3.8450E-5*(pres-1000.0)+6.62430E-5*e+4.62404E-3*(temp-10.0));
+    C=6.945748E-2*(1.0+3.956E-5*(pres-1000.0)+2.94868E-3*(temp-10.0));
+    mh=(1.0+A/(1.0+B/C))/(sin(E)+A/(sin(E)+B/(sin(E)+C)));
+
+    A=5.741E-4; B=1.547E-3; C=4.88185E-2;
+    mw=(1.0+A/(1.0+B/C))/(sin(E)+A/(sin(E)+B/(sin(E)+C)));
+
+    if (mapfw) *mapfw=mw;
+    return mh;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmapf_ma_mu(gtime_t time, const double *pos, const double *azel,
+                                 double *mapfw)
+{
+    const double temp0=15.0; /* temparature at sea level */
+    const double humi=0.7;
+    double A,B,pres,temp,e,hs,beta,e0,f,ff,E=azel[1],mh,mw;
+
+    if (pos[2]<-1000.0||pos[2]>20000.0) {
+        if (mapfw) *mapfw=0.0;
+        return 0.0;
+    }
+    /* standard atmosphere */
+    hs=(pos[2]<0.0?0.0:pos[2])/1000.0;
+
+    pres=1013.25*pow(1.0-2.2557E-5*hs,5.2568);
+    temp=temp0-6.5E-3*hs+273.15;
+    e=6.108*humi*exp((17.15*temp-4684.0)/(temp-38.45));
+
+    e0=humi*6.11*pow(10.0,7.5*(temp-273.16)/temp);
+    f=1.0-0.00266*cos(2.0*pos[1])-0.00028*hs;
+    B=0.002277*(pres+(0.05+1255.0/temp)*e0)/f;
+    ff=1.0-0.00266*cos(2.0*pos[1])-0.00031*hs;
+    A=2.644E-3*exp(-0.14372*hs)/ff;
+
+    beta=A/B;
+    mw=mh=(1.0+beta)/(sin(E)+(beta/(1.0+beta)/(sin(E)+0.015)));
+    if (mapfw) *mapfw=mw;
+    return mh;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmapf_ifadis(gtime_t time, const double *pos, const double *azel,
+                                  double *mapfw)
+{
+    const double temp0=15.0; /* temparature at sea level */
+    const double humi=0.7;
+
+    double a,b,c,pres,temp,e,hs,mh,mw,E=azel[1];
+
+    if (pos[2]<-1000.0||pos[2]>20000.0) {
+        if (mapfw) *mapfw=0.0;
+        return 0.0;
+    }
+    /* standard atmosphere */
+    hs=(pos[2]<0.0?0.0:pos[2]);
+
+    pres=1013.25*pow(1.0-2.2557E-5*hs,5.2568);
+    temp=temp0-6.5E-3*hs+273.15;
+    e=6.108*humi*exp((17.15*temp-4684.0)/(temp-38.45));
+
+    a=0.001237+0.1316E-6*(pres-1000.0)+0.1378E-5*(temp-15.0)+0.8057E-5*SQRT(e);
+    b=0.003333+0.1946E-6*(pres-1000.0)+0.104E-5*(temp-15.0)+0.1747E-4*SQRT(e);
+    c=0.078;
+    mh=(1.0+a/(1.0+b/(1.0+c)))/(sin(E)+a/(sin(E)+b/(sin(E)+c)));
+
+    a=0.0005236+0.2471E-6*(pres-1000.0)-0.1724E-6*(temp-15.0)+0.1328E-4*SQRT(e);
+    b=0.001705+0.7384E-6*(pres-1000.0)+0.3767E-6*(temp-15.0)+0.2147E-4*SQRT(e);
+    c=0.05917;
+    mw=(1.0+a/(1.0+b/(1.0+c)))/(sin(E)+a/(sin(E)+b/(sin(E)+c)));
+
+    if (mapfw) *mapfw=mw; return mh;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmapf_exp(gtime_t time, const double *pos, const double *azel,
+                               double *mapfw)
+{
+    const double H=8452.4;
+    const double C1=-1.265518,C2=1.000427,C3=0.3761631,C4=0.1870715,
+            C5=-0.4751701,C6=0.9814044,C7=-1.864333,
+            C8=1.194816,C9=-0.02725696,C10=-0.1368659;
+    const double RE=RE_WGS84;
+    double hs,E=azel[1],ro;
+    double K,U,mh,mw,CU;
+
+    if (pos[2]<-1000.0||pos[2]>20000.0) {
+        if (mapfw) *mapfw=0.0;
+        return 0.0;
+    }
+    /* standard atmosphere */
+    hs=(pos[2]<0.0?0.0:pos[2]); ro=fabs(RE+hs);
+
+    K=SQRT(ro/(2.0*H))*tan(E); U=1.0/(1.0+0.5*K);
+
+    CU=C1*pow(U,0)+C2*pow(U,1)+C3*pow(U,2)+C4*pow(U,3)+C5*pow(U,4)+
+       C6*pow(U,5)+C7*pow(U,6)+C8*pow(U,7)+C9*pow(U,8);
+    mw=mh=SQRT(PI)/cos(E)*U*SQRT(ro/(2.0*H))*exp(CU);
+
+    if (mapfw) *mapfw=mw; return mh;
+}
+/*----------------------------------------------------------------------------*/
+extern double arc_tropmapf_UNSW931(gtime_t time, const double *pos, const double *azel,
+                                   double *mapfw)
+{
+    const double temp0=15.0; /* temparature at sea level */
+    const double H=8452.4,hT=11.132;
+    const double humi=0.7,beta=3.5;
+    double D1,D2,D3,D4,hs,z=PI/2.0-azel[1],I,mh,mw,T,P,e,r0=RE_WGS84;
+
+    if (pos[2]<-1000.0||pos[2]>20000.0) {
+        if (mapfw) *mapfw=0.0;
+        return 0.0;
+    }
+    /* standard atmosphere */
+    hs=(pos[2]<0.0?0.0:pos[2]); r0+=hs;
+    T=temp0-6.5E-3*hs;
+    P=1013.25*pow(1.0-2.2557E-5*hs,5.2568);
+    e=6.108*humi*exp((17.15*T-4684.0)/(T+273.16-38.45));
+
+    I=SQRT(2.0*r0/H)/tan(z);
+
+    D1=0.4613893+2.864E-5*(P-1013.25)+8.99E-6*e-6.98E-6*e*e-1.0914E-4*(T-15.0)+
+       1.30E-6*(T-15.0)*(T-15.0)+9.4694E-3*(beta+6.5)-2.4946E-3*(hT-11.231)+1.8072E-4*(hT-11.231)*(hT-11.231);
+    D2=0.8276476+2.056E-5*(P-1013.25)+2.3820E-4*e-4.76E-6*e*e+5.1125E-4*(T-15.0)+
+       1.23E-6*(T-15.0)*(T-15.0)+3.6479E-2*(beta+6.5)-1.5321E-2*(hT-11.231)+9.4802E-4*(hT-11.231)*(hT-11.231);
+    D3=2.531492+1.093E-4*(P-1013.25)+2.6179E-3*e+1.33E-5*e*e+3.7103E-3*(T-15.0)+
+       4.95E-6*(T-15.0)*(T-15.0)+1.6022E-1*(beta+6.5)-8.998E-2*(hT-11.231)+4.9496E-3*(hT-11.231)*(hT-11.231);
+    D4=47.07844+1.595E-3*(P-1013.25)+3.9026E-2*e+2.41E-4*e*e-4.1713E-2*(T-15.0)+
+       2.16E-4*(T-15.0)*(T-15.0)+1.6313*(beta+6.5)-9.9757E-1*(hT-11.231)+4.4528E-2*(hT-11.231)*(hT-11.231);
+    mh=1.0/(cos(z)+D1/(I*I/cos(z)+D2/(cos(z)+D3/(I*I/cos(z)+D4))));
+
+    D1=0.4815575+2.7294274E-5*(P-1013.25)+2.4902E-10*(P-1013.25)*(P-1013.25)-2.1572975E-3*(T-15.0)+(T-15.0)*(T-15.0)-
+       1.1699250E-2*(beta+6.5)+9.1246967E-4*(e-1.0)+7.1638049E-3*(hT-11.231);
+    D2=0.812254+2.9278208E-5*(P-1013.25)+7.9563810E-9*(P-1013.25)*(P-1013.25)-2.7441928E-3*(T-15.0)-
+       3.3017573E-3*(beta+6.5)+4.5324398E-4*(e-1.0)+2.1880062E-6*(e-1.0)*(e-1.0)+8.9074254E-3*(hT-11.231)+
+       6.075414E-14*(hT-11.231)*(hT-11.231);
+    D3=2.342219-8.8508130E-5*(P-1013.25)+4.3200293E-8*(P-1013.25)*(P-1013.25)-7.8798437E-3*(T-15.0)-
+       1.9310775E-2*(beta+6.5)+1.7527907E-3*(e-1.0)+1.2091468E-5*(e-1.0)*(e-1.0)+9.3512393E-4*(hT-11.231)+
+       3.248198E-3*(hT-11.231)*(hT-11.231);
+    D4=44.8141601-1.2605952E-3*(P-1013.25)+5.4042844E-7*(P-1013.25)*(P-1013.25)-0.16031622*(T-15.0)-
+       0.25365998*(beta+6.5)+2.3692612E-2*(e-1.0)+1.663844E-4*(e-1.0)*(e-1.0)-0.12135797*(hT-11.231)+
+       3.6598847E-2*(hT-11.231)*(hT-11.231);
+    mw=1.0/(cos(z)+D1/(I*I/cos(z)+D2/(cos(z)+D3/(I*I/cos(z)+D4))));
+
+    if (mapfw) *mapfw=mw;
+    return mh;
 }
 /* dummy functions for lex extentions ----------------------------------------*/
 #ifndef EXTLEX

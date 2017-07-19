@@ -116,8 +116,51 @@ extern int tropcorr(gtime_t time, const nav_t *nav, const double *pos,
             azel[1] * R2D);
     
     /* saastamoinen model */
-    if (tropopt==TROPOPT_SAAS||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
+    if (tropopt==TROPOPT_SAAS
+        ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
         *trp=tropmodel(time,pos,azel,REL_HUMI);
+        *var=SQR(ERR_SAAS/(sin(azel[1])+0.1));
+        return 1;
+    }
+    /* hopf model */
+    else if (tropopt==TROPOPT_HOPF
+             ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
+        *trp=arc_tropmodel_hopf(time,pos,azel,REL_HUMI);
+        *var=SQR(ERR_SAAS/(sin(azel[1])+0.1));
+        return 1;
+    }
+    /* unb3 model */
+    else if (tropopt==TROPOPT_UNB3
+             ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
+        *trp=arc_tropmodel_unb3(time,pos,azel,REL_HUMI,NULL,NULL);
+        *var=SQR(ERR_SAAS/(sin(azel[1])+0.1));
+        return 1;
+    }
+    /* mops model */
+    else if (tropopt==TROPOPT_MOPS
+             ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
+        *trp=arc_tropmodel_unb3(time,pos,azel,REL_HUMI,NULL,NULL);
+        *var=SQR(ERR_SAAS/(sin(azel[1])+0.1));
+        return 1;
+    }
+    /* gcat model */
+    else if (tropopt==TROPOPT_GCAT
+             ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
+        *trp=arc_tropmodel_gcat(time,pos,azel,REL_HUMI);
+        *var=SQR(ERR_SAAS/(sin(azel[1])+0.1));
+        return 1;
+    }
+    /* black model */
+    else if (tropopt==TROPOPT_BALCK
+             ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
+        *trp=arc_tropmodel_black(time,pos,azel,REL_HUMI,NULL,NULL);
+        *var=SQR(ERR_SAAS/(sin(azel[1])+0.1));
+        return 1;
+    }
+    /* black model */
+    else if (tropopt==TROPOPT_WAAS
+             ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
+        *trp=arc_tropmodel_waas(time,pos,azel,REL_HUMI);
         *var=SQR(ERR_SAAS/(sin(azel[1])+0.1));
         return 1;
     }

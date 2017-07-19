@@ -24,6 +24,9 @@ using namespace std;
 
 #define TTOL_MOVEB  (1.0+2*DTTOL)
                                /* time sync tolerance for moving-baseline (s) */
+#define MUDOT_GPS   (0.00836*D2R)   /* average angular velocity GPS (rad/s) */
+#define EPS0_GPS    (13.5*D2R)      /* max shadow crossing angle GPS (rad) */
+#define T_POSTSHADOW 1800.0         /* post-shadow recovery time (s) */
 
 /* number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated) */
 #define NF(opt)     ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf)
@@ -161,12 +164,158 @@ static double arc_yaw_nominal(double beta, double mu)
     if (fabs(beta)<1E-12&&fabs(mu)<1E-12) return PI;
     return atan2(-tan(beta),sin(mu))+PI;
 }
-/* yaw-angle of satellite ----------------------------------------------------*/
-extern int arc_yaw_angle(int sat, const char *type, int opt, double beta, double mu,
-                         double *yaw)
+/* shadow-crossing GPS IIA ---------------------------------------------------*/
+static int arc_yaw_shadow_IIA(double beta, double mu, double eps0, double R,
+                              double mudot, double *yaw)
+{
+    double mu_s,mu_e;
+
+    mu_s=-sqrt(SQR(eps0)-SQR(beta));
+    mu_e=-mu_s;
+
+    if (mu_s<=mu&&mu<mu_e) {
+        *yaw=atan2(-tan(beta),sin(mu_s))+R*(mu-mu_s)/mudot;
+    }
+    else if (mu_e<=mu&&mu<mu_e+T_POSTSHADOW*mudot) {
+        return 0;
+    }
+    return 1;
+}
+/* shadow-crossing GLONASS-M -------------------------------------------------*/
+static int arc_yaw_shadow_GLO(double beta, double mu, double eps0, double R,
+                              double mudot, double *yaw)
+{
+    double mu_s,mu_e,mu_f,tan_beta,sin_mu_s;
+
+    if (beta<0) R=-R;
+    tan_beta=tan(beta);
+
+    mu_s=-acos(cos(eps0)/cos(beta));
+    mu_e=-mu_s;
+    sin_mu_s=sin(mu_s);
+    mu_f=mudot*(atan2(-tan_beta,-sin_mu_s)-atan2(-tan_beta,sin_mu_s))/R+mu_s;
+
+    if (mu_s<=mu&&mu<mu_f) {
+        *yaw=atan2(-tan_beta,sin_mu_s)+R*(mu-mu_s)/mudot;
+    }
+    else if (mu_f<=mu&&mu<mu_e) {
+        *yaw=atan2(-tan_beta,-sin_mu_s);
+    }
+    return 1;
+}
+/* noon-turn maneuver --------------------------------------------------------*/
+static int arc_yaw_noon(double beta, double mu, double beta0, double R,
+                    double mudot, double *yaw)
+{
+    double mu_s,y;
+
+    if (beta>=0) R=-R;
+    mu_s=PI-sqrt(beta0*fabs(beta)-SQR(beta));
+
+    if (mu_s<=mu) {
+        y=atan2(-tan(beta),sin(mu_s))+R*(mu-mu_s)/mudot;
+        if ((beta>=0&&y>*yaw)||(beta<0&&y<*yaw)) *yaw=y;
+    }
+    return 1;
+}
+/* midnight-turn maneuver ----------------------------------------------------*/
+static int arc_yaw_midnight(double beta, double mu, double beta0, double R,
+                            double mudot, double *yaw)
+{
+    double mu_s,y;
+
+    if (beta<0) R=-R;
+
+    mu_s=-sqrt(beta0*fabs(beta)-SQR(beta));
+
+    if (mu_s<=mu) {
+        y=atan2(-tan(beta),sin(mu_s))+R*(mu-mu_s)/mudot;
+        if ((beta>=0&&y<*yaw)||(beta<0&&y>*yaw)) *yaw=y;
+    }
+    return 1;
+}
+/* yaw-angle of GPS IIA (ref [8]) --------------------------------------------*/
+static int arc_yaw_IIA(int sat, int opt, double beta, double mu, double *yaw)
+{
+    const double R_GPSIIA[]={
+            0.1046,0.1230,0.1255,0.1249,0.1003,0.1230,0.1136,0.1169,0.1253,0.0999,
+            0.1230,0.1230,0.1230,0.1230,0.1092,0.1230,0.1230,0.1230,0.1230,0.1230,
+            0.1230,0.1230,0.1230,0.0960,0.0838,0.1284,0.1183,0.1230,0.1024,0.1042,
+            0.1230,0.1100,0.1230
+    };
+    double R=R_GPSIIA[sat-1]*D2R,beta0=atan(MUDOT_GPS/R);
+
+    *yaw=atan2(-tan(beta),sin(mu));
+
+    if (opt==2) { /* precise yaw */
+        if (mu<PI/2.0&&fabs(beta)<EPS0_GPS) {
+            if (!arc_yaw_shadow_IIA(beta,mu,EPS0_GPS,R,MUDOT_GPS,yaw)) return 0;
+        }
+        else if (mu>PI/2.0&&fabs(beta)<beta0) {
+            if (!arc_yaw_noon(beta,mu,beta0,R,MUDOT_GPS,yaw)) return 0;
+        }
+    }
+    return 1;
+}
+/* yaw-angle of GPS IIR (ref [8]) --------------------------------------------*/
+static int arc_yaw_IIR(int sat, int opt, double beta, double mu, double *yaw)
+{
+    const double R=0.2*D2R;
+    double beta0=atan(MUDOT_GPS/R);
+
+    *yaw=atan2(-tan(beta),sin(mu));
+
+    if (opt==2) { /* precise yaw */
+        if (mu<PI/2.0&&fabs(beta)<beta0) {
+            if (!arc_yaw_midnight(beta,mu,beta0,R,MUDOT_GPS,yaw)) return 0;
+        }
+        else if (mu>PI/2.0&&fabs(beta)<beta0) {
+            if (!arc_yaw_noon(beta,mu,beta0,R,MUDOT_GPS,yaw)) return 0;
+        }
+    }
+    *yaw+=PI;
+    return 1;
+}
+/* yaw-angle of GPS IIF (ref [9]) --------------------------------------------*/
+static int arc_yaw_IIF(int sat, int opt, double beta, double mu, double *yaw)
+{
+    const double R0=0.06*D2R,R1=0.11*D2R;
+    double beta0=atan(MUDOT_GPS/R1);
+
+    *yaw=atan2(-tan(beta),sin(mu));
+
+    if (opt==2) { /* precise yaw */
+        if (fabs(mu)<EPS0_GPS&&fabs(beta)<EPS0_GPS) {
+            if (!arc_yaw_shadow_GLO(beta,mu,EPS0_GPS,R0,MUDOT_GPS,yaw)) return 0;
+        }
+        else if (mu>PI/2.0&&fabs(beta)<beta0) {
+            if (!arc_yaw_noon(beta,mu,beta0,R1,MUDOT_GPS,yaw)) return 0;
+        }
+    }
+    return 1;
+}
+/* yaw-angle of Galileo (ref [11]) -------------------------------------------*/
+static int arc_yaw_GAL(int sat, int opt, double beta, double mu, double *yaw)
 {
     *yaw=arc_yaw_nominal(beta,mu);
     return 1;
+}
+
+static int arc_yaw_CMP(int sat, int opt, double beta, double mu, double *yaw)
+{
+    *yaw=0.0;
+    return 1;
+}
+/* yaw-angle of satellite ----------------------------------------------------*/
+extern int arc_yaw_angle(int sat, const char *type, int opt, double beta, double mu,
+                     double *yaw)
+{
+    if      (strstr(type,"BLOCK IIA")) return arc_yaw_IIA(sat,opt,beta,mu,yaw);
+    else if (strstr(type,"BLOCK IIR")) return arc_yaw_IIR(sat,opt,beta,mu,yaw);
+    else if (strstr(type,"BLOCK IIF")) return arc_yaw_IIF(sat,opt,beta,mu,yaw);
+    else if (strstr(type,"Galileo"  )) return arc_yaw_GAL(sat,opt,beta,mu,yaw);
+    else if (strstr(type,"BEIDOU"   )) return arc_yaw_CMP(sat,opt,beta,mu,yaw);
+    return 0;
 }
 /* satellite attitude model --------------------------------------------------*/
 static int arc_sat_yaw(gtime_t time, int sat, const char *type, int opt,

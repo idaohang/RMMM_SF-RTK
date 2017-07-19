@@ -78,6 +78,35 @@ extern double arc_mattrace(double *A,int n);
 /* adaptive Kaman filter -------------------------------------------------------*/
 extern int adap_kaman_filter(rtk_t* rtk,double *x, double *P, const double *H,
                              const double *v,const double *R,int n,int m);
+/* tropmodel model--------------------------------------------------------------*/
+extern double arc_tropmodel_hopf(gtime_t time, const double *pos, const double *azel,
+                                 double humi);
+extern double arc_tropmodel_unb3(gtime_t time, const double *pos, const double *azel,
+                                 double humi,double *zhd,double *zwd);
+extern double arc_tropmodel_mops(gtime_t time, const double *pos, const double *azel,
+                                 double humi,double *zhd,double *zwd);
+extern double arc_tropmodel_gcat(gtime_t time, const double *pos, const double *azel,
+                                 double humi);
+extern double arc_tropmodel_black(gtime_t time, const double *pos, const double *azel,
+                                  double humi,double *zhd,double *zwd);
+extern double arc_tropmodel_waas(gtime_t time, const double *pos, const double *azel,
+                                 double humi);
+/* troposphere mapping function-------------------------------------------------*/
+extern double arc_tropmapf_UNSW931(gtime_t time, const double *pos, const double *azel,
+                                   double *mapfw);
+extern double arc_tropmapf_exp(gtime_t time, const double *pos, const double *azel,
+                               double *mapfw);
+extern double arc_tropmapf_ifadis(gtime_t time, const double *pos, const double *azel,
+                                  double *mapfw);
+extern double arc_tropmapf_ma_mu(gtime_t time, const double *pos, const double *azel,
+                                 double *mapfw);
+extern double arc_tropmapf_mtt(gtime_t time, const double *pos, const double *azel,
+                               double *mapfw);
+extern double arc_tropmapf_chao(gtime_t time, const double *pos, const double *azel,
+                                double *mapfw);
+extern double arc_tropmapf_cfa2_2(gtime_t time, const double *pos, const double *azel,
+                                  double *mapfw);
+
 
 #ifdef __cplusplus
 }
