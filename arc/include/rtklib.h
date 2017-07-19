@@ -866,6 +866,42 @@ typedef struct {        /* ambiguity control type */
     char flags[MAXSAT]; /* fix flags */
 } ambc_t;
 
+/* ukf ---------------------------------------------*/
+typedef void (*filter_function)(double*, double *,double *);
+typedef void (*measure_function)(double *, double *);
+
+typedef struct                 /* filter structure */
+{
+    unsigned state_dim;        /* filter state */
+    unsigned measure_dim;
+    double *x;
+    double *y;                 /* measure */
+    double *P;                 /* covariance matrix */
+    double *Q;                 /* covariance matrix noise model (additive) */
+    double *R;                 /* covariance matrix noise measurement (additive) */
+    filter_function ffun;      /* filter function */
+    measure_function mfun;     /* measurement function */
+    /* all fields below are specific to UKF */
+    double *wm;                /* weights for computing the mean */
+    double *wc;                /* weights for computing the covariance */
+    double gamma;              /* scaling parameter */
+    double *sigma_point;       /* sigma points (first one is filter state) */
+    double *sigma;             /* preallocated temporaries */
+    double *sigma_y;
+    double *PM;
+    double *PM_save;
+    double *xm;
+    double *ym;
+    double *khi;
+    double *khi_y;
+    double *Pyy;
+    double *Pxy;
+    double *dx;
+    double *dy;
+    double *gain;
+    double *KL;
+} ukf_t;
+
 typedef struct {         /* RTK control/result type */
     sol_t  sol;          /* RTK solution */
     double rb[6];        /* base position/velocity (ecef) (m|m/s) */
@@ -880,16 +916,14 @@ typedef struct {         /* RTK control/result type */
     int neb;             /* bytes in error message buffer */
     char errbuf[MAXERRMSG]; /* error message buffer */
     prcopt_t opt;           /* processing options */
-
-    /* ceres solver */
+                            /* ceres solver */
     ceres_problem_t *ceres_problem;
                             /* solve the single rtk position problem */
     ceres_cost_function_t *ceres_cost_function;
                             /* solve the single rtk position loss function */
     int *ceres_active_x;    /* ceres solver active states index in states list */
-
-    /* adaptive Kaman filter */
-    double lam;
+    double lam;             /* adaptive Kaman filter parameters */
+    ukf_t ukf;              /* unscented Kalman filter */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */

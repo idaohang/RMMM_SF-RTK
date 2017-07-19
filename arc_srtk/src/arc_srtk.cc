@@ -1372,6 +1372,17 @@ extern int adap_kaman_filter(rtk_t* rtk,double *x, double *P, const double *H,
     free(C0); free(H_); free(M); free(N);
     return 1;
 }
+/* ukf: Propagate the sigma points through the dynamic model-----------------*/
+static void arc_ukf_filterfunc(ukf_t *ukf,double *input_X,double *output_X)
+{
+    int i;
+    for (i=0;i<ukf->state_dim;i++) output_X[i]=input_X[i];
+}
+/* ukf: Propagate sigma points through the measurement model -----------------*/
+static void arc_ukf_measfunc(ukf_t *ukf,double *input_X,double *output_Y)
+{
+
+}
 /* ceres problem pointor asignment -------------------------------------------*/
 static void arc_ceres_init(double *H,const prcopt_t* opt,int nv,double* rs,
                            double *dts,double *y,double *azel,int nu,int nr,
