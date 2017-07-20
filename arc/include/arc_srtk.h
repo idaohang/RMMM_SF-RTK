@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 /* constants/global variables -------------------------------------------------*/
-//#define ARC_TRACE_MAT                     /* matrix printf */
+#define ARC_TRACE_MAT                     /* matrix printf */
 #define GLOG            1                 /* google log for debug */
 #define ARC_NOLOG       -1                /* disable log informations */
 #define ARC_INFO        0				  /* google information log */
@@ -62,14 +62,15 @@ extern void arc_traceclose(void);
 extern void arc_tracelevel(int level);
 extern void arc_log(int level, const char *format, ...);
 extern void arc_tracet(int level, const char *format, ...);
-extern void arc_tracemat(int level, const double *A, int n, int m, int p, int q);
-extern void arc_traceobs(int level, const obsd_t *obs, int n);
-extern void arc_tracenav(int level, const nav_t *nav);
-extern void arc_tracegnav(int level, const nav_t *nav);
-extern void arc_tracehnav(int level, const nav_t *nav);
-extern void arc_tracepeph(int level, const nav_t *nav);
-extern void arc_tracepclk(int level, const nav_t *nav);
-extern void arc_traceb(int level, const unsigned char *p, int n);
+extern void arc_tracemat(int level,const double *A,int n,int m,int p,int q);
+extern void arc_tracemati(int level,const int *A,int n,int m,int p,int q);
+extern void arc_traceobs(int level,const obsd_t *obs,int n);
+extern void arc_tracenav(int level,const nav_t *nav);
+extern void arc_tracegnav(int level,const nav_t *nav);
+extern void arc_tracehnav(int level,const nav_t *nav);
+extern void arc_tracepeph(int level,const nav_t *nav);
+extern void arc_tracepclk(int level,const nav_t *nav);
+extern void arc_traceb(int level,const unsigned char *p,int n);
 extern void arc_tracebuf(int buffcount);
 /* arc cholesky functions ------------------------------------------------------*/
 extern double *arc_cholesky(double *A,int n);

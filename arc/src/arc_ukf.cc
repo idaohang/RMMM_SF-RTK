@@ -144,10 +144,10 @@ extern int arc_ukf_filter_new(unsigned int state_dim,
     filter->ffun=ffun;
     filter->mfun=mfun;
 
-    filter->x=(double*)(state_dim*sizeof(double));
+    filter->x=(double*)malloc(state_dim*sizeof(double));
     err|=(filter->x==NULL);
 
-    filter->y=(double*)(measure_dim*sizeof(double));
+    filter->y=(double*)malloc(measure_dim*sizeof(double));
     err|=(filter->y==NULL);
 
     Size=state_dim*state_dim;
@@ -265,9 +265,8 @@ extern void arc_ukf_filter_reset(ukf_t* filter,double *x0,double *P0)
 {
     if(filter) {
         /* state of the filter */
-        memcpy(filter->x,x0,filter->state_dim*sizeof(double));
-        memcpy(filter->P,P0,
-               filter->state_dim*filter->state_dim*sizeof(double));
+        if (x0) arc_matcpy(filter->x,x0,filter->state_dim,1);
+        if (P0) arc_matcpy(filter->P,P0,filter->state_dim,filter->state_dim);
     }
 }
 /* --------------------------------------------------------------------
@@ -278,8 +277,8 @@ extern void arc_ukf_filter_reset(ukf_t* filter,double *x0,double *P0)
 extern void arc_ukf_filter_get_state(ukf_t *filter, double *x, double* P)
 {
     if(filter) {
-        memcpy(x,filter->x,filter->state_dim*sizeof(double));
-        memcpy(P,filter->P,filter->state_dim*filter->state_dim*sizeof(double));
+        if (x) arc_matcpy(x,filter->x,filter->state_dim,1);
+        if (P) arc_matcpy(P,filter->P,filter->state_dim,filter->state_dim);
     }
 }
 /* --------------------------------------------------------------------
@@ -294,6 +293,8 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     int m=filter->measure_dim; /* numbers of measures */
     int i,j,k;
     double t;
+
+    arc_log(ARC_INFO,"arc_ukf_filter_update : update filter using a measure \n");
 
     /* cholesky decomposition of the state covariance matrix */
     arc_ukf_cholesky_decomposition(filter->P,l,filter->sigma);
@@ -318,7 +319,7 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     /* ================================= */
     /* propagate sigma points:y=f(xi) ,return khi[]*/
     for (i=0;i<2*l+1;i++) {  /* sigma point numbers */
-        filter->ffun(filter->state_dim,&(filter->khi[i*l]),&(filter->sigma_point[i*l]));
+        filter->ffun(filter->state_dim,&(filter->sigma_point[i*l]),&(filter->khi[i*l]));
     }
     /* compute state prediction xm */
     for (i=0;i<l;i++) {  /* states numbers */
@@ -327,6 +328,10 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
             filter->xm[i]+=filter->wm[j]*filter->khi[j*l+i];
         }
     }
+    arc_log(ARC_INFO,"arc_ukf_filter_update : propagate sigma points,"
+            "its mean sigma point is : \n");
+    arc_tracemat(ARC_MATPRINTF,filter->xm,l,1,10,4);
+    
     /* ================================ */
     /* time update */
     /* start with state covariance matrix */
@@ -370,8 +375,11 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     }
     /* ================================= */
     /* propagate measurement */
+    
+    arc_log(ARC_INFO,"arc_ukf_filter_update : propagate measurement \n");
+    
     for (i=0;i<2*l+1;i++) {
-        filter->mfun(&(filter->khi_y[i*m]),&(filter->sigma_point[i*l]));
+        filter->mfun(&(filter->sigma_point[i*l]),&(filter->khi_y[i*m]));
     }
     /* measurement prediction */
     for (i=0;i<m;i++) {
@@ -394,6 +402,9 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
                 filter->Pyy[j*m+k]+=filter->wc[i]*filter->dy[j]*filter->dy[k];
             }
     }
+    arc_log(ARC_INFO,"arc_ukf_filter_update : Pyy matrix \n");
+    arc_tracemat(ARC_MATPRINTF,filter->Pyy,m,m,10,4);
+
     /* Pxy matrix */
     for(i=0;i<m*l;i++) filter->Pxy[i]=0.0;
 
@@ -411,6 +422,9 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
             }
         }
     }
+    arc_log(ARC_INFO,"arc_ukf_filter_update : Pxy matrix \n");
+    arc_tracemat(ARC_MATPRINTF,filter->Pxy,l,m,10,4);
+
     /* gain de kalman */
     arc_ukf_cholesky_decomposition(filter->Pyy,m,filter->sigma_y);
     arc_ukf_cholesky_solve(filter->Pyy,m,filter->sigma_y,filter->Pxy,l,filter->gain);
@@ -423,6 +437,9 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     for (j=0;j<m;j++) {
         filter->dy[j]=y[j]-filter->ym[j];
     }
+    arc_log(ARC_INFO,"arc_ukf_filter_update : dy \n");
+    arc_tracemat(ARC_MATPRINTF,filter->dy,m,1,10,4);
+
     for (i=0;i<l;i++) {
         filter->x[i]=filter->xm[i];
         t=0.0;
@@ -431,6 +448,9 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
         }
         filter->x[i]+=t;
     }
+    arc_log(ARC_INFO,"arc_ukf_filter_update : x \n");
+    arc_tracemat(ARC_MATPRINTF,filter->x,filter->state_dim,1,10,4);
+
     for(i=0;i<l;i++) {
         for(j=0;j<m;j++) {
             t=0.0;
@@ -449,6 +469,8 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
             filter->P[i*l+j]-=t;
         }
     }
+    arc_log(ARC_INFO,"arc_ukf_filter_update : P \n");
+    arc_tracemat(ARC_MATPRINTF,filter->P,filter->state_dim,filter->state_dim,10,4);
     /* finished with kalman iteration ! */
 }
 /* ukf_filter_delete -----------------------------------------------*/

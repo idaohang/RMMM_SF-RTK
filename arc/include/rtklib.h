@@ -928,6 +928,8 @@ typedef struct {         /* RTK control/result type */
     double lam;             /* adaptive Kaman filter parameters */
     ukf_t ukf;              /* unscented Kalman filter */
     int sat[MAXSAT];        /* hold the double-difference satellite pair,sat[2*i] is reference satellite */
+    int nc;                 /* phase observation numbers */
+    int np;                 /* pseudorange observation numbers */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */

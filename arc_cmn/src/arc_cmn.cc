@@ -863,9 +863,26 @@ extern int arc_smoother(const double *xf, const double *Qf, const double *xb,
 extern void matfprint(const double A[], int n, int m, int p, int q, FILE *fp)
 {
     int i,j;
-    fprintf(fp,"MAT:----------------------------------------------------------\n");
     for (i=0;i<n;i++) {
         for (j=0;j<m;j++) fprintf(fp," %*.*f",p,q,A[i+j*n]);
+        fprintf(fp,"\n");
+    }
+}
+/* print matrix ----------------------------------------------------------------
+* print matrix to stdout
+* args   : int    *A        I   matrix A (n x m)
+*          int    n,m       I   number of rows and columns of A
+*          int    p,q       I   total columns, columns under decimal point
+*         (FILE  *fp        I   output file pointer)
+* return : none
+* notes  : matirix stored by column-major order (fortran convention)
+*-----------------------------------------------------------------------------*/
+extern void matfprinti(const int A[], int n, int m, int p, int q, FILE *fp)
+{
+    int i,j;
+    fprintf(fp,"MAT:----------------------------------------------------------\n");
+    for (i=0;i<n;i++) {
+        for (j=0;j<m;j++) fprintf(fp," %*.*d",p,q,A[i+j*n]);
         fprintf(fp,"\n");
     }
 }
@@ -2481,6 +2498,13 @@ extern void arc_tracemat(int level, const double *A, int n, int m, int p, int q)
     matfprint(A,n,m,p,q,stderr); fflush(stderr);
 #endif
 }
+extern void arc_tracemati(int level,const int *A,int n,int m,int p,int q)
+{
+    if (level!=ARC_MATPRINTF) return;
+#ifdef ARC_TRACE_MAT
+    matfprinti(A,n,m,p,q,stderr); fflush(stderr);
+#endif
+}
 extern void arc_traceobs(int level, const obsd_t *obs, int n)
 {
     char str[64],id[16];
@@ -3141,7 +3165,7 @@ extern double arc_tropmapf(gtime_t time, const double pos[], const double azel[]
     if (mapfw) *mapfw=gmfw;
     return gmfh;
 #else
-    return nmf(time,pos,azel,mapfw); /* NMF */
+    return arc_nmf(time,pos,azel,mapfw); /* NMF */
 #endif
 }
 /* interpolate antenna phase center variation --------------------------------*/
