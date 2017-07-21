@@ -108,18 +108,18 @@ extern double arc_tropmapf_chao(gtime_t time, const double *pos, const double *a
 extern double arc_tropmapf_cfa2_2(gtime_t time, const double *pos, const double *azel,
                                   double *mapfw);
 /* ukf filter -------------------------------------------------------------------*/
-extern int ukf_filter_new(unsigned state_dim,unsigned measure_dim,double *Q,
-                          double *R,filter_function ffun, measure_function mfun,
-                          ukf_t *ukf);
+extern ukf_t* arc_ukf_filter_new(unsigned int state_dim,
+                                 unsigned int measure_dim,
+                                 double *Q,
+                                 double *R,
+                                 filter_function ffun,
+                                 measure_function mfun);
 extern void arc_ukf_filter_delete(ukf_t *filter);
 extern void arc_ukf_filter_compute_weights(ukf_t *filter,double alpha,double k,double beta);
 extern void arc_ukf_filter_reset(ukf_t *filter, double *x0,double *PO);
 extern void arc_ukf_filter_get_state(ukf_t *filter, double *x, double *P);
 extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,double*F,
                                   double *G);
-extern int arc_ukf_filter_new(unsigned int state_dim,unsigned int measure_dim,
-                              double *Q,double *R,filter_function ffun,
-                              measure_function mfun,ukf_t *ukf);
 #ifdef __cplusplus
 }
 #endif

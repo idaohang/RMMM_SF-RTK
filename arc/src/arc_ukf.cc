@@ -121,23 +121,20 @@ static void arc_ukf_cholesky_invert(double *A, unsigned n, double *sigma)
  * @param ffun: the funcion describing the filter evolution equation
  * @param mfun: the measurement function
  * ----------------------------------------------------------------*/
-extern int arc_ukf_filter_new(unsigned int state_dim,
-                              unsigned int measure_dim,
-                              double *Q,
-                              double *R,
-                              filter_function ffun,
-                              measure_function mfun,
-                              ukf_t *ukf)
+extern ukf_t* arc_ukf_filter_new(unsigned int state_dim,
+                                 unsigned int measure_dim,
+                                 double *Q,
+                                 double *R,
+                                 filter_function ffun,
+                                 measure_function mfun)
 {
     ukf_t *filter;
     int Size;
     unsigned err=0;
     /* nothing to do if no state or measurement !*/
-    if(state_dim==0||measure_dim==0) return 0;
+    if(state_dim==0||measure_dim==0) return NULL;
     /* alloc new structure */
-    if (!(filter=(ukf_t*)malloc(sizeof(ukf_t)))) return 0;
-    /* fills the structure*/
-    if (ukf) filter=ukf; else return 0;
+    if (!(filter=(ukf_t*)malloc(sizeof(ukf_t)))) return NULL;
 
     filter->state_dim=state_dim;
     filter->measure_dim=measure_dim;
@@ -227,7 +224,7 @@ extern int arc_ukf_filter_new(unsigned int state_dim,
         return 0;
     }
     memcpy(filter->R,R,Size*Size*sizeof(double));
-    return 1;
+    return filter;
 }
 /* -------------------------------------------------------------------
  * set filter weight using default procedure
@@ -298,6 +295,9 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
 
     /* cholesky decomposition of the state covariance matrix */
     arc_ukf_cholesky_decomposition(filter->P,l,filter->sigma);
+    
+    arc_log(ARC_INFO,"arc_ukf_filter_update,cholesky decomposition P=\n ");
+    arc_tracemat(ARC_MATPRINTF,filter->P,filter->state_dim,filter->state_dim,10,4);
 
     /* ================================= */
     /* compute sigma points */
@@ -423,7 +423,7 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
         }
     }
     arc_log(ARC_INFO,"arc_ukf_filter_update : Pxy matrix \n");
-    arc_tracemat(ARC_MATPRINTF,filter->Pxy,l,m,10,4);
+    arc_tracemat(ARC_MATPRINTF,filter->Pxy,m,l,10,4);
 
     /* gain de kalman */
     arc_ukf_cholesky_decomposition(filter->Pyy,m,filter->sigma_y);
@@ -433,6 +433,9 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     for(i=0;i<l*l;i++) {
         filter->P[i]=filter->PM_save[i];
     }
+    arc_log(ARC_INFO,"arc_ukf_filter_update :ukf measurements =\n");
+    arc_tracemat(ARC_MATPRINTF,y,filter->measure_dim,1,10,4);
+    
     /* update state */
     for (j=0;j<m;j++) {
         filter->dy[j]=y[j]-filter->ym[j];
@@ -477,7 +480,7 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
 extern void arc_ukf_filter_delete(ukf_t *filter)
 {
     /* free ukf */
-    filter->measure_dim=filter->state_dim=0;
+    filter->measure_dim=filter->state_dim=0;  /* todo:this function have some unknown bugs,must to fix */
     filter->gamma=0.0;
 
     if (filter->x)           free(filter->x);
@@ -494,7 +497,7 @@ extern void arc_ukf_filter_delete(ukf_t *filter)
     if (filter->PM_save)     free(filter->PM_save);
     if (filter->xm)          free(filter->xm);
     if (filter->ym)          free(filter->ym);
-    if (filter->khi)         free(filter->khi);
+    if (filter->khi)         free(filter->khi);  /* todo:memory leak or memory overflow,need to fix */
     if (filter->khi_y)       free(filter->khi_y);
     if (filter->Pyy)         free(filter->Pyy);
     if (filter->Pxy)         free(filter->Pxy);
@@ -502,4 +505,6 @@ extern void arc_ukf_filter_delete(ukf_t *filter)
     if (filter->dy)          free(filter->dy);
     if (filter->gain)        free(filter->gain);
     if (filter->KL)          free(filter->KL);
+    if (filter)              free(filter);
+    filter=NULL;
 }

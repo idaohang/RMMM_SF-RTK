@@ -926,7 +926,7 @@ typedef struct {         /* RTK control/result type */
                             /* solve the single rtk position loss function */
     int *ceres_active_x;    /* ceres solver active states index in states list */
     double lam;             /* adaptive Kaman filter parameters */
-    ukf_t ukf;              /* unscented Kalman filter */
+    ukf_t* ukf;             /* unscented Kalman filter */
     int sat[MAXSAT];        /* hold the double-difference satellite pair,sat[2*i] is reference satellite */
     int nc;                 /* phase observation numbers */
     int np;                 /* pseudorange observation numbers */

@@ -863,6 +863,8 @@ extern int arc_smoother(const double *xf, const double *Qf, const double *xb,
 extern void matfprint(const double A[], int n, int m, int p, int q, FILE *fp)
 {
     int i,j;
+    static char *str="-";
+    for (i=0;i<p*m+5;i++) fprintf(fp,str);fprintf(fp,"\n");
     for (i=0;i<n;i++) {
         for (j=0;j<m;j++) fprintf(fp," %*.*f",p,q,A[i+j*n]);
         fprintf(fp,"\n");
