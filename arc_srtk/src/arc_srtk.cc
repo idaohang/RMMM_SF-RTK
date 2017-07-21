@@ -444,6 +444,7 @@ static void arc_udpos(rtk_t *rtk,double tt)
     arc_log(ARC_INFO, "arc_udpos   : tt=%.3f\n", tt);
 
     /* fixed mode */
+    /* todo:this mode may useless */
     if (rtk->opt.mode==PMODE_FIXED) {
         for (i=0;i<3;i++) arc_initx(rtk,rtk->opt.ru[i],1E-8,i);
         return;
@@ -453,10 +454,15 @@ static void arc_udpos(rtk_t *rtk,double tt)
         for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
     }
     /* reset rover station pistion and its variance */
+    /* todo:using standard positioning to initial ukf prior states and its covariacne matrix,
+     * todo:and may have more better methids to do this */
+#ifdef ARC_UKF_USEPNT_INIT
     for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],rtk->sol.qr[i],i);
-    
+#else
+    for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
+#endif
     /* update ceres solver problem active states index list */
-    for (i=0;i<3;i++) rtk->ceres_active_x[i]=1;
+    for (i=0;i<3;i++) rtk->ceres_active_x[i]=1;  /* todo:set active states index in here may be not best */
 
     /* add velecity noise to position variance */
     for (i=0;i<3;i++) rtk->P[i+i*rtk->nx]+=SQR(rtk->opt.prn[5])*tt;
@@ -1106,7 +1112,7 @@ static double arc_intpres(gtime_t time, const obsd_t *obs, int n, const nav_t *n
     ttb=timediff(time,obsb[0].time);
     if (fabs(ttb)>opt->maxtdiff*2.0||ttb==tt) return tt;
 
-    arc_satposs(time, obsb, nb, nav, opt->sateph, rs, dts, var, svh);
+    arc_satposs(time,obsb,nb,nav,opt->sateph,rs,dts,var,svh);
 
     if (!arc_zdres(1,obsb,nb,rs,dts,svh,nav,rtk->rb,opt,1,yb,e,azel,rtk,NULL)) {
         return tt;
@@ -1568,6 +1574,18 @@ static void arc_ukf_initial(rtk_t *rtk,const nav_t* nav,const obsd_t* obs,int nu
         _UKF_MEAS_=arc_zeros(MAXSAT,1); _UKF_NMEAS_=0;
     }
 }
+/* ukf: free ukf position variance--------------------------------------------*/
+extern void arc_ukf_free_problem()  /* todo:may be have more better way to free ukf problem */
+{
+    if (_UKF_MEAS_) free(_UKF_MEAS_);
+    if (_UKF_PP_)   free(_UKF_PP_);
+    if (_UKF_XP_)   free(_UKF_XP_);
+    if (_UKF_Q_)    free(_UKF_Q_);
+    if (_UKF_IX_)   free(_UKF_IX_);
+    if (_UKF_DY_)   free(_UKF_DY_);
+    if (_UKF_Y_)    free(_UKF_Y_);
+    if (_UKF_R_)    free(_UKF_R_);
+}
 /* ukf: count active states index list----------------------------------------*/
 static void arc_ukf_activex(const rtk_t *rtk)
 {
@@ -1976,6 +1994,9 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             }
         }
         else if (opt->ukf) {
+            /* inital states covariance matrix */
+            arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);  /* todo:this step may educe code running'speed */
+            
             /* undifferenced residuals for rover */
             if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk,NULL)) {
                 arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
@@ -1987,53 +2008,54 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                 arc_log(ARC_WARNING, "arc_relpos : no double-differenced residual\n");
                 stat=SOLQ_NONE;
             }
-            /* count active states index list */
-            arc_ukf_activex(rtk);
-            /* compute the states system noise matrix */
-            arc_ukf_Q(rtk);
+            if (_UKF_NV_>=1) {  /* todo:this condition may not best */
+                /* count active states index list */
+                arc_ukf_activex(rtk);
+                /* compute the states system noise matrix */
+                arc_ukf_Q(rtk);
 
-#ifdef ARC_TEST
-            arc_tracemat(ARC_MATPRINTF,_UKF_Q_,_UKF_ANX_,_UKF_ANX_,10,4);
-#endif
-            /* creates a new unscented kalman filter structure */
-            ukf_t *ukf=arc_ukf_filter_new(_UKF_ANX_,_UKF_NV_,_UKF_Q_,_UKF_R_,
-                                          arc_ukf_filterfunc,arc_ukf_measfunc);
-#ifdef ARC_TEST
-            arc_tracemat(ARC_MATPRINTF,_UKF_R_,_UKF_NV_,_UKF_NV_,10,4);
-#endif
-            /* set the prior states and its covariance matrix */
-            arc_ukf_get_prior_XP(rtk,_UKF_XP_,_UKF_PP_);
+                arc_log(ARC_INFO,"arc_relpos : Q(ukf)=\n");
+                arc_tracemat(ARC_MATPRINTF,_UKF_Q_,_UKF_ANX_,_UKF_ANX_,10,4);
 
-#ifdef ARC_TEST
-            arc_tracemat(ARC_MATPRINTF,_UKF_XP_,_UKF_ANX_,1,10,4);
-            arc_tracemat(ARC_MATPRINTF,_UKF_PP_,_UKF_ANX_,_UKF_ANX_,10,4);
-#endif
-            arc_ukf_filter_reset(ukf,_UKF_XP_,_UKF_PP_);
+                /* creates a new unscented kalman filter structure */
+                ukf_t *ukf=arc_ukf_filter_new(_UKF_ANX_,_UKF_NV_,_UKF_Q_,_UKF_R_,
+                                              arc_ukf_filterfunc,arc_ukf_measfunc);
 
-            /* compute weight of ukf */
-            arc_ukf_filter_compute_weights(ukf,rtk->opt.ukf_alpha,
-                                           rtk->opt.ukf_ZCount,rtk->opt.ukf_beta);
-            /* make double-difference measurements */
-            if (arc_ukf_dd_meas()!=_UKF_NV_) {
-                arc_log(ARC_WARNING, "arc_relpos : no double-differenced measurements\n");
-                stat=SOLQ_NONE;
+                arc_log(ARC_INFO,"arc_relpos : R(ukf)=\n");
+                arc_tracemat(ARC_MATPRINTF,_UKF_R_,_UKF_NV_,_UKF_NV_,10,4);
+
+                /* set the prior states and its covariance matrix */
+                arc_ukf_get_prior_XP(rtk,_UKF_XP_,_UKF_PP_);
+
+                arc_ukf_filter_reset(ukf,_UKF_XP_,_UKF_PP_);
+
+                /* compute weight of ukf */
+                arc_ukf_filter_compute_weights(ukf,rtk->opt.ukf_alpha,
+                                               rtk->opt.ukf_ZCount,rtk->opt.ukf_beta);
+                /* make double-difference measurements */
+                if (arc_ukf_dd_meas()!=_UKF_NV_) {  /* todo:here may have bugs */
+                    arc_log(ARC_WARNING, "arc_relpos : no double-differenced measurements\n");
+                    stat=SOLQ_NONE;
+                }
+                arc_log(ARC_INFO,"arc_relpos : double-differenced measurements(ukf)\n");
+                arc_tracemat(ARC_MATPRINTF,_UKF_MEAS_,_UKF_NV_,1,10,4);
+
+                /* states filter */
+                arc_ukf_filter_update(ukf,_UKF_MEAS_,NULL,NULL,NULL);
+                /* updates states */
+                arc_ukf_get_updatax(ukf,xp,Pp);
+
+                arc_log(ARC_INFO,"ukf updates x : \n");
+                arc_tracemat(ARC_MATPRINTF,xp,3,1,10,4);
+                
+#ifdef ARC_TEST
+                fp_ukf_ceres<<setiosflags(ios::fixed)<<setprecision(10)
+                            <<xp[0]<<"   "<<xp[1]<<"   "<<xp[2]<<"   "
+                            <<ukf->state_dim<<"   "<<ukf->measure_dim<<std::endl;
+#endif
+                /* free ukf problem */
+                arc_ukf_filter_delete(ukf);  /* todo:why always free?may be have some better way to do */
             }
-#ifdef ARC_TEST
-            arc_tracemat(ARC_MATPRINTF,_UKF_MEAS_,_UKF_NV_,1,10,4);
-#endif
-            /* states filter */
-            arc_ukf_filter_update(ukf,_UKF_MEAS_,NULL,NULL,NULL);
-            /* updates states */
-            arc_ukf_get_updatax(ukf,xp,Pp);
-
-            arc_log(ARC_INFO,"ukf updates x : \n");
-            arc_tracemat(ARC_MATPRINTF,xp,3,1,10,4);
-#ifdef ARC_TEST
-            fp_ukf_ceres<<setiosflags(ios::fixed)<<setprecision(10)<<
-                        xp[0]<<"   "<<xp[1]<<"   "<<xp[2]<<"   "<<ukf->state_dim<<"   "<<ukf->measure_dim<<std::endl;
-#endif
-            /* free ukf problem */
-            arc_ukf_filter_delete(ukf);  /* todo:why always free?may be have some better way to do */
         }
     }
     else if (opt->ceres==ARC_CERES_SINGLE) {

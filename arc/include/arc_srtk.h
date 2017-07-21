@@ -45,6 +45,7 @@ extern "C" {
 #define ARC_CERES_SINGLE      1           /* ceres solver single epoch solution */
 #define ARC_CERES_WINDOWS     2           /* ceres solver windows solution */
 #define ARC_TEST                          /* arc-srtk test define */
+#define ARC_UKF_USEPNT_INIT               /* using standard position to initial ukf prior states and its covariance matrix */
 /* single frequency rtk position post-processing ------------------------------*/
 extern int  arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,
@@ -120,6 +121,7 @@ extern void arc_ukf_filter_reset(ukf_t *filter, double *x0,double *PO);
 extern void arc_ukf_filter_get_state(ukf_t *filter, double *x, double *P);
 extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,double*F,
                                   double *G);
+extern void arc_ukf_free_problem();
 #ifdef __cplusplus
 }
 #endif
