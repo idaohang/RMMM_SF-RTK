@@ -97,6 +97,7 @@ static double *_UKF_XP_  =NULL;                     /* ukf problem prior states 
 static double *_UKF_PP_  =NULL;                     /* ukf problem prior states covariance matrix */
 static double *_UKF_MEAS_=NULL;                     /* ukf problem measurements vector */
 static int _UKF_NMEAS_   =0;                        /* ukf problem measurements vector dim */
+static double *_KF_Y_    =NULL;                     /* ukf problem kf's undifference measurements */
 
 /* single-differenced observable ---------------------------------------------*/
 static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
@@ -777,6 +778,14 @@ static int arc_validobs(int i,int j,int f,int nf,double *y)
     return y[f+i*nf*2]!=0.0&&y[f+j*nf*2]!=0.0&&
            (f<nf||(y[f-nf+i*nf*2]!=0.0&&y[f-nf+j*nf*2]!=0.0));
 }
+/* test valid observation data for ukf----------------------------------------*/
+static int arc_ukf_validobs(int i,int j,int f,int nf,double *ukf_y)
+{
+    /* if no phase observable, psudorange is also unusable */
+    if (ukf_y==NULL) return 1;
+    return ukf_y[f+i*nf*2]!=0.0&&ukf_y[f+j*nf*2]!=0.0&&
+           (f<nf||(ukf_y[f-nf+i*nf*2]!=0.0&&ukf_y[f-nf+j*nf*2]!=0.0));
+}
 /* double-differenced measurement error covariance ---------------------------*/
 static void arc_ddcov(const int *nb, int n, const double *Ri, const double *Rj,
                       int nv, double *R)
@@ -877,7 +886,7 @@ static int arc_test_sys(int sys, int m)
 static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
                      const double *P,const int *sat,double *y,double *e,
                      double *azel,const int *iu,const int *ir,int ns,double *v,
-                     double *H,double *R,int *vflg,double *ukf_y,double *ukf_dy)
+                     double *H,double *R,int *vflg, double *ukf_y,double *ukf_dy)
 {
     prcopt_t *opt=&rtk->opt;
     double bl,dr[3],posu[3],posr[3],didxi=0.0,didxj=0.0,*im;
@@ -891,6 +900,9 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
 
     Ri=arc_mat(ns*nf*2+2,1); Rj=arc_mat(ns*nf*2+2,1); im=arc_mat(ns,1);
     tropu=arc_mat(ns,1); tropr=arc_mat(ns,1); dtdxu=arc_mat(ns,3); dtdxr=arc_mat(ns,3);
+
+    /* reset double-difference measurements for ukf */
+    if (ukf_dy) for (i=0;i<ns;i++) ukf_dy[i]=0.0;
 
     /* initial satellite status informations */
     for (i=0;i<MAXSAT;i++) {
@@ -917,8 +929,12 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
         for (i=-1,j=0;j<ns;j++) {
             sysi=rtk->ssat[sat[j]-1].sys;
             if (!arc_test_sys(sysi,m)) continue;
+            
             /* y[i] may be zero,so must check out,this step is importance */
-            if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
+            if (y)     if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
+            if (ukf_y) if (!arc_ukf_validobs(iu[j],ir[j],f,nf,ukf_y)) continue;
+
+            /* set the reference satellite index */
             if (i<0||azel[1+iu[j]*2]>=azel[1+iu[i]*2]) i=j;
         }
         if (i<0) continue;  /* i is the reference satellite */
@@ -929,7 +945,10 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
             sysi=rtk->ssat[sat[i]-1].sys;
             sysj=rtk->ssat[sat[j]-1].sys;
             if (!arc_test_sys(sysj,m)) continue;
-            if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
+            
+            /* todo:may be have bugs on running,need to fix in future */
+            if (y)     if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
+            if (ukf_y) if (!arc_ukf_validobs(iu[j],ir[j],f,nf,ukf_y)) continue;
 
             /* save double-difference satellite pair */
             rtk->sat[nv*2]=sat[i]; rtk->sat[nv*2+1]=sat[j];
@@ -1058,8 +1077,9 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
         arc_tracemat(ARC_MATPRINTF, H,rtk->nx,nv,7,4);
     }
     /* double-differenced measurement error covariance */
-    if (R) arc_ddcov(nb,b,Ri,Rj,nv,R);
-
+    if (R) {
+        arc_ddcov(nb,b,Ri,Rj,nv,R);
+    }
     free(Ri); free(Rj); free(im);
     free(tropu); free(tropr); free(dtdxu); free(dtdxr);
 
@@ -1460,10 +1480,10 @@ static void arc_ukf_filterfunc(int states_dim,double *input_X,double *output_X)
     for (i=0;i<states_dim;i++) output_X[i]=input_X[i];  /* todo:here have not think about dynamic model */
 }
 /* ukf: Propagate sigma points through the measurement model -----------------*/
-static void arc_ukf_measfunc(double *input_X,double *output_Y)
+static void arc_ukf_measfunc(double *input_X,double *output_Y)  /* todo:this function have some problem and bugs,need to fix */
 {
     /* input_X's dim is not equal to rtk->nx,so need to adjust */
-    int ns,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],i,nzd=0;
+    int ns,sat[MAXSAT]={0},iu[MAXSAT]={0},ir[MAXSAT]={0},i,nzd=0;
     double dt,*xp=arc_zeros(_UKF_RTK_->nx,1);
 
     if (input_X==NULL||output_Y==NULL) return;
@@ -1484,7 +1504,7 @@ static void arc_ukf_measfunc(double *input_X,double *output_Y)
     /* undifferenced residuals for rover */
     if (!(nzd=arc_zdres(0,_UKF_OBS_,_UKF_NU_,_UKF_RS_,_UKF_DTS_,_UKF_SVH_,
                         _UKF_NAV_,xp,&_UKF_RTK_->opt,0,
-                        NULL,_UKF_E_,_UKF_AZEL_,_UKF_RTK_,_UKF_Y_))) {
+                        _KF_Y_,_UKF_E_,_UKF_AZEL_,_UKF_RTK_,_UKF_Y_))) {
         arc_log(ARC_WARNING, "arc_ukf_measfunc : rover initial position error\n");
         return;
     }
@@ -1492,8 +1512,8 @@ static void arc_ukf_measfunc(double *input_X,double *output_Y)
     arc_tracemat(ARC_MATPRINTF,_UKF_Y_,_UKF_NU_,1,10,4);
 
     /* double-differenced residuals and partial derivatives */
-    if ((_UKF_NV_=arc_ddres(_UKF_RTK_,_UKF_NAV_,dt,xp,NULL,sat,NULL,_UKF_E_,
-                            _UKF_AZEL_,iu,ir,ns,NULL,NULL,_UKF_R_,_VFLAG_,_UKF_Y_,_UKF_DY_))<1) {
+    if ((_UKF_NV_=arc_ddres(_UKF_RTK_,_UKF_NAV_,dt,xp,NULL,sat,_KF_Y_,_UKF_E_,
+                            _UKF_AZEL_,iu,ir,ns,NULL,NULL,NULL,_VFLAG_,_UKF_Y_,_UKF_DY_))<1) {
         arc_log(ARC_WARNING, "arc_ukf_measfunc : no double-differenced residual\n");
     }
     if (output_Y) {
@@ -1506,9 +1526,9 @@ static void arc_ukf_measfunc(double *input_X,double *output_Y)
 }
 /* ukf: set the all needed paranmeter pointor,just for initial ukf process----*/
 static void arc_ukf_initial(rtk_t *rtk,const nav_t* nav,const obsd_t* obs,int nu,int nr,
-                            double *rs,double *dts,double *e,int *svh,int *vflag,double *azel)
+                            double *rs,double *dts,double *e,int *svh,int *vflag,double *azel,
+                            double *kf_y)
 {
-    int i,k;
     /* before using ukf,must use this function to initial all data and struct */
     _UKF_RTK_  =rtk;       /* rtk data struct */
     _UKF_NAV_  =nav;       /* navigation data */
@@ -1522,6 +1542,7 @@ static void arc_ukf_initial(rtk_t *rtk,const nav_t* nav,const obsd_t* obs,int nu
     _UKF_AZEL_ =azel;      /* satellite-rover station azel pointor */
     _UKF_E_    =e;         /* observation satellite - rover line of light */
     _UKF_DTS_  =dts;       /* satellite clock/dirft pointor */
+    _KF_Y_     =kf_y;      /* undifference measurements pointor */
     if (_UKF_R_==NULL) {   /* initial double-difference measurements variance */
         _UKF_R_=arc_zeros(MAXSAT,MAXSAT);   /* todo:may be allocate too large memory */
     }
@@ -1529,10 +1550,10 @@ static void arc_ukf_initial(rtk_t *rtk,const nav_t* nav,const obsd_t* obs,int nu
         _UKF_Y_=arc_zeros(MAXSAT*2*2,1);    /* todo:may be allocate too large memory */
     }
     if (_UKF_DY_==NULL) {  /* initial sigma point double-difference measurements vector */
-        _UKF_DY_=arc_mat(MAXSAT*2,1);       /* todo:may be allocate too large memory,can be modified */
+        _UKF_DY_=arc_zeros(MAXSAT*2,1);     /* todo:may be allocate too large memory,can be modified */
     }
     if (_UKF_IX_==NULL) {  /* initial active states index list */
-        _UKF_IX_=arc_imat(rtk->nx,1); 
+        _UKF_IX_=arc_imat(rtk->nx,1);
     }
     if (_UKF_Q_==NULL) {   /* initial states system noise matrix */
         _UKF_Q_=arc_zeros(rtk->nx,rtk->nx);
@@ -1671,7 +1692,7 @@ static int arc_ukf_dd_meas()
                              (_UKF_OBS_[ir[0]].P[0]-_UKF_OBS_[ir[1]].P[0]));
     }
     if (k!=(_UKF_RTK_->nc+_UKF_RTK_->np)) return 0;  /* todo:this condition may be not best */
-    return 1;
+    return k;
 }
 /* ceres problem pointor asignment -------------------------------------------*/
 static void arc_ceres_init(double *H,const prcopt_t* opt,int nv,double* rs,
@@ -1872,7 +1893,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     arc_satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
 
     /* initial ukf solution needed data struct */
-    if (opt->ukf) arc_ukf_initial(rtk,nav,obs,nu,nr,rs,dts,e,svh,vflg,azel);
+    if (opt->ukf) arc_ukf_initial(rtk,nav,obs,nu,nr,rs,dts,e,svh,vflg,azel,y);
 
     /* exclude measurements of eclipsing satellite (block IIA) */
     if (rtk->opt.posopt[3]) {
@@ -1993,7 +2014,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             arc_ukf_filter_compute_weights(ukf,rtk->opt.ukf_alpha,
                                            rtk->opt.ukf_ZCount,rtk->opt.ukf_beta);
             /* make double-difference measurements */
-            if (!arc_ukf_dd_meas()) {
+            if (arc_ukf_dd_meas()!=_UKF_NV_) {
                 arc_log(ARC_WARNING, "arc_relpos : no double-differenced measurements\n");
                 stat=SOLQ_NONE;
             }
@@ -2009,7 +2030,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             arc_tracemat(ARC_MATPRINTF,xp,3,1,10,4);
 #ifdef ARC_TEST
             fp_ukf_ceres<<setiosflags(ios::fixed)<<setprecision(10)<<
-                        xp[0]<<"   "<<xp[1]<<"   "<<xp[2]<<std::endl;
+                        xp[0]<<"   "<<xp[1]<<"   "<<xp[2]<<"   "<<ukf->state_dim<<"   "<<ukf->measure_dim<<std::endl;
 #endif
             /* free ukf problem */
             arc_ukf_filter_delete(ukf);  /* todo:why always free?may be have some better way to do */
@@ -2032,7 +2053,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         }
         /* build a ceres solve problem */
         ceres_problem_t *ceres_problem=arc_ceres_create_problem();
-        ceres_option_t  *ceres_option=arc_ceres_create_option();
+        ceres_option_t  *ceres_option =arc_ceres_create_option ();
         ceres_summary_t *ceres_summary=arc_ceres_create_summary();
 
         /* ceres problem initial */
@@ -2079,7 +2100,6 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     }
     else if (opt->ceres_windows==ARC_CERES_WINDOWS) {
         
-
     }
     if (stat!=SOLQ_NONE&&arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk,NULL)) {
 

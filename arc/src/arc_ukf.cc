@@ -181,7 +181,7 @@ extern ukf_t* arc_ukf_filter_new(unsigned int state_dim,
     err|=(filter->ym==NULL);
 
     Size=2*filter->state_dim+1;
-    filter->khi=(double*)malloc(Size*filter->state_dim*sizeof(double));
+    filter->khi=(double*)malloc(2*Size*filter->state_dim*sizeof(double));
     err|=(filter->khi==NULL);
 
     filter->khi_y=(double*)malloc(Size*filter->measure_dim*sizeof(double));
@@ -321,6 +321,9 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     for (i=0;i<2*l+1;i++) {  /* sigma point numbers */
         filter->ffun(filter->state_dim,&(filter->sigma_point[i*l]),&(filter->khi[i*l]));
     }
+    arc_log(ARC_INFO,"sigma points:\n");
+    arc_tracemat(ARC_MATPRINTF,filter->sigma_point,l,2*l+1,16,4);
+
     /* compute state prediction xm */
     for (i=0;i<l;i++) {  /* states numbers */
         filter->xm[i]=filter->wm[0]*filter->khi[i];
@@ -330,7 +333,7 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     }
     arc_log(ARC_INFO,"arc_ukf_filter_update : propagate sigma points,"
             "its mean sigma point is : \n");
-    arc_tracemat(ARC_MATPRINTF,filter->xm,l,1,10,4);
+    arc_tracemat(ARC_MATPRINTF,filter->xm,l,1,16,4);
     
     /* ================================ */
     /* time update */
@@ -381,6 +384,8 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     for (i=0;i<2*l+1;i++) {
         filter->mfun(&(filter->sigma_point[i*l]),&(filter->khi_y[i*m]));
     }
+    arc_tracemat(ARC_MATPRINTF,filter->khi_y,m,2*l+1,16,4);
+
     /* measurement prediction */
     for (i=0;i<m;i++) {
         filter->ym[i]=filter->wm[0]*filter->khi_y[i];
@@ -496,8 +501,8 @@ extern void arc_ukf_filter_delete(ukf_t *filter)
     if (filter->PM)          free(filter->PM);
     if (filter->PM_save)     free(filter->PM_save);
     if (filter->xm)          free(filter->xm);
-    if (filter->ym)          free(filter->ym);
     if (filter->khi)         free(filter->khi);  /* todo:memory leak or memory overflow,need to fix */
+    if (filter->ym)          free(filter->ym);
     if (filter->khi_y)       free(filter->khi_y);
     if (filter->Pyy)         free(filter->Pyy);
     if (filter->Pxy)         free(filter->Pxy);
