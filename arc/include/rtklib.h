@@ -650,6 +650,7 @@ typedef struct {        /* solution type */
     float age;          /* age of differential (s) */
     float ratio;        /* AR ratio factor for valiation */
     float thres;        /* AR ratio threshold for valiation */
+    int ns;             /* valid sat numbers */
 } sol_t;
 
 typedef struct {        /* solution status type */
@@ -762,6 +763,10 @@ typedef struct {        /* processing options type */
     double ukf_alpha;      /* ukf compute weight parameter-1 */
     double ukf_ZCount;     /* ukf compute weight parameter-2 */
     double ukf_beta;       /* ukf compute weight parameter-3 */
+
+    int reset_amb_all;     /* every epoch all ambiguity reset */
+    int amb_part;          /* resolve part ambiguity */
+    int amb_iter;          /* number of lambda  iteration */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -858,6 +863,7 @@ typedef struct {        /* satellite status type */
     double  phw;        /* phase windup (cycle) */
     gtime_t pt[2][NFREQ]; /* previous carrier-phase time */
     double  ph[2][NFREQ]; /* previous carrier-phase observable (cycle) */
+    double  r0[2];
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */
@@ -930,6 +936,7 @@ typedef struct {         /* RTK control/result type */
     int sat[MAXSAT];        /* hold the double-difference satellite pair,sat[2*i] is reference satellite */
     int nc;                 /* phase observation numbers */
     int np;                 /* pseudorange observation numbers */
+    int amb_refsat;         /* ambiguity solve reference satellite */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */

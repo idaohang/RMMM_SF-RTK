@@ -119,7 +119,7 @@ extern void arc_ukf_filter_delete(ukf_t *filter);
 extern void arc_ukf_filter_compute_weights(ukf_t *filter,double alpha,double k,double beta);
 extern void arc_ukf_filter_reset(ukf_t *filter, double *x0,double *PO);
 extern void arc_ukf_filter_get_state(ukf_t *filter, double *x, double *P);
-extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,double*F,
+extern int  arc_ukf_filter_update(ukf_t *filter, double *y, double *u,double*F,
                                   double *G);
 extern void arc_ukf_free_problem();
 #ifdef __cplusplus

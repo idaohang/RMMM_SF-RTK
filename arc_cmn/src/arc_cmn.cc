@@ -630,7 +630,7 @@ extern void arc_matmul(const char *tr, int n, int k, int m, double alpha,
     }
 }
 /* LU decomposition ----------------------------------------------------------*/
-static int ludcmp(double *A, int n, int *indx, double *d)
+static int arc_ludcmp(double *A, int n, int *indx, double *d)
 {
     double big,s,tmp,*vv= arc_mat(n, 1);
     int i,imax=0,j,k;
@@ -665,7 +665,7 @@ static int ludcmp(double *A, int n, int *indx, double *d)
     return 0;
 }
 /* LU back-substitution ------------------------------------------------------*/
-static void lubksb(const double *A, int n, const int *indx, double *b)
+static void arc_lubksb(const double *A, int n, const int *indx, double *b)
 {
     double s;
     int i,ii=-1,ip,j;
@@ -687,10 +687,10 @@ extern int arc_matinv(double *A, int n)
     
     indx= arc_imat(n, 1); B= arc_mat(n, n);
     arc_matcpy(B, A, n, n);
-    if (ludcmp(B,n,indx,&d)) {free(indx); free(B); return -1;}
+    if (arc_ludcmp(B,n,indx,&d)) {free(indx); free(B); return -1;}
     for (j=0;j<n;j++) {
         for (i=0;i<n;i++) A[i+j*n]=0.0; A[j+j*n]=1.0;
-        lubksb(B,n,indx,A+j*n);
+        arc_lubksb(B,n,indx,A+j*n);
     }
     free(indx); free(B);
     return 0;
@@ -730,7 +730,6 @@ extern double *arc_cholesky(double *A,int n)
     }
     return L;
 }
-
 /* end of matrix routines ----------------------------------------------------*/
 
 /* least square estimation -----------------------------------------------------
@@ -775,9 +774,9 @@ extern int arc_lsq(const double *A, const double *y, int n, int m, double *x,
 * notes  : matirix stored by column-major order (fortran convention)
 *          if state x[i]==0.0, not updates state x[i]/P[i+i*n]
 *-----------------------------------------------------------------------------*/
-static int filter_(const double *x, const double *P, const double *H,
-                   const double *v, const double *R, int n, int m,
-                   double *xp, double *Pp)
+static int arc_filter_(const double *x, const double *P, const double *H,
+                       const double *v, const double *R, int n, int m,
+                       double *xp, double *Pp)
 {
     double *F= arc_mat(n,m),*Q= arc_mat(m,m),*K=arc_mat(n,m),*I=arc_eye(n);
     int info;
@@ -808,7 +807,7 @@ extern int arc_filter(double *x, double *P, const double *H, const double *v,
         for (j=0;j<k;j++) P_[i+j*k]=P[ix[i]+ix[j]*n];
         for (j=0;j<m;j++) H_[i+j*k]=H[ix[i]+j*n];
     }
-    info=filter_(x_,P_,H_,v,R,k,m,xp_,Pp_);
+    info=arc_filter_(x_,P_,H_,v,R,k,m,xp_,Pp_);
     for (i=0;i<k;i++) {
         x[ix[i]]=xp_[i];
         for (j=0;j<k;j++) P[ix[i]+ix[j]*n]=Pp_[i+j*k];
@@ -1742,7 +1741,7 @@ extern void eci2ecef(gtime_t tutc, const double *erpv, double *U, double *gmst)
     arc_tracemat(5, U, 3, 3, 15, 12);
 }
 /* decode antenna parameter field --------------------------------------------*/
-static int decodef(char *p, int n, double *v)
+static int arc_decodef(char *p, int n, double *v)
 {
     int i;
     
@@ -1753,7 +1752,7 @@ static int decodef(char *p, int n, double *v)
     return i;
 }
 /* add antenna parameter -----------------------------------------------------*/
-static void addpcv(const pcv_t *pcv, pcvs_t *pcvs)
+static void arc_addpcv(const pcv_t *pcv, pcvs_t *pcvs)
 {
     pcv_t *pcvs_pcv;
     
@@ -1769,7 +1768,7 @@ static void addpcv(const pcv_t *pcv, pcvs_t *pcvs)
     pcvs->pcv[pcvs->n++]=*pcv;
 }
 /* read ngs antenna parameter file -------------------------------------------*/
-static int readngspcv(const char *file, pcvs_t *pcvs)
+static int arc_readngspcv(const char *file, pcvs_t *pcvs)
 {
     FILE *fp;
     static const pcv_t pcv0={0};
@@ -1792,23 +1791,23 @@ static int readngspcv(const char *file, pcvs_t *pcvs)
             strncpy(pcv.type,buff,61); pcv.type[61]='\0';
         }
         else if (n==2) {
-            if (decodef(buff,3,neu)<3) continue;
+            if (arc_decodef(buff,3,neu)<3) continue;
             pcv.off[0][0]=neu[1];
             pcv.off[0][1]=neu[0];
             pcv.off[0][2]=neu[2];
         }
-        else if (n==3) decodef(buff,10,pcv.var[0]);
-        else if (n==4) decodef(buff,9,pcv.var[0]+10);
+        else if (n==3) arc_decodef(buff,10,pcv.var[0]);
+        else if (n==4) arc_decodef(buff,9,pcv.var[0]+10);
         else if (n==5) {
-            if (decodef(buff,3,neu)<3) continue;;
+            if (arc_decodef(buff,3,neu)<3) continue;;
             pcv.off[1][0]=neu[1];
             pcv.off[1][1]=neu[0];
             pcv.off[1][2]=neu[2];
         }
-        else if (n==6) decodef(buff,10,pcv.var[1]);
+        else if (n==6) arc_decodef(buff,10,pcv.var[1]);
         else if (n==7) {
-            decodef(buff,9,pcv.var[1]+10);
-            addpcv(&pcv,pcvs);
+            arc_decodef(buff,9,pcv.var[1]+10);
+            arc_addpcv(&pcv,pcvs);
         }
     }
     fclose(fp);
@@ -1840,7 +1839,7 @@ static int readantex(const char *file, pcvs_t *pcvs)
             state=1;
         }
         if (strstr(buff+60,"END OF ANTENNA")) {
-            addpcv(&pcv,pcvs);
+            arc_addpcv(&pcv,pcvs);
             state=0;
         }
         if (!state) continue;
@@ -1868,14 +1867,14 @@ static int readantex(const char *file, pcvs_t *pcvs)
         }
         else if (strstr(buff+60,"NORTH / EAST / UP")) {
             if (freq<1||NFREQ<freq) continue;
-            if (decodef(buff,3,neu)<3) continue;
+            if (arc_decodef(buff,3,neu)<3) continue;
             pcv.off[freq-1][0]=neu[pcv.sat?0:1]; /* x or e */
             pcv.off[freq-1][1]=neu[pcv.sat?1:0]; /* y or n */
             pcv.off[freq-1][2]=neu[2];           /* z or u */
         }
         else if (strstr(buff,"NOAZI")) {
             if (freq<1||NFREQ<freq) continue;
-            if ((i=decodef(buff+8,19,pcv.var[freq-1]))<=0) continue;
+            if ((i=arc_decodef(buff+8,19,pcv.var[freq-1]))<=0) continue;
             for (;i<19;i++) pcv.var[freq-1][i]=pcv.var[freq-1][i-1];
         }
     }
@@ -1908,7 +1907,7 @@ extern int arc_readpcv(const char *file, pcvs_t *pcvs)
         stat=readantex(file_,pcvs);
     }
     else {
-        stat=readngspcv(file_,pcvs);
+        stat=arc_readngspcv(file_,pcvs);
     }
     for (i=0;i<pcvs->n;i++) {
         pcv=pcvs->pcv+i;
@@ -2006,7 +2005,7 @@ extern void readpos(const char *file, const char *rcv, double *pos)
     pos[0]=pos[1]=pos[2]=0.0;
 }
 /* read blq record -----------------------------------------------------------*/
-static int readblqrecord(FILE *fp, double *odisp)
+static int arc_readblqrecord(FILE *fp, double *odisp)
 {
     double v[11];
     char buff[256];
@@ -2049,7 +2048,7 @@ extern int readblq(const char *file, const char *sta, double *odisp)
         if (strcmp(name,staname)) continue;
         
         /* read blq record */
-        if (readblqrecord(fp,odisp)) {
+        if (arc_readblqrecord(fp,odisp)) {
             fclose(fp);
             return 1;
         }
@@ -2155,7 +2154,7 @@ extern int geterp(const erp_t *erp, gtime_t time, double *erpv)
     return 1;
 }
 /* compare ephemeris ---------------------------------------------------------*/
-static int cmpeph(const void *p1, const void *p2)
+static int arc_cmpeph(const void *p1, const void *p2)
 {
     eph_t *q1=(eph_t *)p1,*q2=(eph_t *)p2;
     return q1->ttr.time!=q2->ttr.time?(int)(q1->ttr.time-q2->ttr.time):
@@ -2163,7 +2162,7 @@ static int cmpeph(const void *p1, const void *p2)
             q1->sat-q2->sat);
 }
 /* sort and unique ephemeris -------------------------------------------------*/
-static void uniqeph(nav_t *nav)
+static void arc_uniqeph(nav_t *nav)
 {
     eph_t *nav_eph;
     int i,j;
@@ -2172,7 +2171,7 @@ static void uniqeph(nav_t *nav)
     
     if (nav->n<=0) return;
     
-    qsort(nav->eph,nav->n,sizeof(eph_t),cmpeph);
+    qsort(nav->eph,nav->n,sizeof(eph_t),arc_cmpeph);
     
     for (i=1,j=0;i<nav->n;i++) {
         if (nav->eph[i].sat!=nav->eph[j].sat||
@@ -2201,7 +2200,7 @@ static int cmpgeph(const void *p1, const void *p2)
             q1->sat-q2->sat);
 }
 /* sort and unique glonass ephemeris -----------------------------------------*/
-static void uniqgeph(nav_t *nav)
+static void arc_uniqgeph(nav_t *nav)
 {
     geph_t *nav_geph;
     int i,j;
@@ -2232,7 +2231,7 @@ static void uniqgeph(nav_t *nav)
     arc_log(ARC_INFO, "uniqgeph: ng=%d\n", nav->ng);
 }
 /* compare sbas ephemeris ----------------------------------------------------*/
-static int cmpseph(const void *p1, const void *p2)
+static int arc_cmpseph(const void *p1, const void *p2)
 {
     seph_t *q1=(seph_t *)p1,*q2=(seph_t *)p2;
     return q1->tof.time!=q2->tof.time?(int)(q1->tof.time-q2->tof.time):
@@ -2240,7 +2239,7 @@ static int cmpseph(const void *p1, const void *p2)
             q1->sat-q2->sat);
 }
 /* sort and unique sbas ephemeris --------------------------------------------*/
-static void uniqseph(nav_t *nav)
+static void arc_uniqseph(nav_t *nav)
 {
     seph_t *nav_seph;
     int i,j;
@@ -2249,7 +2248,7 @@ static void uniqseph(nav_t *nav)
     
     if (nav->ns<=0) return;
     
-    qsort(nav->seph,nav->ns,sizeof(seph_t),cmpseph);
+    qsort(nav->seph,nav->ns,sizeof(seph_t),arc_cmpseph);
     
     for (i=j=0;i<nav->ns;i++) {
         if (nav->seph[i].sat!=nav->seph[j].sat||
@@ -2281,9 +2280,9 @@ extern void uniqnav(nav_t *nav)
     arc_log(ARC_INFO, "uniqnav: neph=%d ngeph=%d nseph=%d\n", nav->n, nav->ng, nav->ns);
     
     /* unique ephemeris */
-    uniqeph (nav);
-    uniqgeph(nav);
-    uniqseph(nav);
+    arc_uniqeph (nav);
+    arc_uniqgeph(nav);
+    arc_uniqseph(nav);
     
     /* update carrier wave length */
     for (i=0;i<MAXSAT;i++) for (j=0;j<NFREQ;j++) {
@@ -2291,7 +2290,7 @@ extern void uniqnav(nav_t *nav)
     }
 }
 /* compare observation data -------------------------------------------------*/
-static int cmpobs(const void *p1, const void *p2)
+static int arc_cmpobs(const void *p1, const void *p2)
 {
     obsd_t *q1=(obsd_t *)p1,*q2=(obsd_t *)p2;
     double tt=timediff(q1->time,q2->time);
@@ -2312,7 +2311,7 @@ extern int sortobs(obs_t *obs)
     
     if (obs->n<=0) return 0;
     
-    qsort(obs->data,obs->n,sizeof(obsd_t),cmpobs);
+    qsort(obs->data,obs->n,sizeof(obsd_t),arc_cmpobs);
     
     /* delete duplicated data */
     for (i=j=0;i<obs->n;i++) {
@@ -2707,7 +2706,7 @@ extern int expath(const char *path, char *paths[], int nmax)
     return n;
 }
 /* replace string ------------------------------------------------------------*/
-static int repstr(char *str, const char *pat, const char *rep)
+static int arc_repstr(char *str, const char *pat, const char *rep)
 {
     int len=(int)strlen(pat);
     char buff[1024],*p,*q,*r;
@@ -2761,28 +2760,28 @@ extern int reppath(const char *path, char *rpath, gtime_t time, const char *rov,
     strcpy(rpath,path);
     
     if (!strstr(rpath,"%")) return 0;
-    if (*rov ) stat|=repstr(rpath,"%r",rov );
-    if (*base) stat|=repstr(rpath,"%b",base);
+    if (*rov ) stat|=arc_repstr(rpath,"%r",rov );
+    if (*base) stat|=arc_repstr(rpath,"%b",base);
     if (time.time!=0) {
         time2epoch(time,ep);
         ep0[0]=ep[0];
         dow=(int)floor(time2gpst(time,&week)/86400.0);
         doy=(int)floor(timediff(time,epoch2time(ep0))/86400.0)+1;
-        sprintf(rep,"%02d",  ((int)ep[3]/3)*3);   stat|=repstr(rpath,"%ha",rep);
-        sprintf(rep,"%02d",  ((int)ep[3]/6)*6);   stat|=repstr(rpath,"%hb",rep);
-        sprintf(rep,"%02d",  ((int)ep[3]/12)*12); stat|=repstr(rpath,"%hc",rep);
-        sprintf(rep,"%04.0f",ep[0]);              stat|=repstr(rpath,"%Y",rep);
-        sprintf(rep,"%02.0f",fmod(ep[0],100.0));  stat|=repstr(rpath,"%y",rep);
-        sprintf(rep,"%02.0f",ep[1]);              stat|=repstr(rpath,"%m",rep);
-        sprintf(rep,"%02.0f",ep[2]);              stat|=repstr(rpath,"%d",rep);
-        sprintf(rep,"%02.0f",ep[3]);              stat|=repstr(rpath,"%h",rep);
-        sprintf(rep,"%02.0f",ep[4]);              stat|=repstr(rpath,"%M",rep);
-        sprintf(rep,"%02.0f",floor(ep[5]));       stat|=repstr(rpath,"%S",rep);
-        sprintf(rep,"%03d",  doy);                stat|=repstr(rpath,"%n",rep);
-        sprintf(rep,"%04d",  week);               stat|=repstr(rpath,"%W",rep);
-        sprintf(rep,"%d",    dow);                stat|=repstr(rpath,"%D",rep);
-        sprintf(rep,"%c",    'a'+(int)ep[3]);     stat|=repstr(rpath,"%H",rep);
-        sprintf(rep,"%02d",  ((int)ep[4]/15)*15); stat|=repstr(rpath,"%t",rep);
+        sprintf(rep,"%02d",  ((int)ep[3]/3)*3);   stat|=arc_repstr(rpath,"%ha",rep);
+        sprintf(rep,"%02d",  ((int)ep[3]/6)*6);   stat|=arc_repstr(rpath,"%hb",rep);
+        sprintf(rep,"%02d",  ((int)ep[3]/12)*12); stat|=arc_repstr(rpath,"%hc",rep);
+        sprintf(rep,"%04.0f",ep[0]);              stat|=arc_repstr(rpath,"%Y",rep);
+        sprintf(rep,"%02.0f",fmod(ep[0],100.0));  stat|=arc_repstr(rpath,"%y",rep);
+        sprintf(rep,"%02.0f",ep[1]);              stat|=arc_repstr(rpath,"%m",rep);
+        sprintf(rep,"%02.0f",ep[2]);              stat|=arc_repstr(rpath,"%d",rep);
+        sprintf(rep,"%02.0f",ep[3]);              stat|=arc_repstr(rpath,"%h",rep);
+        sprintf(rep,"%02.0f",ep[4]);              stat|=arc_repstr(rpath,"%M",rep);
+        sprintf(rep,"%02.0f",floor(ep[5]));       stat|=arc_repstr(rpath,"%S",rep);
+        sprintf(rep,"%03d",  doy);                stat|=arc_repstr(rpath,"%n",rep);
+        sprintf(rep,"%04d",  week);               stat|=arc_repstr(rpath,"%W",rep);
+        sprintf(rep,"%d",    dow);                stat|=arc_repstr(rpath,"%D",rep);
+        sprintf(rep,"%c",    'a'+(int)ep[3]);     stat|=arc_repstr(rpath,"%H",rep);
+        sprintf(rep,"%02d",  ((int)ep[4]/15)*15); stat|=arc_repstr(rpath,"%t",rep);
     }
     else if (strstr(rpath,"%ha")||strstr(rpath,"%hb")||strstr(rpath,"%hc")||
              strstr(rpath,"%Y" )||strstr(rpath,"%y" )||strstr(rpath,"%m" )||
@@ -3171,7 +3170,7 @@ extern double arc_tropmapf(gtime_t time, const double pos[], const double azel[]
 #endif
 }
 /* interpolate antenna phase center variation --------------------------------*/
-static double interpvar(double ang, const double *var)
+static double arc_interpvar(double ang, const double *var)
 {
     double a=ang/5.0; /* ang=0-90 */
     int i=(int)a;
@@ -3202,7 +3201,7 @@ extern void arc_antmodel(const pcv_t *pcv, const double *del, const double *azel
     for (i=0;i<NFREQ;i++) {
         for (j=0;j<3;j++) off[j]=pcv->off[i][j]+del[j];
         
-        dant[i]=-arc_dot(off,e,3)+(opt?interpvar(90.0-azel[1]*R2D,pcv->var[i]):0.0);
+        dant[i]=-arc_dot(off,e,3)+(opt?arc_interpvar(90.0-azel[1]*R2D,pcv->var[i]):0.0);
     }
     arc_log(ARC_INFO, "antmodel: dant=%6.3f %6.3f\n",dant[0],dant[1]);
 }
@@ -3220,7 +3219,7 @@ extern void arc_antmodel_s(const pcv_t *pcv, double nadir, double *dant)
     arc_log(ARC_INFO, "antmodel_s: nadir=%6.1f\n", nadir * R2D);
     
     for (i=0;i<NFREQ;i++) {
-        dant[i]=interpvar(nadir*R2D*5.0,pcv->var[i]);
+        dant[i]=arc_interpvar(nadir*R2D*5.0,pcv->var[i]);
     }
     arc_log(ARC_INFO, "antmodel_s: dant=%6.3f %6.3f\n", dant[0], dant[1]);
 }
@@ -3955,7 +3954,7 @@ extern double arc_tropmapf_cfa2_2(gtime_t time, const double *pos, const double 
 extern double arc_tropmapf_chao(gtime_t time, const double *pos, const double *azel,
                                 double *mapfw)
 {
-    double A,B,C,mh,mw;
+    double A,B,mh,mw;
 
     if (pos[2]<-1000.0||pos[2]>20000.0) {
         if (mapfw) *mapfw=0.0;

@@ -21,10 +21,11 @@
  * @brief ARC-SRTK Particle Filter Some Const-Variable and Marco
  * @author sujinglan
  */
-#include <rtklib.h>
 #include "arc.h"
 
 #define MAXSTATES 100
+/* Macro for defining an exception------------------------------------------------------*/
+ARC_DEFINE_EXCEPTION(Exception, std::runtime_error);
 
 /*-------------------------------------------------------------------------
  * Computes cholesky decomposition of A
@@ -36,6 +37,8 @@
  *------------------------------------------------------------------------*/
 static void arc_ukf_cholesky_decomposition(double *A, unsigned n, double *sigma)
 {
+    arc_log(ARC_INFO,"arc_ukf_cholesky_decomposition : \n");
+
     unsigned i,j,k;
     double t;
 
@@ -69,6 +72,8 @@ static void arc_ukf_cholesky_decomposition(double *A, unsigned n, double *sigma)
 static void arc_ukf_cholesky_solve(double *A, unsigned n, double *sigma, double *B,
                                    unsigned m, double *X)
 {
+    arc_log(ARC_INFO,"arc_ukf_cholesky_solve : \n");
+
     int i,j,k;
     double t;
 
@@ -99,6 +104,8 @@ static void arc_ukf_cholesky_solve(double *A, unsigned n, double *sigma, double 
  *---------------------------------------------------------------------*/
 static void arc_ukf_cholesky_invert(double *A, unsigned n, double *sigma)
 {
+    arc_log(ARC_INFO,"arc_ukf_cholesky_invert : \n");
+
     double t;
     int i,j,k;
 
@@ -128,6 +135,8 @@ extern ukf_t* arc_ukf_filter_new(unsigned int state_dim,
                                  filter_function ffun,
                                  measure_function mfun)
 {
+    arc_log(ARC_INFO,"arc_ukf_filter_new : \n");
+
     ukf_t *filter;
     int Size;
     unsigned err=0;
@@ -235,6 +244,8 @@ extern ukf_t* arc_ukf_filter_new(unsigned int state_dim,
 extern void arc_ukf_filter_compute_weights(ukf_t  *filter,double alpha,
                                            double ZCount,double beta)
 {
+    arc_log(ARC_INFO,"arc_ukf_filter_compute_weights : \n");
+
     double l;
     double lam;
     unsigned YCount;
@@ -260,6 +271,8 @@ extern void arc_ukf_filter_compute_weights(ukf_t  *filter,double alpha,
  * -------------------------------------------------------------------*/
 extern void arc_ukf_filter_reset(ukf_t* filter,double *x0,double *P0)
 {
+    arc_log(ARC_INFO,"arc_ukf_filter_reset : \n");
+
     if(filter) {
         /* state of the filter */
         if (x0) arc_matcpy(filter->x,x0,filter->state_dim,1);
@@ -273,6 +286,8 @@ extern void arc_ukf_filter_reset(ukf_t* filter,double *x0,double *P0)
  *--------------------------------------------------------------------*/
 extern void arc_ukf_filter_get_state(ukf_t *filter, double *x, double* P)
 {
+    arc_log(ARC_INFO,"arc_ukf_filter_get_state : \n");
+
     if(filter) {
         if (x) arc_matcpy(x,filter->x,filter->state_dim,1);
         if (P) arc_matcpy(P,filter->P,filter->state_dim,filter->state_dim);
@@ -283,13 +298,15 @@ extern void arc_ukf_filter_get_state(ukf_t *filter, double *x, double* P)
  * @param y: The measure vector
  * @param u: the command
  * -------------------------------------------------------------------*/
-extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
-                                  double*F,double *G)
+extern int arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
+                                 double*F,double *G)
 {
     int l=filter->state_dim; /* numbers of states */
     int m=filter->measure_dim; /* numbers of measures */
     int i,j,k;
     double t;
+    /* propagate measurements and gotten measurements max difference for check */
+    static const double MAXDY=5.0;
 
     arc_log(ARC_INFO,"arc_ukf_filter_update : update filter using a measure \n");
 
@@ -320,6 +337,11 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     /* propagate sigma points:y=f(xi) ,return khi[]*/
     for (i=0;i<2*l+1;i++) {  /* sigma point numbers */
         filter->ffun(filter->state_dim,&(filter->sigma_point[i*l]),&(filter->khi[i*l]));
+    }
+    /* check propagate sigma point whether is good */
+    if (arc_norm(filter->khi,filter->state_dim)<=0.0) {
+        arc_log(ARC_WARNING,"propagate sigma points failed \n");
+        return 0;
     }
     arc_log(ARC_INFO,"sigma points:\n");
     arc_tracemat(ARC_MATPRINTF,filter->sigma_point,l,2*l+1,16,4);
@@ -384,6 +406,12 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     for (i=0;i<2*l+1;i++) {
         filter->mfun(&(filter->sigma_point[i*l]),&(filter->khi_y[i*m]));
     }
+    /* check propagate measurement */
+    if (arc_norm(filter->khi_y,filter->measure_dim)<=0.0) {
+        arc_log(ARC_WARNING,"ukf propagate measurement failed \n");
+        return 0;
+    }
+    arc_log(ARC_INFO,"ukf propagate measurement = \n");
     arc_tracemat(ARC_MATPRINTF,filter->khi_y,m,2*l+1,16,4);
 
     /* measurement prediction */
@@ -479,11 +507,14 @@ extern void arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
     }
     arc_log(ARC_INFO,"arc_ukf_filter_update : P \n");
     arc_tracemat(ARC_MATPRINTF,filter->P,filter->state_dim,filter->state_dim,10,4);
+    return 1;
     /* finished with kalman iteration ! */
 }
 /* ukf_filter_delete -----------------------------------------------*/
 extern void arc_ukf_filter_delete(ukf_t *filter)
 {
+    arc_log(ARC_INFO,"arc_ukf_filter_delete : \n");
+
     /* free ukf */
     filter->measure_dim=filter->state_dim=0;  /* todo:this function have some unknown bugs,must to fix */
     filter->gamma=0.0;
@@ -510,6 +541,6 @@ extern void arc_ukf_filter_delete(ukf_t *filter)
     if (filter->dy)          free(filter->dy);
     if (filter->gain)        free(filter->gain);
     if (filter->KL)          free(filter->KL);
-    if (filter)              free(filter);
+    if (filter)              free(filter);  /* todo:here may have more better to complete */
     filter=NULL;
 }
