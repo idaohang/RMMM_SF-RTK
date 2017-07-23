@@ -66,6 +66,8 @@ extern "C" {
 #define SC2RAD      3.1415926535898     /* semi-circle to radian (IS-GPS) */
 #define AU          149597870691.0      /* 1 AU (m) */
 #define AS2R        (D2R/3600.0)        /* arc sec to radian */
+#define LOG_PI      1.14472988584940017 /* log(pi) */
+#define SQRT2       1.41421356237309510 /* sqrt(2) */
 
 #define OMGE        7.2921151467E-5     /* earth angular velocity (IS-GPS) (rad/s) */
 
@@ -766,6 +768,7 @@ typedef struct {        /* processing options type */
     int reset_amb_all;     /* every epoch all ambiguity reset */
     int amb_part;          /* resolve part ambiguity */
     int amb_iter;          /* number of lambda  iteration */
+    double amb_ref_thres;  /* confidence function threshold of round reference ambiguity */
 } prcopt_t;
 
 typedef struct {        /* solution options type */

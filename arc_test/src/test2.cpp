@@ -16,11 +16,11 @@ int main()
     solopt_t arc_solopt = solopt_default;
 
     arc_opt.mode = PMODE_STATIC;
-    arc_opt.ionoopt = IONOOPT_SBAS;
+    arc_opt.ionoopt = IONOOPT_OFF;
     arc_opt.tropopt = TROPOPT_SAAS;
-    arc_opt.modear = ARMODE_FIXHOLD;                    //AR mode(0:off, 1 : continuous, 2 : instantaneous（瞬时的）, 3 : fix and hold, 4 : ppp - ar) * /
+    arc_opt.modear = ARMODE_INST;                    //AR mode(0:off, 1 : continuous, 2 : instantaneous（瞬时的）, 3 : fix and hold, 4 : ppp - ar) * /
     arc_opt.bdsmodear = 1;
-    arc_opt.elmaskar = 15.0* D2R;                       // elevation mask of AR for rising satellite (deg)
+    arc_opt.elmaskar = 10.0* D2R;                       // elevation mask of AR for rising satellite (deg)
     arc_opt.elmaskhold = 20.0* D2R;                     // elevation mask to hold ambiguity (deg)
     arc_opt.niter = 1;                                  // 滤波迭代次数
     arc_opt.refpos = 0;                                 // 0:pos in prcopt
@@ -32,7 +32,7 @@ int main()
     arc_opt.refpos=0;
 
     arc_opt.nf = 1;                                     // 解算频率
-    arc_opt.elmin = 15.0 * D2R;
+    arc_opt.elmin = 10.0 * D2R;
     arc_opt.navsys = SYS_GPS;
     arc_opt.dynamics=0;
     arc_opt.ceres=0;
@@ -42,6 +42,9 @@ int main()
     arc_opt.ukf_beta=3;
     arc_opt.ukf_ZCount=0;
     arc_opt.reset_amb_all=0;
+    arc_opt.amb_part=1;
+    arc_opt.amb_iter=3;
+    arc_opt.amb_ref_thres=0.99;
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
@@ -64,12 +67,12 @@ int main()
     strcpy(infile[0], roverobsf);
     strcpy(infile[1], baseobsf);
     strcpy(infile[2], navf);
-    strcpy(infile[3],navf1);
+    strcpy(infile[3], navf1);
 
     arc_tracelevel(ARC_NOLOG);
     arc_tracebuf(10);
 
-    arc_postpos(ts, te, ti, tu, &arc_opt, &arc_solopt, &arc_fopt, infile, 4, outfile,rover,base);
+    arc_postpos(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,4,outfile,rover,base);
 
     return 0;
 }

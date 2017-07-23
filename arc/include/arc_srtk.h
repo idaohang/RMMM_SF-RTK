@@ -310,6 +310,7 @@ extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
 /* precise positioning -------------------------------------------------------*/
 extern void arc_rtkinit(rtk_t *rtk, const prcopt_t *opt);
 extern void arc_rtkfree(rtk_t *rtk);
+extern double arc_conffunc(int N, double B, double sig);
 
 /* application defined functions ---------------------------------------------*/
 extern int arc_showmsg(char *format, ...);

@@ -2452,9 +2452,9 @@ extern void arc_log(int level, const char *format, ...)
 #else
         google::SetStderrLogging(google::GLOG_FATAL);
 #endif
-        FLAGS_max_log_size = 100; 
-        FLAGS_stop_logging_if_full_disk = true;
-		FLAGS_colorlogtostderr = true;
+        FLAGS_max_log_size=100;
+        FLAGS_stop_logging_if_full_disk=true;
+		FLAGS_colorlogtostderr=true;
 		FLAGS_log_dir=".";
 		google::SetLogDestination(google::GLOG_FATAL, "arc_log_fatal_");
 		google::SetLogDestination(google::GLOG_ERROR, "arc_log_error_");
@@ -4134,6 +4134,58 @@ extern double arc_tropmapf_UNSW931(gtime_t time, const double *pos, const double
 
     if (mapfw) *mapfw=mw;
     return mh;
+}
+/* complementaty error function (ref [1] p.227-229) --------------------------*/
+static double arc_q_gamma(double a, double x, double log_gamma_a);
+static double arc_p_gamma(double a, double x, double log_gamma_a)
+{
+    double y,w;
+    int i;
+
+    if (x==0.0) return 0.0;
+    if (x>=a+1.0) return 1.0-arc_q_gamma(a,x,log_gamma_a);
+
+    y=w=exp(a*log(x)-x-log_gamma_a)/a;
+
+    for (i=1;i<100;i++) {
+        w*=x/(a+i);
+        y+=w;
+        if (fabs(w)<1E-15) break;
+    }
+    return y;
+}
+static double arc_q_gamma(double a, double x, double log_gamma_a)
+{
+    double y,w,la=1.0,lb=x+1.0-a,lc;
+    int i;
+
+    if (x<a+1.0) return 1.0-arc_p_gamma(a,x,log_gamma_a);
+    w=exp(-x+a*log(x)-log_gamma_a);
+    y=w/lb;
+    for (i=2;i<100;i++) {
+        lc=((i-1-a)*(lb-la)+(i+x)*lb)/i;
+        la=lb; lb=lc;
+        w*=(i-1-a)/i;
+        y+=w/la/lb;
+        if (fabs(w/la/lb)<1E-15) break;
+    }
+    return y;
+}
+static double f_erfc(double x)
+{
+    return x>=0.0?arc_q_gamma(0.5,x*x,LOG_PI/2.0):1.0+arc_p_gamma(0.5,x*x,LOG_PI/2.0);
+}
+/* confidence function of integer ambiguity ----------------------------------*/
+extern double arc_conffunc(int N, double B, double sig)
+{
+    double x,p=1.0;
+    int i;
+
+    x=fabs(B-N);
+    for (i=1;i<8;i++) {
+        p-=f_erfc((i-x)/(SQRT2*sig))-f_erfc((i+x)/(SQRT2*sig));
+    }
+    return p;
 }
 /* dummy functions for lex extentions ----------------------------------------*/
 #ifndef EXTLEX

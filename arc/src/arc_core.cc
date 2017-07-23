@@ -288,7 +288,7 @@ static void arc_procpos_pf(const prcopt_t *popt, const solopt_t *sopt,
 }
 /* process positioning -------------------------------------------------------*/
 #ifdef ARC_TEST
-FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/akf.pos","w");
+FILE* fp=fopen("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/kf_static.pos","w");
 #endif
 static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
                         int mode)
@@ -327,7 +327,7 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
         //    fprintf(fp,"%10.6lf   ",rtk.ssat[i].resc[0]);
         //}
         //fprintf(fp,"\n");
-        fprintf(fp,"%10.6lf    %10.6lf    %10.6lf   \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2]);
+        fprintf(fp,"%10.6lf    %10.6lf    %10.6lf   %10.6lf  \n",rtk.sol.rr[0],rtk.sol.rr[1],rtk.sol.rr[2],rtk.sol.ratio);
         //fprintf(fp,"%10.6lf   \n",rtk.sol.ratio);
 
 #endif
