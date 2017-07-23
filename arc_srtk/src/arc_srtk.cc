@@ -499,99 +499,103 @@ static void arc_udtrop(rtk_t *rtk,double tt,double bl)
     }
 }
 /* detect cycle slip by double-difference inter-stations and epoches ------------*/
-int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const int *ir,
-                    int ns, const nav_t *nav, const double *rs)
+static int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const int *ir,
+                           int ns, const nav_t *nav, const double *rs)
 {
-    double *H, *v, *er, *eb;
-    double dx[4], Qx[4 * 4];
-    double dr, db;
-    int i, j, k, nv;
+    double *H,*v,*er,*eb;
+    double dx[4],Qx[4*4];
+    double dr,db;
+    int i,j,k,nv;
     int sat[MAXSAT];
-    H = arc_mat(ns, 4); v = arc_mat(ns, 1); er = arc_mat(ns, 3); eb = arc_mat(ns, 3);
 
-    if (ns < 5)
-    {
-        arc_log(ARC_WARNING, "arc_detslp_ddre: lack of satellate,ns=%d", ns);
+    arc_log(ARC_INFO,"arc_detslp_ddre : \n");
+
+    if (ns<5) {
+        arc_log(ARC_WARNING,"arc_detslp_ddre: lack of satellate,ns=%d",ns);
         return 0;
     }
-    for (nv = i = 0; i < ns; i++)
-    {
-        if (obs[iu[i]].sat != obs[ir[i]].sat)continue;
-        sat[nv] = obs[iu[i]].sat;
-        if (rtk->x[IB(sat[nv], 0, &rtk->opt)] == 0)continue;
-        if (rtk->ssat[sat[nv] - 1].slip[0] == 1)continue;
-        if (rtk->ssat[sat[nv] - 1].ph[0][0] == 0 || rtk->ssat[sat[nv] - 1].ph[1][0] == 0)continue;
-        if (rtk->ssat[sat[nv] - 1].r0[0] == 0 || rtk->ssat[sat[nv] - 1].r0[1] == 0)continue;
+    
+    H=arc_mat(ns,4); v=arc_mat(ns,1); er=arc_mat(ns,3); eb=arc_mat(ns,3);
+    for (nv=i=0;i<ns;i++) {
+        if (obs[iu[i]].sat!=obs[ir[i]].sat) continue;  /* rover and base station common satellite */
+        sat[nv]=obs[iu[i]].sat;
+        
+        if (rtk->x[IB(sat[nv],0,&rtk->opt)]==0) continue;
+        if (rtk->ssat[sat[nv]-1].slip[0]==1) continue;
+        if (rtk->ssat[sat[nv]-1].ph[0][0]==0
+            ||rtk->ssat[sat[nv]-1].ph[1][0]==0) continue;
+        
+        if (rtk->ssat[sat[nv]-1].r0[0]==0
+            ||rtk->ssat[sat[nv]-1].r0[1]==0) continue;
 
-        dr = arc_geodist(rs + iu[i] * 6, rtk->sol.rr, er + i * 3);
-        db = arc_geodist(rs + ir[i] * 6, rtk->rb, eb + i * 3);
+        dr=arc_geodist(rs+iu[i]*6,rtk->sol.rr,er+i*3);  /* rover station to satellite distance */
+        db=arc_geodist(rs+ir[i]*6,rtk->rb,eb+i*3);  /* base station to satellite distance */
 
-        for (j = 0; j < 3; j++)
-        {
-            H[nv * 4 + j] = -er[i * 3 + j];
+        for (j=0;j<3;j++) {
+            H[nv*4+j]=-er[i*3+j];  /* fill design matrix */
         }
-        H[nv * 4 + 3] = 1;
+        H[nv*4+3]=1;
 
-        v[nv] = ((obs[iu[i]].L[0] - obs[ir[i]].L[0]) - (rtk->ssat[sat[nv] - 1].ph[0][0] - rtk->ssat[sat[nv] - 1].ph[1][0]))
-                *nav->lam[sat[nv] - 1][0] - ((dr - db) - (rtk->ssat[sat[nv] - 1].r0[0] - rtk->ssat[sat[nv] - 1].r0[1]));
+        v[nv]=((obs[iu[i]].L[0]-obs[ir[i]].L[0])-(rtk->ssat[sat[nv]-1].ph[0][0]-rtk->ssat[sat[nv]-1].ph[1][0]))
+              *nav->lam[sat[nv]-1][0]-((dr-db)-(rtk->ssat[sat[nv]-1].r0[0]-rtk->ssat[sat[nv]-1].r0[1]));
         nv++;
     }
-
-    if (nv < 5)
-    {
+    if (nv<5) {
         arc_log(ARC_WARNING, "arc_detslp_ddre: lack of satellate,nv=%d", nv);
+        free(H); free(v); free(er); free(eb);
         return 0;
     }
-    if (arc_lsq(H, v, 4, nv, dx, Qx)>0)
-    {
+    if (arc_lsq(H,v,4,nv,dx,Qx)>0) {
         arc_log(ARC_WARNING, "arc_detslp_ddre: lsq error");
+        free(H); free(v); free(er); free(eb);
         return 0;
     }
+    arc_matmul("TN",nv,1,4,1.0,H,dx,-1,v);  /* v=H'*dx-v */
 
-    arc_matmul("TN", nv, 1, 4, 1.0, H, dx, -1, v);  /* v=H'*dx-v */
-
-    double *Q; Q = arc_mat(4, 4);
-    arc_matmul("NT", 4, 4, nv, 1.0, H, H, 0.0, Q);  /* Q=H*H' */
-    arc_matinv(Q, 4);
-    double *QH; QH = arc_mat(nv, 4);
-    arc_matmul("TN", nv, 4, 4, 1.0, H, Q, 0.0, QH);  /* QH=H'*Q-1 */
-    double *Qvv; Qvv = arc_eye(nv);
-    arc_matmul("NN", nv, nv, 4, -1.0, QH, H, 1, Qvv);  /* Qvv=Qvv^-1-H'*Q-1*H */
+    double *Q; Q=arc_mat(4,4);
+    arc_matmul("NT",4,4,nv,1.0,H,H,0.0,Q);  /* Q=H*H' */
+    arc_matinv(Q,4);
+    double *QH; QH=arc_mat(nv,4);
+    arc_matmul("TN",nv,4,4,1.0,H,Q,0.0,QH);  /* QH=H'*Q-1 */
+    double *Qvv; Qvv=arc_eye(nv);
+    arc_matmul("NN",nv,nv,4,-1.0,QH,H,1,Qvv);  /* Qvv=Qvv^-1-H'*Q-1*H */
 
     double delta;
-    delta = sqrt(arc_dot(v, v, nv) / (nv - 1));
+    delta=sqrt(arc_dot(v,v,nv)/(nv-1));
     double *vv;
-    vv = arc_mat(nv, 1);
-    for (i = 0; i < nv; i++)
-    {
-        vv[i] = v[i] / (sqrt(Qvv[i*nv + i])*delta);
+    vv=arc_mat(nv,1);
+    for (i=0;i<nv;i++) {
+        vv[i]=v[i]/(sqrt(Qvv[i*nv+i])*delta);
     }
+    
     double maxv = 0;
-    for (k = i = 0; i < nv; i++)
-    {
-        if (fabs(vv[i])>fabs(maxv))
-        {
-            maxv = vv[i];
-            k = i;
+    for (k =i=0;i<nv;i++) {
+        if (fabs(vv[i])>fabs(maxv)) {
+            maxv=vv[i]; k=i;
         }
     }
-    if (fabs(maxv) > 3 && fabs(v[k]) > 0.1)
+    if (fabs(maxv)>3&&fabs(v[k])>0.1) {
+        free(H); free(v); free(er); free(eb);
+        free(Q); free(QH); free(Qvv); free(vv);
         return sat[k];
+    }
+    
     free(H); free(v); free(er); free(eb);
+    free(Q); free(QH); free(Qvv); free(vv);
     return 0;
 }
-void arc_detsl_new(rtk_t *rtk, const obsd_t *obs, const int *iu, const int *ir,
-                   int ns, const nav_t *nav, const double *rs)
+/* ------------------------------------------------------------------------- */
+static void arc_detsl_new(rtk_t *rtk, const obsd_t *obs, const int *iu, const int *ir,
+                          int ns, const nav_t *nav, const double *rs)
 {
-    int sat = 0;
+    int sat=0;
     do{
-        sat = arc_detslp_ddre(rtk, obs, iu, ir, ns, nav, rs);
-        if (sat != 0)
-        {
-            arc_log(ARC_ERROR, "arc_detsl_new: slip detected,sat=%d", sat);
-            rtk->ssat[sat - 1].slip[0] = 1;
+        sat=arc_detslp_ddre(rtk,obs,iu,ir,ns,nav,rs);
+        if (sat!=0) {
+            arc_log(ARC_ERROR,"arc_detsl_new: slip detected,sat=%d",sat);
+            rtk->ssat[sat-1].slip[0]=1;
         }
-    } while (sat != 0);
+    } while(sat!=0);  /* todo:this condition may have bugs */
 }
 /* detect cycle slip by LLI --------------------------------------------------*/
 static void arc_detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
@@ -599,7 +603,7 @@ static void arc_detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
     unsigned int slip,LLI;
     int f=0,sat=obs[i].sat;
 
-    arc_log(ARC_INFO, "arc_detslp_ll: i=%d rcv=%d\n", i, rcv);
+    arc_log(ARC_INFO, "arc_detslp_ll: i=%d rcv=%d\n",i,rcv);
 
     if (obs[i].L[f]==0.0) return;
 
@@ -673,7 +677,8 @@ static void arc_ubbias_all(rtk_t *rtk, double tt, const obsd_t *obs, const int *
 }
 /* temporal update of phase biases -------------------------------------------*/
 static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
-                       const int *iu, const int *ir, int ns, const nav_t *nav)
+                       const int *iu, const int *ir, int ns, const nav_t *nav,
+                       const double *rs)
 {
     double cp,pr,*bias,offset,lami;
     int i,j,f=0,slip,reset;
@@ -694,6 +699,8 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
         rtk->ssat[sat[i]-1].half[f]=
                 !((obs[iu[i]].LLI[f]&2)||(obs[ir[i]].LLI[f]&2));
     }
+    arc_detsl_new(rtk,obs,iu,ir,ns,nav,rs);
+
     /* reset phase-bias if instantaneous AR or expire obs outage counter */
     for (i=1;i<=MAXSAT;i++) {
 
@@ -752,7 +759,8 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
 }
 /* temporal update of states --------------------------------------------------*/
 static void arc_udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,
-                        const int *iu, const int *ir, int ns, const nav_t *nav)
+                        const int *iu, const int *ir, int ns, const nav_t *nav,
+                        const double *rs)
 {
     double tt=fabs(rtk->tt),bl,dr[3];
 
@@ -772,7 +780,7 @@ static void arc_udstate(rtk_t *rtk, const obsd_t *obs, const int *sat,
     }
     /* temporal update of phase-bias */
     if (rtk->opt.mode>PMODE_DGPS) {
-        arc_udbias(rtk,tt,obs,sat,iu,ir,ns,nav);
+        arc_udbias(rtk,tt,obs,sat,iu,ir,ns,nav,rs);
     }
 }
 /* undifferenced phase/code residual for satellite ---------------------------*/
@@ -1262,8 +1270,9 @@ static int arc_ddmat(rtk_t *rtk, double *D)
                 }
             }
             /* set the reference ambiguity index */
-            rtk->ssat[ref-k].fix[f]=2; /* fix */
-            rtk->amb_refsat=ref-k+1;  /* sat no.todo:this step need to modified */
+            rtk->ssat[ref-k].fix[f]=2;  /* fix */
+            rtk->amb_refsat=ref-k+1;    /* sat no.todo:this step need to modified */
+            rtk->amb_index[0]=ref-k+1;  /* ambiguity index for sat no.,first is the reference sat no. */
             
             for (j=k;j<k+MAXSAT;j++) {
                 if (ref==j||rtk->x[j]==0.0||!arc_test_sys(rtk->ssat[j-k].sys,m)||
@@ -1273,10 +1282,11 @@ static int arc_ddmat(rtk_t *rtk, double *D)
                 if (rtk->ssat[j-k].lock[f]>0&&!(rtk->ssat[j-k].slip[f]&2)&&
                     rtk->ssat[ref-k].vsat[f]&&rtk->ceres_active_x[i]&&
                     rtk->ssat[j-k].azel[1]>=rtk->opt.elmaskar&&!nofix) {
-                    D[ref+(na+nb)*nx]= 1.0;  /* reference single-difference ambiguity */
-                    D[j  +(na+nb)*nx]=-1.0;  /* other single-difference ambiguity */
-                    nb++; /* numbers of double-difference ambiguity */
-                    rtk->ssat[j-k].fix[f]=2; /* fix */
+                    D[ref+(na+nb)*nx]= 1.0;      /* reference single-difference ambiguity */
+                    D[j  +(na+nb)*nx]=-1.0;      /* other single-difference ambiguity */
+                    rtk->amb_index[nb+1]=j-k+1;  /* double-difference ambiguity index (sat no) */
+                    nb++;                        /* numbers of double-difference ambiguity */
+                    rtk->ssat[j-k].fix[f]=2;     /* fix */
                 }
             }
         }
@@ -1288,7 +1298,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
 /* restore single-differenced ambiguity --------------------------------------*/
 static void arc_restamb(rtk_t *rtk, const double *bias, double *xa)
 {
-    int i,n,m,f,index[MAXSAT],nv=0,nf=NF(&rtk->opt),ref=-1;
+    int i,n,m,f,index[MAXSAT],nv=0,nf=1,ref=-1;
     double tmp=0.0;
 
     arc_log(ARC_INFO, "arc_restamb :\n");
@@ -1296,15 +1306,14 @@ static void arc_restamb(rtk_t *rtk, const double *bias, double *xa)
     for (i=0;i<rtk->nx;i++) xa[i]=rtk->x [i];  /* ambiguity */
     for (i=0;i<rtk->na;i++) xa[i]=rtk->xa[i];  /* station position/trp/iono/clock and so on */
 
-    for (m=0;m<4;m++) for (f=0;f<nf;f++) {
-
+    for (m=0;m<4;m++) {  /* m==3 is bds */
         for (n=i=0;i<MAXSAT;i++) {
             if (!arc_test_sys(rtk->ssat[i].sys,m)
-                ||rtk->ssat[i].fix[f]!=2) {
+                ||rtk->ssat[i].fix[0]!=2) {
                 continue;
             }
             if (i+1==rtk->amb_refsat) ref=n;
-            index[n++]=IB(i+1,f,&rtk->opt);  /* include reference single-differnce ambiguity */
+            index[n++]=IB(i+1,0,&rtk->opt);  /* include reference single-differnce ambiguity */
         }
         if (n<2) continue;
 
@@ -1485,6 +1494,11 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                     }
                     /* reset the numbers of ambiguitys */
                     nb=nb-1;
+                    /* reset y */
+                    arc_matcpy(y,y_reduce,nb,1);
+                    /* reset fix flag */
+                    rtk->ssat[rtk->amb_index[k+1]].fix[0]=0;  /* no fix this double-differnce ambiguity */
+                                                              /* todo:may be the reference single-difference ambiguity,need to fix this bug */
                 }
                 else {
                     arc_log(ARC_WARNING, "arc_resamb_LAMBDA : ambiguity validation "
@@ -1976,7 +1990,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         return 0;
     }
     /* temporal update of states */
-    arc_udstate(rtk,obs,sat,iu,ir,ns,nav);
+    arc_udstate(rtk,obs,sat,iu,ir,ns,nav,rs);
 
     xp=arc_mat(rtk->nx,1); Pp=arc_zeros(rtk->nx,rtk->nx);
     xa=arc_mat(rtk->nx,1);
@@ -2169,8 +2183,13 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         rtk->ssat[obs[i].sat-1].pt[obs[i].rcv-1][j]=obs[i].time;
         rtk->ssat[obs[i].sat-1].ph[obs[i].rcv-1][j]=obs[i].L[j];
     }
+    for (i=0;i<n;i++) {  /* save rover and base station to satellite's distance */
+        if (obs[i].rcv-1==0)
+            rtk->ssat[obs[i].sat-1].r0[obs[i].rcv-1]=arc_geodist(rs+i*6,rtk->x, e+i*3);
+        else
+            rtk->ssat[obs[i].sat-1].r0[obs[i].rcv-1]=arc_geodist(rs+i*6,rtk->rb,e+i*3);
+    }
     for (i=0;i<ns;i++) for (j=0;j<nf;j++) {
-
         /* output snr of rover receiver */
         rtk->ssat[sat[i]-1].snr[j]=obs[iu[i]].SNR[j];
     }

@@ -650,7 +650,6 @@ typedef struct {        /* solution type */
     float age;          /* age of differential (s) */
     float ratio;        /* AR ratio factor for valiation */
     float thres;        /* AR ratio threshold for valiation */
-    int ns;             /* valid sat numbers */
 } sol_t;
 
 typedef struct {        /* solution status type */
@@ -937,6 +936,7 @@ typedef struct {         /* RTK control/result type */
     int nc;                 /* phase observation numbers */
     int np;                 /* pseudorange observation numbers */
     int amb_refsat;         /* ambiguity solve reference satellite */
+    int amb_index[MAXSAT];  /* double-difference index list : amb_index[i] - sat no. */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */
