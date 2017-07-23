@@ -37,7 +37,7 @@ int main()
     arc_opt.dynamics=0;
     arc_opt.ceres=0;
     arc_opt.ceres_cholesky=0;
-    arc_opt.ukf=1;
+    arc_opt.ukf=0;
     arc_opt.ukf_alpha=1E-2;
     arc_opt.ukf_beta=3;
     arc_opt.ukf_ZCount=0;

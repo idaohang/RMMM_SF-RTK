@@ -67,14 +67,14 @@ static int arc_checkbrk(const char *format, ...)
 {
     va_list arg;
     char buff[1024],*p=buff;
-    if (!*format) return showmsg("");
+    if (!*format) return arc_showmsg("");
     va_start(arg,format);
     p+=vsprintf(p,format,arg);
     va_end(arg);
     if (*proc_rov&&*proc_base) sprintf(p," (%s-%s)",proc_rov,proc_base);
     else if (*proc_rov ) sprintf(p," (%s)",proc_rov );
     else if (*proc_base) sprintf(p," (%s)",proc_base);
-    return showmsg(buff);
+    return arc_showmsg(buff);
 }
 /* search next observation data index ----------------------------------------*/
 static int arc_nextobsf(const obs_t *obs, int *i, int rcv)
@@ -110,9 +110,10 @@ static int arc_inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int 
     arc_log(ARC_INFO, "infunc  : revs=%d iobsu=%d iobsr=%d isbs=%d\n", revs, iobsu, iobsr, isbs);
     
     if (0<=iobsu&&iobsu<obss.n) {
-        settime((time=obss.data[iobsu].time));
+        arc_settime((time = obss.data[iobsu].time));
         if (arc_checkbrk("processing : %s Q=%d",time_str(time,0),solq)) {
-            aborts=1; showmsg("aborted"); return -1;
+            aborts=1;
+            arc_showmsg("aborted"); return -1;
         }
     }
     if (!revs) { /* input forward data */
@@ -581,7 +582,7 @@ static int arc_avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
         }
         if (j<=0||!screent(data[0].time,ts,ts,1.0)) continue; /* only 1 hz */
         
-        if (!arc_pntpos(data, j, nav, opt, &sol, NULL, NULL, msg)) continue;
+        if (!arc_pntpos(data,j,nav,opt,&sol,NULL,NULL,msg)) continue;
         
         for (i=0;i<3;i++) ra[i]+=sol.rr[i];
         n++;
@@ -642,20 +643,20 @@ static int arc_openses(const prcopt_t *popt, const solopt_t *sopt,
         return 0;
     }
     /* read receiver antenna parameters */
-    if (*fopt->rcvantp&&!(arc_readpcv(fopt->rcvantp, pcvr))) {
+    if (*fopt->rcvantp&&!(arc_readpcv(fopt->rcvantp,pcvr))) {
         arc_log(ARC_WARNING, "rec antenna pcv read error: %s\n", fopt->rcvantp);
         return 0;
     }
     /* use satellite L2 offset if L5 offset does not exists */
     for (i=0;i<pcvs->n;i++) {
-        if (arc_norm(pcvs->pcv[i].off[2], 3)>0.0) continue;
-        arc_matcpy(pcvs->pcv[i].off[2], pcvs->pcv[i].off[1], 3, 1);
-        arc_matcpy(pcvs->pcv[i].var[2], pcvs->pcv[i].var[1], 19, 1);
+        if (arc_norm(pcvs->pcv[i].off[2],3)>0.0) continue;
+        arc_matcpy(pcvs->pcv[i].off[2],pcvs->pcv[i].off[1],3, 1);
+        arc_matcpy(pcvs->pcv[i].var[2],pcvs->pcv[i].var[1],19,1);
     }
     for (i=0;i<pcvr->n;i++) {
-        if (arc_norm(pcvr->pcv[i].off[2], 3)>0.0) continue;
-        arc_matcpy(pcvr->pcv[i].off[2], pcvr->pcv[i].off[1], 3, 1);
-        arc_matcpy(pcvr->pcv[i].var[2], pcvr->pcv[i].var[1], 19, 1);
+        if (arc_norm(pcvr->pcv[i].off[2],3)>0.0) continue;
+        arc_matcpy(pcvr->pcv[i].off[2],pcvr->pcv[i].off[1],3, 1);
+        arc_matcpy(pcvr->pcv[i].var[2],pcvr->pcv[i].var[1],19,1);
     }
     return 1;
 }

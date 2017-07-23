@@ -3607,9 +3607,9 @@ extern unsigned int tickget(void)
 #endif /* WIN32 */
 }
 /* show messages--------------------------------------------------------------*/
-extern int showmsg(char *format,...) {return 0;}
-extern void settspan(gtime_t ts, gtime_t te) {}
-extern void settime(gtime_t time) {}
+extern int arc_showmsg(char *format, ...) {return 0;}
+extern void arc_settspan(gtime_t ts, gtime_t te) {}
+extern void arc_settime(gtime_t time) {}
 /* uncompress file -------------------------------------------------------------
 * uncompress (uncompress/unzip/uncompact hatanaka-compression/tar) file
 * args   : char   *file     I   input file

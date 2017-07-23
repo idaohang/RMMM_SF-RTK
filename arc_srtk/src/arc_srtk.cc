@@ -1280,7 +1280,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
                     continue;
                 }
                 if (rtk->ssat[j-k].lock[f]>0&&!(rtk->ssat[j-k].slip[f]&2)&&
-                    rtk->ssat[ref-k].vsat[f]&&rtk->ceres_active_x[i]&&
+                    rtk->ssat[ref-k].vsat[f]&&rtk->ceres_active_x[j]&&
                     rtk->ssat[j-k].azel[1]>=rtk->opt.elmaskar&&!nofix) {
                     D[ref+(na+nb)*nx]= 1.0;      /* reference single-difference ambiguity */
                     D[j  +(na+nb)*nx]=-1.0;      /* other single-difference ambiguity */
@@ -2241,7 +2241,10 @@ extern void arc_rtkinit(rtk_t *rtk, const prcopt_t *opt)
     rtk->opt=*opt;
 
     /* ceres solver options */
-    rtk->ceres_active_x=arc_imat(rtk->nx,1);
+    rtk->ceres_active_x=arc_imat(rtk->nx,1);  /* todo: may be use static variance */
+    
+    /* ambiguity solver options */
+    for (i=0;i<MAXSAT;i++) rtk->amb_index[i]=0;
 }
 /* free rtk control ------------------------------------------------------------
 * free memory for rtk control struct

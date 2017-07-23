@@ -18,13 +18,13 @@
  *********************************************************************************/
 
 /**
- * @brief ARC-SRTK Particle Filter Some Const-Variable and Marco
+ * @brief ARC-SRTK UKF Functions
  * @author sujinglan
  */
 #include "arc.h"
 
 #define MAXSTATES 100
-/* Macro for defining an exception------------------------------------------------------*/
+/* Macro for defining an exception----------------------------------------*/
 ARC_DEFINE_EXCEPTION(Exception, std::runtime_error);
 
 /*-------------------------------------------------------------------------
