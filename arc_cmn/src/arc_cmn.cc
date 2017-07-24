@@ -2387,6 +2387,7 @@ static int glog_init=1;           /* google log initial flag */
 static int count=0;               /* how many count to output */
 static int buffcount=1;           
 static char logfile[1024];        /* google log file path */
+static int glog_output_file=0;    /* google log information to file */
 
 static void traceswap(void)
 {
@@ -2439,6 +2440,10 @@ extern void arc_tracebuf(int count)
 {
     buffcount=count;
 }
+extern void arc_set_glog_tofile(int opt)
+{
+    glog_output_file=opt;
+}
 extern void arc_log(int level, const char *format, ...)
 {
     va_list ap;
@@ -2455,12 +2460,14 @@ extern void arc_log(int level, const char *format, ...)
         FLAGS_max_log_size=100;
         FLAGS_stop_logging_if_full_disk=true;
 		FLAGS_colorlogtostderr=true;
-		FLAGS_log_dir=".";
-		google::SetLogDestination(google::GLOG_FATAL, "arc_log_fatal_");
-		google::SetLogDestination(google::GLOG_ERROR, "arc_log_error_");
-		google::SetLogDestination(google::GLOG_WARNING, "arc_log_warning_");
-		google::SetLogDestination(google::GLOG_INFO, "arc_log_info_");
-        google::InstallFailureSignalHandler(); 
+        if (glog_output_file) {
+            FLAGS_log_dir=".";
+            google::SetLogDestination(google::GLOG_FATAL, "arc_log_fatal_");
+            google::SetLogDestination(google::GLOG_ERROR, "arc_log_error_");
+            google::SetLogDestination(google::GLOG_WARNING, "arc_log_warning_");
+            google::SetLogDestination(google::GLOG_INFO, "arc_log_info_");
+        }
+        google::InstallFailureSignalHandler();
 		glog_init=0;
 	}
 	va_start(ap,format);

@@ -21,6 +21,7 @@
  * @brief ARC-SRTK UKF Functions
  * @author sujinglan
  */
+#include <rtklib.h>
 #include "arc.h"
 
 #define MAXSTATES 100
@@ -421,6 +422,9 @@ extern int arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
             filter->ym[i]+=filter->wm[j]*filter->khi_y[j*m+i];
         }
     }
+    arc_log(ARC_INFO,"measurement prediction meanings = \n");
+    arc_tracemat(ARC_MATPRINTF,filter->ym,filter->measure_dim,1,13,4);
+
     /* measurement update
     /* Pyy matrix
     /* start with measure covariance matrix */
@@ -474,7 +478,7 @@ extern int arc_ukf_filter_update(ukf_t *filter, double *y, double *u,
         filter->dy[j]=y[j]-filter->ym[j];
     }
     arc_log(ARC_INFO,"arc_ukf_filter_update : dy \n");
-    arc_tracemat(ARC_MATPRINTF,filter->dy,m,1,10,4);
+    arc_tracemat(ARC_MATPRINTF,filter->dy,1,m,10,4);
 
     for (i=0;i<l;i++) {
         filter->x[i]=filter->xm[i];

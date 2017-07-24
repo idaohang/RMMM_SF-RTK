@@ -30,7 +30,6 @@
 #include "arc_MovementModel.h"
 #include <iomanip>
 #include <fstream>
-#include <rtklib.h>
 
 using namespace std;
 /* constants/global variables ------------------------------------------------*/
@@ -107,7 +106,7 @@ static int arc_inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int 
     gtime_t time={0};
     int i,n=0;
 
-    arc_log(ARC_INFO, "infunc  : revs=%d iobsu=%d iobsr=%d isbs=%d\n", revs, iobsu, iobsr, isbs);
+    arc_log(ARC_INFO,"infunc  : revs=%d iobsu=%d iobsr=%d isbs=%d\n",revs,iobsu,iobsr,isbs);
     
     if (0<=iobsu&&iobsu<obss.n) {
         arc_settime((time = obss.data[iobsu].time));

@@ -936,6 +936,7 @@ typedef struct {         /* RTK control/result type */
     double lam;             /* adaptive Kaman filter parameters */
     ukf_t* ukf;             /* unscented Kalman filter */
     int sat[MAXSAT];        /* hold the double-difference satellite pair,sat[2*i] is reference satellite */
+    int obs_ind[2*MAXSAT];  /* index of observations for every double-difference observations */
     int nc;                 /* phase observation numbers */
     int np;                 /* pseudorange observation numbers */
     int amb_refsat;         /* ambiguity solve reference satellite */

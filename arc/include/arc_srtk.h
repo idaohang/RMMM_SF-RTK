@@ -34,6 +34,7 @@ extern "C" {
 /* constants/global variables -------------------------------------------------*/
 #define ARC_TRACE_MAT                     /* matrix printf */
 #define GLOG            1                 /* google log for debug */
+#define ARC_LOGTOFILE   1                 /* google log output file */
 #define ARC_NOLOG       -1                /* disable log informations */
 #define ARC_INFO        0				  /* google information log */
 #define ARC_WARNING 	1				  /* google warnings */
@@ -46,6 +47,10 @@ extern "C" {
 #define ARC_CERES_WINDOWS     2           /* ceres solver windows solution */
 #define ARC_TEST                          /* arc-srtk test define */
 #define ARC_UKF_USEPNT_INIT               /* using standard position to initial ukf prior states and its covariance matrix */
+#define ARC_AMB_PART    1
+#define ARC_AMB_NOPART  0
+#define ARC_UKF         1
+#define ARC_NOUKF       0
 /* single frequency rtk position post-processing ------------------------------*/
 extern int  arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,
@@ -73,6 +78,7 @@ extern void arc_tracepeph(int level,const nav_t *nav);
 extern void arc_tracepclk(int level,const nav_t *nav);
 extern void arc_traceb(int level,const unsigned char *p,int n);
 extern void arc_tracebuf(int buffcount);
+extern void arc_set_glog_tofile(int opt);
 /* arc cholesky functions ------------------------------------------------------*/
 extern double *arc_cholesky(double *A,int n);
 /* computethe trace of matrix---------------------------------------------------*/

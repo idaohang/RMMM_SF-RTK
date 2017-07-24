@@ -31,15 +31,15 @@ int main()
     arc_opt.rb[2] = 2420032.5440;
     arc_opt.refpos=0;
 
-    arc_opt.nf = 1;                                     // 解算频率
-    arc_opt.elmin = 10.0 * D2R;
-    arc_opt.navsys = SYS_GPS;
+    arc_opt.nf=1;                                     // 解算频率
+    arc_opt.elmin=10.0*D2R;
+    arc_opt.navsys=SYS_GPS;
     arc_opt.dynamics=0;
     arc_opt.ceres=0;
     arc_opt.ceres_cholesky=0;
     arc_opt.ukf=0;
-    arc_opt.ukf_alpha=1E-2;
-    arc_opt.ukf_beta=3;
+    arc_opt.ukf_alpha=1E-4;
+    arc_opt.ukf_beta=2;
     arc_opt.ukf_ZCount=0;
     arc_opt.reset_amb_all=0;
     arc_opt.amb_part=1;
@@ -56,7 +56,7 @@ int main()
     const char *roverobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hklt/hklt1910.17o";
     const char *baseobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17o";
     const char *navf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hklt/hklt1910.17n";
-    const char *navf1 = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17o";
+    const char *navf1 = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17";
 
     for (int i = 0; i < NUMINFILE; i++) {
         if (!(infile[i] = (char *)malloc(1024))) {
@@ -67,10 +67,12 @@ int main()
     strcpy(infile[0], roverobsf);
     strcpy(infile[1], baseobsf);
     strcpy(infile[2], navf);
-    strcpy(infile[3], navf1);
+    strcpy(infile[3],navf1);
+    //strcpy(infile[4],navf2);
+    //strcpy(infile[5],navf3);;
 
     arc_tracelevel(ARC_NOLOG);
-    arc_tracebuf(10);
+    arc_tracebuf(0);
 
     arc_postpos(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,4,outfile,rover,base);
 
