@@ -18,6 +18,7 @@ using namespace std;
 #define VAR_GRA     SQR(0.001)      /* initial variance of gradient (m^2) */
 #define VAR_AMB     SQR(10.0)       /* initial variance of ambguity (cycle^2) */
 #define INIT_ZWD    0.15            /* initial zwd (m) */
+#define VAR_POS_AMB SQR(2.0)        /* after ambiguity fix,the variance of position */
 
 #define GAP_RESION  120             /* gap to reset ionosphere parameters (epochs) */
 #define VAR_HOLDAMB 0.001           /* constraint to hold ambiguity (cycle^2) */
@@ -31,7 +32,7 @@ using namespace std;
 
 /* number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated) */
 #define NF(opt)     ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf)
-#define NP(opt)     ((opt)->dynamics==0?3:9)
+#define NP(opt)     ((opt)->dynamics==0?3:6)
 #define NI(opt)     ((opt)->ionoopt!=IONOOPT_EST?0:MAXSAT)
 #define NT(opt)     ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt<TROPOPT_ESTG?2:6))
 #define NL(opt)     ((opt)->glomodear!=2?0:NFREQGLO)
@@ -86,8 +87,11 @@ static double arc_varerr(int sat, int sys, double el, double bl, double dt, int 
                          const prcopt_t *opt)
 {
     double a,b,c=opt->err[3]*bl/1E4,d=CLIGHT*opt->sclkstab*dt,fact=1.0;
-    double sinel=sin(el);
+    double sinel=sin(el),geo_factor=1.0;
     int i=sys==SYS_GLO?1:(sys==SYS_GAL?2:0),nf=NF(opt);
+
+    /* bds geo */
+    if (sys==SYS_CMP&&arc_is_bds_geo(sat)) geo_factor=EFACT_GEO; /* todo:this may be no effect,now just for test */
 
     /* extended error model */
     if (f>=nf&&opt->exterr.ena[0]) { /* code */
@@ -107,7 +111,7 @@ static double arc_varerr(int sat, int sys, double el, double bl, double dt, int 
         a=fact*opt->err[1];
         b=fact*opt->err[2];
     }
-    return 2.0*(opt->ionoopt==IONOOPT_IFLC?3.0:1.0)*(a*a+b*b/sinel/sinel+c*c)+d*d;
+    return 2.0*geo_factor*(opt->ionoopt==IONOOPT_IFLC?3.0:1.0)*(a*a+b*b/sinel/sinel+c*c)+d*d;
 }
 /* baseline length -----------------------------------------------------------*/
 static double arc_baseline(const double *ru,const double *rb,double *dr)
@@ -414,7 +418,9 @@ static int arc_selsat(const obsd_t *obs,double *azel,int nu,int nr,
 /* temporal update of position/velocity/acceleration -------------------------*/
 static void arc_udpos(rtk_t *rtk,double tt)
 {
-    int i;
+    /* todo:dynamic mode is not good,cause of this is not clearly */
+    int i,j;
+    double var;
 
     arc_log(ARC_INFO, "arc_udpos   : tt=%.3f\n", tt);
 
@@ -427,10 +433,13 @@ static void arc_udpos(rtk_t *rtk,double tt)
     /* initialize position for first epoch */
     if (arc_norm(rtk->x,3)<=0.0) {
         for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
+        /* initial rover station velecity */
+        if (rtk->opt.dynamics) for (i=3;i<6;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_VEL,i);
     }
 
-    /* update ceres solver problem active states index list */
-    for (i=0;i<3;i++) rtk->ceres_active_x[i]=1;  /* todo:set active states index in here may be not best */
+    /* update ceres solver problem active states index list,included velecity */
+    if (rtk->opt.dynamics) for (i=0;i<6;i++) rtk->ceres_active_x[i]=1;  /* todo:set active states index in here may be not best */
+    else for (i=0;i<3;i++) rtk->ceres_active_x[i]=1;
 
     /* static mode */
     if (rtk->opt.mode==PMODE_STATIC) return;
@@ -438,14 +447,64 @@ static void arc_udpos(rtk_t *rtk,double tt)
     /* reset rover station pistion and its variance */
     /* todo:using standard positioning to initial ukf prior states and its covariacne matrix,
      * todo:and may have more better methids to do this */
-#ifdef ARC_UKF_USEPNT_INIT
-    for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],rtk->sol.qr[i],i);
-#else
-    for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
-#endif
+#ifndef ARC_UKF_USEPNT_INIT
 
-    /* add velecity noise to position variance */
-    for (i=0;i<3;i++) rtk->P[i+i*rtk->nx]+=SQR(rtk->opt.prn[5])*tt;
+    /* kinmatic mode without dynamics */
+    if (!rtk->opt.dynamics) for (i=0;i<3;i++) {
+        arc_initx(rtk,rtk->sol.rr[i],rtk->sol.qr[i],i);
+        return;
+    }
+#else
+    /* kinmatic mode without dynamics */
+    if (!rtk->opt.dynamics) {
+        if (rtk->sol.ratio>=rtk->opt.thresar[0]) {
+            for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS_AMB,i);
+            return;
+        }
+        for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
+        return;
+    }
+#endif
+    /* check variance of estimated postion */
+    for (i=0;i<3;i++) var+=rtk->P[i+i*rtk->nx]; var/=3.0;
+
+    if (var>VAR_POS) {
+        /* reset position with large variance */
+        for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
+        for (i=3;i<6;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_VEL,i);
+        arc_log(ARC_INFO,"reset rtk position due to large variance: var=%.3f\n",var);
+        return;
+    }
+    /* state transition of position/velocity/acceleration for dynamic mode */
+    double *F=arc_eye(rtk->nx),*FP=arc_mat(rtk->nx,rtk->nx),
+           *xp=arc_mat(rtk->nx,1),pos[3]={0},Q[9]={0},Qv[9]={0};
+
+    /* compute the state transition matrix */
+    for (i=0;i<3;i++) F[i+(i+3)*rtk->nx]=tt;
+
+    arc_log(ARC_INFO,"arc_udpos : state transition matrix =\n");
+    arc_tracemat(ARC_MATPRINTF,F,rtk->nx,rtk->nx,10,4);
+
+    arc_log(ARC_INFO,"arc_udpos : before state transition P =\n");
+    arc_tracemat(ARC_MATPRINTF,rtk->P,rtk->nx,rtk->nx,10,4);
+
+    /* x=F*x, P=F*P*F+Q */
+    arc_matmul("NN",rtk->nx,1,rtk->nx,1.0,F,rtk->x,0.0,xp);
+    arc_matcpy(rtk->x,xp,rtk->nx,1);
+    arc_matmul("NN",rtk->nx,rtk->nx,rtk->nx,1.0,F,rtk->P,0.0,FP);
+    arc_matmul("NT",rtk->nx,rtk->nx,rtk->nx,1.0,FP,F,0.0,rtk->P);
+
+    arc_log(ARC_INFO,"arc_udpos : after state transition P = \n");
+    arc_tracemat(ARC_MATPRINTF,rtk->P,rtk->nx,rtk->nx,10,4);
+
+    /* process noise added to only velecity */
+    Q[0]=Q[4]=SQR(rtk->opt.prn[3]); Q[8]=SQR(rtk->opt.prn[4]);
+    ecef2pos(rtk->x,pos);
+    covecef(pos,Q,Qv);
+    for (i=0;i<3;i++) for (j=0;j<3;j++) {
+        rtk->P[i+3+(j+3)*rtk->nx]+=Qv[i+j*3];  /* add system process noise */
+    }
+    free(F); free(FP); free(xp);
 }
 /* temporal update of ionospheric parameters ---------------------------------*/
 static void arc_udion(rtk_t *rtk,double tt,double bl,const int *sat,int ns)
@@ -453,7 +512,7 @@ static void arc_udion(rtk_t *rtk,double tt,double bl,const int *sat,int ns)
     double el,fact;
     int i,j;
 
-    arc_log(ARC_INFO, "arc_udion   : tt=%.1f bl=%.0f ns=%d\n", tt, bl, ns);
+    arc_log(ARC_INFO, "arc_udion   : tt=%.1f bl=%.0f ns=%d\n",tt,bl,ns);
 
     for (i=1;i<=MAXSAT;i++) {
         j=II(i,&rtk->opt);
@@ -526,7 +585,7 @@ static int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const i
         sat[nv]=obs[iu[i]].sat;
 
         if (rtk->x[IB(sat[nv],0,&rtk->opt)]==0) continue;
-        if (rtk->ssat[sat[nv]-1].slip[0]==1) continue;
+        if (rtk->ssat[sat[nv]-1].slip[0]) continue;
         if (rtk->ssat[sat[nv]-1].ph[0][0]==0
             ||rtk->ssat[sat[nv]-1].ph[1][0]==0) continue;
 
@@ -580,32 +639,31 @@ static int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const i
             maxv=vv[i]; k=i;
         }
     }
-    if (fabs(maxv)>3&&fabs(v[k])>0.1) {
-        free(H); free(v); free(er); free(eb);
-        free(Q); free(QH); free(Qvv); free(vv);
-        return sat[k];
-    }
-
     free(H); free(v); free(er); free(eb);
     free(Q); free(QH); free(Qvv); free(vv);
+
+    if (fabs(maxv)>2&&fabs(v[k])>0.02) {
+        return sat[k];
+    }
     return 0;
 }
 /* ------------------------------------------------------------------------- */
 static void arc_detsl_new(rtk_t *rtk, const obsd_t *obs, const int *iu, const int *ir,
                           int ns, const nav_t *nav, const double *rs)
 {
-    int sat=0;
+    int sat=0,i;
 
     arc_log(ARC_INFO,"arc_detsl_new : \n");
 
-    do {
+    for (i=0;i<ns;i++) {
         sat=arc_detslp_ddre(rtk,obs,iu,ir,ns,nav,rs);
         if (sat!=0) {
-            arc_log(ARC_WARNING,"arc_detsl_new: slip detected,sat=%d",sat);
+            arc_log(ARC_WARNING,"arc_detsl_new: slip detected,sat=%d,%s",
+                    sat,time_str(obs[0].time,3));
             rtk->ssat[sat-1].slip[0]|=1;
-            break;
         }
-    } while(sat!=0);  /* todo:this condition may have bugs */
+        if (sat==1) break;
+    }  /* todo:this condition may have bugs */
 }
 /* detect cycle slip by LLI --------------------------------------------------*/
 static void arc_detslp_ll(rtk_t *rtk, const obsd_t *obs, int i, int rcv)
@@ -982,7 +1040,7 @@ static int arc_ukf_ddmeas(rtk_t* rtk,const nav_t* nav,double dt,double *x,const 
     prcopt_t *opt=&rtk->opt;
     double posu[3],posr[3],didxi=0.0,didxj=0.0,*im;
     double *tropr,*tropu,*dtdxr,*dtdxu,lami,lamj,fi,fj;
-    int i,j,m,f=0,nv=0,nf=1,n,sati,satj;
+    int i,j,m,f=0,nv=0,nf=1,n=0,sati,satj;
 
     arc_log(ARC_INFO,"arc_ukf_ddmeas   : dt=%.1f nx=%d ns=%d\n", dt,rtk->nx,ns);
     arc_log(ARC_INFO,"arc_ukf_ddmeas   : np=%4d  nc=%4d \n",rtk->np,rtk->nc);
@@ -1304,7 +1362,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
     for (m=0;m<4;m++) { /* m=0:gps/qzs/sbs,1:glo,2:gal,3:bds */
 
         nofix=(m==3&&rtk->opt.bdsmodear==0);  /* this flag is importance */
-        for (f=0,k=na;f<nf;f++,k+=MAXSAT) {  /* loop for frequency */
+        for (f=0,k=na;f<nf;f++,k+=MAXSAT) {   /* loop for frequency */
 
             for (i=k;i<k+MAXSAT;i++) {  /* loop for ambiguity list */
                 /* select the reference single-difference ambiguity */
@@ -1513,7 +1571,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     /* lambda/mlambda integer least-square estimation */
     for (n=0;n<(rtk->opt.amb_part?rtk->opt.amb_iter:1);n++) {
 
-        if (nb==0) break;
+        if (nb==0) break;  /* no ambiguitys */
 
         if (!(info=arc_lambda(nb,2,yb+na,Qb,b,s))) {
 
@@ -1578,7 +1636,6 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
                     /* reset the numbers of ambiguitys */
                     nb=j;
-
                     /* reset fix flag */
                     rtk->ssat[rtk->amb_index[k+1]-1].fix[0]=0;  /* no fix this double-differnce ambiguity,
                                                                  * don't warn about reference ambiguity */
@@ -1605,7 +1662,7 @@ static int arc_valpos(rtk_t *rtk,const double *v,const double *R,const int *vflg
     int i,stat=1,sat1,sat2,type,freq;
     char stype[8];
 
-    arc_log(ARC_INFO, "arc_valpos  : nv=%d thres=%.1f\n", nv, thres);
+    arc_log(ARC_INFO,"arc_valpos  : nv=%d thres=%.1f\n",nv,thres);
 
     /* post-fit residual test */
     for (i=0;i<nv;i++) {
@@ -1956,7 +2013,7 @@ static void arc_ukf_get_updatax(ukf_t *ukf,double *xp,double *Pp)
 /* make double-differnce measurements-----------------------------------------*/
 static int arc_ukf_dd_meas()
 {
-    arc_log(ARC_INFO,"arc_ukf_dd_meas : \n");
+    arc_log(ARC_INFO,"arc_ukf_dd_meas : \n"); 
 
     int i,k,iu[2]={0},ir[2]={0};
 
@@ -1983,7 +2040,10 @@ static int arc_ukf_dd_meas()
     return k;
 }
 /* relative positioning ------------------------------------------------------*/
+#ifdef ARC_TEST
 ofstream fp_ukf_ceres("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_ukf_pos");
+static int I=0;
+#endif
 static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                       const nav_t *nav)
 {
@@ -1994,6 +2054,10 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
     int stat=rtk->opt.mode<=PMODE_DGPS?SOLQ_DGPS:SOLQ_FLOAT;
     int nf=1;
+
+#ifdef ARC_TEST
+    I++;  /* just for debug */
+#endif
 
     arc_log(ARC_INFO, "arc_relpos  : nx=%d nu=%d nr=%d\n", rtk->nx, nu, nr);
 
@@ -2097,7 +2161,9 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                     break;
                 }
                 arc_log(ARC_INFO,"arc_relpos : x(%d)=",i+1);
-                arc_tracemat(ARC_MATPRINTF,xp,3,1,10,4);
+                if (opt->mode==PMODE_STATIC)                arc_tracemat(ARC_MATPRINTF,xp,3,1,10,4);
+                if (opt->mode==PMODE_KINEMA&&opt->dynamics) arc_tracemat(ARC_MATPRINTF,xp,6,1,10,4);
+
                 arc_log(ARC_INFO,"arc_relpos : P(%d)=",i+1);
                 arc_tracemat(ARC_MATPRINTF,Pp,rtk->nx,rtk->nx,10,4);
             }
@@ -2337,7 +2403,8 @@ extern void arc_rtkfree(rtk_t *rtk)
 static void arc_adjust_option(rtk_t *rtk)
 {
     if (rtk->opt.modear==ARMODE_FIXHOLD) rtk->opt.amb_part=ARC_AMB_NOPART;
-    if (rtk->opt.mode  ==PMODE_KINEMA)   rtk->opt.modear  =ARMODE_INST;
+    if (rtk->opt.mode  ==PMODE_KINEMA)   rtk->opt.modear  =ARMODE_INST;  /* todo:slip cycle often happen if rover station is kinemaed */
+    if (rtk->opt.navsys==SYS_CMP)        rtk->opt.thresar[0]=1.5;  /* todo:when the Ratio value is 1.5,the effect is better than 3.0 */
 }
 /* arc single rtk precise positioning ---------------------------------------*/
 extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
@@ -2414,7 +2481,7 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     }
     /* adjust option,this step just for optimize positioning process */
 #ifdef ARC_AUTOADJUST_OPTION
-    arc_adjust_option(rtk);
+    arc_adjust_option(rtk);  /* todo:this just for debug */
 #endif
     /* relative potitioning */
     arc_relpos(rtk,obs,nu,nr,nav);
