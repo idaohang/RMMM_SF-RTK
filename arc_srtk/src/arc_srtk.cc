@@ -1390,8 +1390,8 @@ static int arc_ddmat(rtk_t *rtk, double *D)
                 if (rtk->ssat[j-k].lock[f]>0&&!(rtk->ssat[j-k].slip[f]&2)&&
                     rtk->ssat[ref-k].vsat[f]&&rtk->ceres_active_x[j]&&
                     rtk->ssat[j-k].azel[1]>=rtk->opt.elmaskar&&!nofix) {
-                    D[ref+(na+nb)*nx]= 1.0;      /* reference single-difference ambiguity */
-                    D[j  +(na+nb)*nx]=-1.0;      /* other single-difference ambiguity */
+                    if (D) D[ref+(na+nb)*nx]= 1.0;  /* reference single-difference ambiguity */
+                    if (D) D[j  +(na+nb)*nx]=-1.0;  /* other single-difference ambiguity */
                     rtk->amb_index[nb+1]=j-k+1;  /* double-difference ambiguity index (sat no) */
                     nb++;                        /* numbers of double-difference ambiguity */
                     rtk->ssat[j-k].fix[f]=2;     /* fix this ambiguity*/
@@ -1400,9 +1400,11 @@ static int arc_ddmat(rtk_t *rtk, double *D)
         }
     }
     rtk->amb_nb=nb;  /* save numbers of double-difference ambiguity */
-    arc_log(ARC_INFO, "D=\n");
-    arc_tracemat(ARC_MATPRINTF,D,nx,na+nb,2,0);
-    return nb;
+    if (D) {
+        arc_log(ARC_INFO, "D=\n");
+        arc_tracemat(ARC_MATPRINTF,D,nx,na+nb,2,0);
+    }
+    return nb; /* numbers of double-difference ambiguity */
 }
 /* restore single-differenced ambiguity --------------------------------------*/
 static void arc_restamb(rtk_t *rtk, const double *bias, double *xa)
@@ -1481,41 +1483,6 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
     }
     free(v); free(H);
 }
-/* select satellites that meet altitude level angles-------------------------*/
-static int arc_amb_sel_sat(const rtk_t* rtk,int *isat,int *index1,int *index2,
-                           double el)
-{
-    int i,j,k;
-
-    for (i=0,j=0,k=0;i<rtk->amb_nb;i++) {  /* todo:rtk->nc is equal to the numbers of double-difference ambiguity,but need to re-thinking */
-        if (rtk->ssat[rtk->amb_index[1+i]-1].azel[1]
-            >=el) {
-            isat[j]=rtk->amb_index[1+i]; /* satellites no. */
-            index1[j]=rtk->na+i; j++; /* start from na in Qy */
-        }                            /* todo:here may be have unkonwn bugs */
-        else index2[k++]=rtk->na+i;
-    }
-    arc_log(ARC_INFO,"arc_amb_sel_sat : states index = \n");
-    arc_tracemati(ARC_MATPRINTF,index1,1,j,2,0);
-    arc_tracemati(ARC_MATPRINTF,index2,1,k,2,0);
-
-    ARC_ASSERT_TRUE_DBG(Exception,j+k==rtk->amb_nb,"arc_amb_sel_sat failed");  /* todo:just for debug */
-
-    return j; /* numbers of satellites */
-}
-/* get the ambiguity covariance matrix--------------------------------------*/
-static int arc_amb_get_Qb(const rtk_t* rtk,const double *Qy,int ny,double *Qb1,
-                          const int* index1,int ni1,int* index2,int ni2,
-                          double *Qb2,double *Q12)
-{
-    int i,j;
-
-    if (Qb1) for (i=0;i<ni1;i++) for (j=0;j<ni1;j++) Qb1[i*ni1+j]=Qy[index1[i]*ny+index1[j]];
-    if (Qb2) for (i=0;i<ni2;i++) for (j=0;j<ni2;j++) Qb2[i*ni2+j]=Qy[index2[i]*ny+index2[j]];
-    if (Q12) for (i=0;i<ni1;i++) for (j=0;j<ni2;j++) Q12[j+i*ni2]=Qy[index1[i]+index2[j]*ny];
-
-    return ni1+ni2==rtk->amb_nb;  /* todo:this conditin maybe unnecessary */
-}
 static int arc_cmpel(const void *p1, const void *p2)
 {
     return *((double*)p1)>=*((double*)p2);
@@ -1533,6 +1500,56 @@ static double arc_amb_adjust_el(const rtk_t *rtk,const int* sat,int ns)
     if (satel[0]>=el||satel[ns-1]<=el) el=satel[ns/2];  /* adjust group-el'value */
 
     return el;  /* ensure two-el-group have elements */
+}
+/* select satellites that meet altitude level angles-------------------------*/
+static int arc_amb_sel_sat(const rtk_t* rtk,const int* sat,int ns,int *sat1,
+                           int *sat2,double el)
+{
+    int i,j,k;
+
+    for (i=0,j=0,k=0;i<ns;i++) {
+        if (rtk->ssat[rtk->amb_index[i]-1].azel[1]
+            >=el) {
+            sat1[j]=rtk->amb_index[i]; /* satellites no. */
+        }
+        else sat2[k++]=rtk->amb_index[i];
+    }
+    arc_log(ARC_INFO,"arc_amb_sel_sat : states index = \n");
+    arc_tracemati(ARC_MATPRINTF,sat1,1,j,2,0);
+    arc_tracemati(ARC_MATPRINTF,sat2,1,k,2,0);
+
+    ARC_ASSERT_TRUE_DBG(Exception,j+k==rtk->amb_nb+1,
+                        "arc_amb_sel_sat failed");  /* just for debug */
+    return j; /* numbers of satellites */
+}
+/* single to double-difference transformation matrix (D')-------------------*/
+static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,double *D)
+{
+    int i,j,nb=0,nx=rtk->nx,na=rtk->na,ref=0;
+    double el=-999.0;
+
+    arc_log(ARC_INFO, "arc_amb_group_dd   :\n");
+
+    /* initial single-difference to double-diffrence transformation matrix */
+    for (i=0;i<na;i++) D[i+i*nx]=1.0;
+
+    /* select the reference single-difference ambiguity */
+    for (i=0,j=0;i<ns;i++) {
+        if (rtk->ssat[sat[i]-1].azel[1]>=el)
+            el=rtk->ssat[sat[i]-1].azel[1],j=sat[i];
+    }
+    /* save the reference satellite */
+    rtk->amb_group_refsat[index]=j;
+
+    /* construct D matrix */
+    ref=IB(j,0,&rtk->opt);
+    for (i=0;i<ns;i++) {
+        if (sat[i]==j) continue;
+        if (D) D[ref+(na+nb)*nx]= 1.0;  /* reference single-difference ambiguity */
+        if (D) D[i  +(na+nb)*nx]=-1.0;  /* other single-difference ambiguity */
+        nb++;
+    }
+    return nb;
 }
 /* resolve part integer ambiguity by LAMBDA-----------------------------------
  * here just reduce the max variance of ambiguity
@@ -1574,179 +1591,36 @@ static int arc_resamb_reduceQ(int _na_,int _nb_,int na,int nb,double *Qy,
 static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
-    int i,j,ny,nb,nx=rtk->nx,na=rtk->na,n1,n2,index1[MAXSAT],index2[MAXSAT],isat[MAXSAT],n=0;
-    double *D,*DP,*y,*Qy,*Qb,*Qab,s[2],*N,el,ratio1=0.0,ratio2=0.0,
-           *H=NULL,*v=NULL,*R=NULL,*ya=NULL,*QQ,*db,*Q1,*Q2,*yb1,*yb2,*b,*Qn2;
+    int nx=rtk->nx,nb,sat1[MAXSAT],sat2[MAXSAT],nb1=0,nb2=0,ns1=0,ns2=0,ns,*sat;
+    double *D1,*D2,el;
 
-    arc_log(ARC_INFO, "arc_resamb_group_LAMBDA : nx=%d\n", nx);
+    arc_log(ARC_INFO, "arc_resamb_LAMBDA : nx=%d\n",nx);
 
     rtk->sol.ratio=0.0;
+    ns=rtk->amb_nb+1; /* numbers of all satellite,included reference satellite */
+    sat=rtk->amb_index; /* all satellite list,included reference satellite */
 
     if (rtk->opt.mode<=PMODE_DGPS||rtk->opt.modear==ARMODE_OFF||
         rtk->opt.thresar[0]<1.0) {
         return 0;
     }
-    /* single to double-difference transformation matrix (D') */
-    D=arc_zeros(nx,nx);
-    if ((nb=arc_ddmat(rtk,D))<=0) {
+    /* single to double-difference transformation matrix (D'),here just for initial */
+    if ((nb=arc_ddmat(rtk,NULL))<=0) {
         arc_log(ARC_WARNING, "arc_resamb_group_LAMBDA : no valid double-difference\n");
-        free(D);
         return 0;
     }
     /* adjust el-group options */
-    el=arc_amb_adjust_el(rtk,rtk->amb_index+1,rtk->amb_nb);
+    el=arc_amb_adjust_el(rtk,sat,ns);
 
-    ny=na+nb;  /* numbers of Qy states */
-    y=arc_mat(ny,1); Qy=arc_mat(ny,ny); DP=arc_mat(ny,nx);
-    Qb=arc_mat(nb,nb); Qab=arc_mat(na,nb);
-    N=arc_mat(nb,1);  /* hold all double-difference ambiguity after LAMBDA */
-    QQ=arc_mat(ny,ny); db=arc_mat(nb,1);
+    /* select two group satellite */
+    ns1=arc_amb_sel_sat(rtk,sat,ns,sat1,sat2,el); ns2=rtk->amb_nb+1-ns1;
 
-    /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
-    arc_matmul("TN",ny,1,nx,1.0, D,rtk->x,0.0,y);
-    arc_matmul("TN",ny,nx,nx,1.0,D,rtk->P,0.0,DP);
-    arc_matmul("NN",ny,ny,nx,1.0,DP,D,0.0,Qy);
+    /* construct two group transformation matrix(D1,D2) */
+    D1=arc_mat(nx,nx); D2=arc_mat(nx,nx);
+    nb1=arc_amb_group_dd(0,rtk,sat1,ns1,D1); /* first group */
+    nb2=arc_amb_group_dd(1,rtk,sat2,ns2,D2); /* second group */
 
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy=\n");
-    arc_tracemat(ARC_MATPRINTF,Qy,na+nb,na+nb,10,4);
 
-    /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
-    for (i=0;i<nb;i++) for (j=0;j<nb;j++) Qb [i+j*nb]=Qy[na+i+(na+j)*ny];
-    for (i=0;i<na;i++) for (j=0;j<nb;j++) Qab[i+j*na]=Qy[   i+(na+j)*ny];
-
-    /* save float amibuigty solutions to N */
-    arc_matcpy(N,y+na,nb,1);  /* todo:may be unnecessary */
-
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb= \n");
-    arc_tracemat(ARC_MATPRINTF,Qb,nb,nb,10,3);
-
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab=\n");
-    arc_tracemat(ARC_MATPRINTF,Qab,na,nb,10,4);
-
-    /* select satellites that meet altitude level angles */
-    n1=arc_amb_sel_sat(rtk,isat,index1,index2,el); n2=nb-n1;
-
-    ARC_ASSERT_TRUE_DBG(Exception,n1+n2==rtk->amb_nb,
-                        "arc_resamb_group_LAMBDA failed"); /* just for debug */
-
-    Q1=arc_mat(n1,n1); Q2=arc_mat(n2,n2); yb1=arc_mat(n1,1);yb2=arc_mat(n2,1);
-    b=arc_mat(nb,2); Qn2=arc_mat(n2,n2);
-
-    arc_amb_get_Qb(rtk,Qy,ny,Q1,index1,n1,index2,n2,Q2,NULL);
-
-    arc_log(ARC_INFO,"arc_amb_get_Qb : Qb1 = \n");
-    arc_tracemat(ARC_MATPRINTF,Q1,n1,n1,10,4);
-    arc_log(ARC_INFO,"arc_amb_get_Qb : Qb2 = \n");
-    arc_tracemat(ARC_MATPRINTF,Q2,n2,n2,10,4);
-
-    for (i=0;i<n1;i++) yb1[i]=y[index1[i]];  /* float ambiguity solution */
-    for (i=0;i<n2;i++) yb2[i]=y[index2[i]];  /* float ambiguity solution */
-
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : yb1 = \n");
-    arc_tracemat(ARC_MATPRINTF,yb1,1,n1,10,4);
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : yb2 = \n");
-    arc_tracemat(ARC_MATPRINTF,yb2,1,n2,10,4);
-
-    /* lambda/mlambda integer least-square estimation */
-    if (!(arc_lambda(n1,2,yb1,Q1,b,s))) {
-
-        arc_log(ARC_INFO, "N(1)=");
-        arc_tracemat(ARC_MATPRINTF,b,1,n1,10,3);
-        arc_log(ARC_INFO, "N(2)=");
-        arc_tracemat(ARC_MATPRINTF,b+n1,1,n1,10,3);
-
-        ratio1=s[0]>0?(float)(s[1]/s[0]):0.0f; if (ratio1>999.9) ratio1=999.9f;
-
-        /* validation by popular ratio-test */
-        if (s[0]<=0.0||s[1]/s[0]>=opt->thresar[0]) {
-            for (i=0;i<n1;i++) yb1[i]-=b[i],N[index1[i]-na]=b[i],n++; /* todo:may have some unknown bugs,need to fix */
-
-            /* design matrix for fixed double-differnce ambiguity */
-            H=arc_zeros(n1,n1+n2); v=arc_zeros(n1+n2,1); R=arc_zeros(n1,n1); ya=arc_mat(ny,1);
-            for (i=0;i<n1;i++) H[i*(n1+n2)+index1[i]-na]=1.0;
-
-            /* float-fix double-difference ambiguity residuals vector */
-            for (i=0;i<n1;i++) v[i]=y[index1[i]]-b[i],R[i*n1+i]=VAR_AMB_GROUP_EL;
-
-            /* kalman filter for fixed double-difference ambiguity */
-            arc_matcpy(ya,y,ny,1);
-            arc_filter(ya+na,Qb,H,v,R,n1+n2,n1);
-
-            /* get the other double-difference ambiguity covariance matrix */
-            for (i=0;i<n2;i++) for (j=0;j<n2;j++)
-                Qn2[i+j*n2]=Qb[index2[i]-na+(index2[j]-na)*(n1+n2)];
-
-            /* other double-difference ambiguity */
-            for (i=0;i<n2;i++) yb2[i]=ya[index2[i]];
-
-            arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qn2=\n");
-            arc_tracemat(ARC_MATPRINTF,Qn2,n2,n2,10,4);
-
-            /* lambda/mlambda integer least-square estimation for other double-difference ambiguity */
-            if (!(arc_lambda(n2,2,yb2,Qn2,b,s))) {
-                ratio2=s[0]>0?(float)(s[1]/s[0]):0.0f; if (ratio2>999.9) ratio2=999.9f;
-
-                arc_log(ARC_INFO, "N(1)=");
-                arc_tracemat(ARC_MATPRINTF,b,1,n2,10,3);
-                arc_log(ARC_INFO, "N(2)=");
-                arc_tracemat(ARC_MATPRINTF,b+n2,1,n2,10,3);
-
-                /* validation by popular ratio-test again */
-                if (s[0]<=0.0||s[1]/s[0]>=opt->thresar[0]) {
-                    for (i=0;i<n2;i++) N[index2[i]-na]=b[i],n++; /* todo:maybe have bugs,need to fix and modified */
-                }
-            }
-            else n=0; /* this step must to be set */
-            free(v); free(R); free(H); free(ya); /* free memory */
-        }
-        else n=0; /* this step is necessary */
-    }
-    else n=0; /* this step is very importance */
-
-    /* transform float to fixed solution (xa=xa-Qab*Qb\(b0-b)) */
-    if (n>0) {
-        for (i=0;i<na;i++) {
-            rtk->xa[i]=rtk->x[i];
-            for (j=0;j<na;j++) rtk->Pa[i+j*na]=rtk->P[i+j*nx];
-        }
-        if (n==n1) { /* only first group double-difference ambiguity */
-            for (i=0;i<n1;i++) bias[i]=N[index1[i]-na]; /* fixed solutions */
-            for (i=0;i<n1;i++) b[i]=y[index1[i]]-N[index1[i]-na]; /* b0-b */
-
-            /* disable other double-difference ambiguity to fix */
-            for (i=0;i<n2;i++) rtk->ssat[rtk->amb_index[1+index2[i]-na]-1].fix[0]=0; /* no fix this ambiguity */
-
-            /* get the Qab matrix */
-            for (i=0;i<na;i++) for (j=0;j<n1;j++) Qab[i+j*na]=Qy[i+index1[j]*ny]; nb=n1;
-        }
-        else if (n==(n1+n2)) { /* fix all two group ambiguity */
-            for (i=0;i<n1+n2;i++) bias[i]=N[i],b[i]=y[i+na]-N[i];
-            nb=n1+n2;
-        }
-        if (!arc_matinv(Qb,nb)) {
-            arc_matmul("NN",nb,1,nb,1.0,Qb,b,0.0,db);
-            arc_matmul("NN",na,1,nb,-1.0,Qab,db,1.0,rtk->xa);
-
-            /* covariance of fixed solution (Qa=Qa-Qab*Qb^-1*Qab') */
-            arc_matmul("NN",na,nb,nb,1.0,Qab,Qb,0.0,QQ);
-            arc_matmul("NT",na,na,nb,-1.0,QQ,Qab,1.0,rtk->Pa);
-
-            arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
-                    nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
-
-            /* restore single-differenced ambiguity */
-            arc_restamb(rtk,bias,xa); /* bias is the fixed solutions */
-        }
-        else n=0;
-    }
-    rtk->sol.ratio=MAX((float)ratio1,(float)ratio2); /* save LAMBDA ratio */
-
-    free(y); free(Qy); free(DP);
-    free(Qb); free(Qab); free(N);
-    free(QQ); free(db);
-    free(Q1); free(Q2); free(yb1);
-    free(yb2); free(b); free(Qn2);
-    return n; /* numebers of double-diffrence ambiguity */
 }
 /* resolve integer ambiguity by LAMBDA ---------------------------------------*/
 static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
