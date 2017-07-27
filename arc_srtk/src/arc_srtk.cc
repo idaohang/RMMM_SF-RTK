@@ -1555,6 +1555,60 @@ static int arc_resamb_reduceQ(int _na_,int _nb_,int na,int nb,double *Qy,
     ix[_na_+k]=0;
     free(ixx); return k;
 }
+/* resolve integer ambiguity by group-LAMBDA ---------------------------------*/
+static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bisa,double *xa,
+                                   const double *H,int nv)
+{
+    prcopt_t *opt=&rtk->opt;
+    int i,j,ny,nb,nx=rtk->nx,na=rtk->na,k,n,ni1,ni2,*index1,*index2,*isat;
+    double *D,*DP,*y,*Qy,*Qb,*Qab,s[2];
+
+    arc_log(ARC_INFO, "arc_resamb_group_LAMBDA : nx=%d\n", nx);
+
+    rtk->sol.ratio=0.0;
+
+    if (rtk->opt.mode<=PMODE_DGPS||rtk->opt.modear==ARMODE_OFF||
+        rtk->opt.thresar[0]<1.0) {
+        return 0;
+    }
+    /* single to double-difference transformation matrix (D') */
+    D=arc_zeros(nx,nx);
+    if ((nb=arc_ddmat(rtk,D))<=0) {
+        arc_log(ARC_WARNING, "arc_resamb_group_LAMBDA : no valid double-difference\n");
+        free(D);
+        return 0;
+    }
+    ny=na+nb;  /* numbers of Qy states */
+    y=arc_mat(ny,1); Qy=arc_mat(ny,ny); DP=arc_mat(ny,nx);
+    Qb=arc_mat(nb,nb); Qab=arc_mat(na,nb);
+    index1=arc_imat(nb,1); index2=arc_imat(nb,1); isat=arc_imat(nb,1);
+
+    /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
+    arc_matmul("TN",ny,1,nx,1.0, D,rtk->x,0.0,y);
+    arc_matmul("TN",ny,nx,nx,1.0,D,rtk->P,0.0,DP);
+    arc_matmul("NN",ny,ny,nx,1.0,DP,D,0.0,Qy);
+
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy=\n");
+    arc_tracemat(ARC_MATPRINTF,Qy,na+nb,na+nb,10,4);
+
+    /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
+    for (i=0;i<nb;i++) for (j=0;j<nb;j++) Qb [i+j*nb]=Qy[na+i+(na+j)*ny];
+    for (i=0;i<na;i++) for (j=0;j<nb;j++) Qab[i+j*na]=Qy[   i+(na+j)*ny];
+
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb= \n");
+    arc_tracemat(ARC_MATPRINTF,Qb,nb,nb,10,3);
+
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab=\n");
+    arc_tracemat(ARC_MATPRINTF,Qab,na,nb,10,4);
+
+    /* select satellites that meet altitude level angles */
+    ni1=arc_amb_sel_sat(rtk,isat,index1,index2); ni2=nb-ni1;
+
+    ARC_ASSERT_TRUE_DBG(Exception,ni1+ni2==rtk->nc,
+                        "arc_resamb_group_LAMBDA failed"); /* just for debug */
+
+
+}
 /* resolve integer ambiguity by LAMBDA ---------------------------------------*/
 static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
