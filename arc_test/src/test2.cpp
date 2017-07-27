@@ -19,7 +19,7 @@ int main()
     arc_opt.mode    = PMODE_STATIC;
     arc_opt.ionoopt = IONOOPT_OFF;
     arc_opt.tropopt = TROPOPT_SAAS;
-    arc_opt.modear  = ARMODE_FIXHOLD;                      // AR mode(0:off, 1 : continuous, 2 : instantaneous, 3 : fix and hold, 4 : ppp - ar) * /
+    arc_opt.modear  = ARMODE_INST;                      // AR mode(0:off, 1 : continuous, 2 : instantaneous, 3 : fix and hold, 4 : ppp - ar) * /
     arc_opt.bdsmodear = 1;
     arc_opt.elmaskar = 10.0* D2R;                       // elevation mask of AR for rising satellite (deg)
     arc_opt.elmaskhold = 20.0* D2R;                     // elevation mask to hold ambiguity (deg)

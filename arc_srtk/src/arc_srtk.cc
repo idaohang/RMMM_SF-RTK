@@ -22,6 +22,7 @@ using namespace std;
 
 #define GAP_RESION  120             /* gap to reset ionosphere parameters (epochs) */
 #define VAR_HOLDAMB 0.001           /* constraint to hold ambiguity (cycle^2) */
+#define VAR_AMB_GROUP_EL SQR(0.1)   /* constraint to high elevation double-difference ambiguity */
 
 #define TTOL_MOVEB  (1.0+2*DTTOL)
                                     /* time sync tolerance for moving-baseline (s) */
@@ -1509,9 +1510,9 @@ static int arc_amb_get_Qb(const rtk_t* rtk,const double *Qy,int ny,double *Qb1,
 {
     int i,j;
 
-    for (i=0;i<ni1;i++) for (j=0;j<ni1;j++) Qb1[i*ni1+j]=Qy[index1[i]*ny+index1[j]];
-    for (i=0;i<ni2;i++) for (j=0;j<ni2;j++) Qb2[i*ni2+j]=Qy[index2[i]*ny+index2[j]];
-    for (i=0;i<ni1;i++) for (j=0;j<ni2;j++) Q12[j+i*ni2]=Qy[index1[i]+index2[j]*ny];
+    if (Qb1) for (i=0;i<ni1;i++) for (j=0;j<ni1;j++) Qb1[i*ni1+j]=Qy[index1[i]*ny+index1[j]];
+    if (Qb2) for (i=0;i<ni2;i++) for (j=0;j<ni2;j++) Qb2[i*ni2+j]=Qy[index2[i]*ny+index2[j]];
+    if (Q12) for (i=0;i<ni1;i++) for (j=0;j<ni2;j++) Q12[j+i*ni2]=Qy[index1[i]+index2[j]*ny];
 
     return ni1+ni2==rtk->amb_nb;  /* todo:this conditin maybe unnecessary */
 }
@@ -1574,7 +1575,8 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
     int i,j,ny,nb,nx=rtk->nx,na=rtk->na,n1,n2,index1[MAXSAT],index2[MAXSAT],isat[MAXSAT],n=0;
-    double *D,*DP,*y,*Qy,*Qb,*Qab,s[2],*N,el,ratio1=0.0,ratio2=0.0;
+    double *D,*DP,*y,*Qy,*Qb,*Qab,s[2],*N,el,ratio1=0.0,ratio2=0.0,
+           *H=NULL,*v=NULL,*R=NULL,*ya=NULL,*QQ,*db,*Q1,*Q2,*yb1,*yb2,*b,*Qn2;
 
     arc_log(ARC_INFO, "arc_resamb_group_LAMBDA : nx=%d\n", nx);
 
@@ -1598,6 +1600,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     y=arc_mat(ny,1); Qy=arc_mat(ny,ny); DP=arc_mat(ny,nx);
     Qb=arc_mat(nb,nb); Qab=arc_mat(na,nb);
     N=arc_mat(nb,1);  /* hold all double-difference ambiguity after LAMBDA */
+    QQ=arc_mat(ny,ny); db=arc_mat(nb,1);
 
     /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
     arc_matmul("TN",ny,1,nx,1.0, D,rtk->x,0.0,y);
@@ -1626,20 +1629,15 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     ARC_ASSERT_TRUE_DBG(Exception,n1+n2==rtk->amb_nb,
                         "arc_resamb_group_LAMBDA failed"); /* just for debug */
 
-    /* get the double-difference ambiguity covariance matrix */
-    double *Q1=arc_mat(n1,n1),*Q2=arc_mat(n2,n2),*yb1=arc_mat(n1,1),*yb2=arc_mat(n2,1),
-           *b=arc_mat(nb,2),*db=arc_mat(nb,1),*Q12=arc_mat(n1,n2),*QQ=arc_mat(na,nb),
-           *N2=arc_mat(n2,1),*Qn2=arc_mat(n2,n2);  /* todo:maybe have more better way to allocate memory */
+    Q1=arc_mat(n1,n1); Q2=arc_mat(n2,n2); yb1=arc_mat(n1,1);yb2=arc_mat(n2,1);
+    b=arc_mat(nb,2); Qn2=arc_mat(n2,n2);
 
-    arc_amb_get_Qb(rtk,Qy,ny,Q1,index1,n1,index2,n2,Q2,Q12);
+    arc_amb_get_Qb(rtk,Qy,ny,Q1,index1,n1,index2,n2,Q2,NULL);
 
     arc_log(ARC_INFO,"arc_amb_get_Qb : Qb1 = \n");
     arc_tracemat(ARC_MATPRINTF,Q1,n1,n1,10,4);
     arc_log(ARC_INFO,"arc_amb_get_Qb : Qb2 = \n");
     arc_tracemat(ARC_MATPRINTF,Q2,n2,n2,10,4);
-
-    arc_log(ARC_INFO,"arc_amb_get_Qb : Qb12 = \n");
-    arc_tracemat(ARC_MATPRINTF,Q12,n2,n1,10,4);
 
     for (i=0;i<n1;i++) yb1[i]=y[index1[i]];  /* float ambiguity solution */
     for (i=0;i<n2;i++) yb2[i]=y[index2[i]];  /* float ambiguity solution */
@@ -1663,29 +1661,29 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         if (s[0]<=0.0||s[1]/s[0]>=opt->thresar[0]) {
             for (i=0;i<n1;i++) yb1[i]-=b[i],N[index1[i]-na]=b[i],n++; /* todo:may have some unknown bugs,need to fix */
 
-            arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : db = \n");
-            arc_tracemat(ARC_MATPRINTF,yb1,1,n1,10,4);
+            /* design matrix for fixed double-differnce ambiguity */
+            H=arc_zeros(n1,n1+n2); v=arc_zeros(n1+n2,1); R=arc_zeros(n1,n1); ya=arc_mat(ny,1);
+            for (i=0;i<n1;i++) H[i*(n1+n2)+index1[i]-na]=1.0;
 
-            if (!arc_matinv(Q1,n1)) {
+            /* float-fix double-difference ambiguity residuals vector */
+            for (i=0;i<n1;i++) v[i]=y[index1[i]]-b[i],R[i*n1+i]=VAR_AMB_GROUP_EL;
 
-                arc_matcpy(N2,yb2,n2,1);
-                arc_matmul("NN",n1,1,n1,1.0,Q1,yb1,0.0,db);
-                arc_matmul("NN",n2,1,n1,-1.0,Q12,db,1.0,N2);
+            /* kalman filter for fixed double-difference ambiguity */
+            arc_matcpy(ya,y,ny,1);
+            arc_filter(ya+na,Qb,H,v,R,n1+n2,n1);
 
-                arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : N2 = \n");
-                arc_tracemat(ARC_MATPRINTF,N2,1,n2,10,4);
+            /* get the other double-difference ambiguity covariance matrix */
+            for (i=0;i<n2;i++) for (j=0;j<n2;j++)
+                Qn2[i+j*n2]=Qb[index2[i]-na+(index2[j]-na)*(n1+n2)];
 
-                /* covariance of fixed solution (Qa=Qa-Qab*Qb^-1*Qab') */
-                arc_matmul("NN",n2,n1,n1,1.0,Q12,Q1,0.0,QQ);
-                arc_matmul("NT",n2,n2,n1,-1.0,QQ,Q12,1.0,Qn2);
+            /* other double-difference ambiguity */
+            for (i=0;i<n2;i++) yb2[i]=ya[index2[i]];
 
-                arc_log(ARC_MATPRINTF,"arc_resamb_group_LAMBDA : Qn2 = \n");
-                arc_tracemat(ARC_MATPRINTF,Qn2,n2,n2,10,4);
-            }
-            else n=0; /* this step must to be set */
+            arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qn2=\n");
+            arc_tracemat(ARC_MATPRINTF,Qn2,n2,n2,10,4);
 
             /* lambda/mlambda integer least-square estimation for other double-difference ambiguity */
-            if (!(arc_lambda(n2,2,N2,Qn2,b,s))) {
+            if (!(arc_lambda(n2,2,yb2,Qn2,b,s))) {
                 ratio2=s[0]>0?(float)(s[1]/s[0]):0.0f; if (ratio2>999.9) ratio2=999.9f;
 
                 arc_log(ARC_INFO, "N(1)=");
@@ -1699,6 +1697,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                 }
             }
             else n=0; /* this step must to be set */
+            free(v); free(R); free(H); free(ya); /* free memory */
         }
         else n=0; /* this step is necessary */
     }
@@ -1710,21 +1709,29 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
             rtk->xa[i]=rtk->x[i];
             for (j=0;j<na;j++) rtk->Pa[i+j*na]=rtk->P[i+j*nx];
         }
-        for (i=0;i<nb;i++) {
-            bias[i]=N[i];  /* fixed solutions */
-            y[na+i]-=N[i]; /* b0-b */
+        if (n==n1) { /* only first group double-difference ambiguity */
+            for (i=0;i<n1;i++) bias[i]=N[index1[i]-na]; /* fixed solutions */
+            for (i=0;i<n1;i++) b[i]=y[index1[i]]-N[index1[i]-na]; /* b0-b */
+
+            /* disable other double-difference ambiguity to fix */
+            for (i=0;i<n2;i++) rtk->ssat[rtk->amb_index[1+index2[i]-na]-1].fix[0]=0; /* no fix this ambiguity */
+
+            /* get the Qab matrix */
+            for (i=0;i<na;i++) for (j=0;j<n1;j++) Qab[i+j*na]=Qy[i+index1[j]*ny]; nb=n1;
         }
-        arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : dy =\n");
-        arc_tracemat(ARC_MATPRINTF,y+na,1,nb,10,4);
+        else if (n==(n1+n2)) { /* fix all two group ambiguity */
+            for (i=0;i<n1+n2;i++) bias[i]=N[i],b[i]=y[i+na]-N[i];
+            nb=n1+n2;
+        }
         if (!arc_matinv(Qb,nb)) {
-            arc_matmul("NN",nb,1,nb,1.0,Qb,y+na,0.0,db);
+            arc_matmul("NN",nb,1,nb,1.0,Qb,b,0.0,db);
             arc_matmul("NN",na,1,nb,-1.0,Qab,db,1.0,rtk->xa);
 
             /* covariance of fixed solution (Qa=Qa-Qab*Qb^-1*Qab') */
             arc_matmul("NN",na,nb,nb,1.0,Qab,Qb,0.0,QQ);
             arc_matmul("NT",na,na,nb,-1.0,QQ,Qab,1.0,rtk->Pa);
 
-            arc_log(ARC_INFO, "arc_resamb_group_LAMBDA : validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
+            arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
                     nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
 
             /* restore single-differenced ambiguity */
@@ -1734,11 +1741,11 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     }
     rtk->sol.ratio=MAX((float)ratio1,(float)ratio2); /* save LAMBDA ratio */
 
-    /* todo:to many free(),need to modified */
-    free(Q1); free(Q2); free(Q12); free(yb1); free(yb2);
-    free(b);  free(db); free(QQ);  free(N2);  free(Qn2);
-    free(N);  free(Qb); free(Qab); free(Qy);  free(y);
-    free(DP); free(D);
+    free(y); free(Qy); free(DP);
+    free(Qb); free(Qab); free(N);
+    free(QQ); free(db);
+    free(Q1); free(Q2); free(yb1);
+    free(yb2); free(b); free(Qn2);
     return n; /* numebers of double-diffrence ambiguity */
 }
 /* resolve integer ambiguity by LAMBDA ---------------------------------------*/
