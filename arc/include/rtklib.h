@@ -944,6 +944,7 @@ typedef struct {         /* RTK control/result type */
     int np;                 /* pseudorange observation numbers */
     int amb_refsat;         /* ambiguity solve reference satellite */
     int amb_index[MAXSAT];  /* double-difference index list : amb_index[i] - sat no. */
+    int amb_nb;             /* numbers of being fixed double-differnce ambiguity */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */
