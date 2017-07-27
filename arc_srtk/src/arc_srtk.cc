@@ -1481,13 +1481,14 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
     free(v); free(H);
 }
 /* select satellites that meet altitude level angles-------------------------*/
-static int arc_amb_sel_sat(const rtk_t* rtk,int *isat,int *index1,int *index2)
+static int arc_amb_sel_sat(const rtk_t* rtk,int *isat,int *index1,int *index2,
+                           double el)
 {
     int i,j,k;
 
     for (i=0,j=0,k=0;i<rtk->amb_nb;i++) {  /* todo:rtk->nc is equal to the numbers of double-difference ambiguity,but need to re-thinking */
         if (rtk->ssat[rtk->amb_index[1+i]-1].azel[1]
-            >=rtk->opt.amb_el_group) {
+            >=el) {
             isat[j]=rtk->amb_index[1+i]; /* satellites no. */
             index1[j]=rtk->na+i; j++; /* start from na in Qy */
         }                            /* todo:here may be have unkonwn bugs */
@@ -1509,7 +1510,7 @@ static int arc_amb_get_Qb(const rtk_t* rtk,const double *Qy,int ny,double *Qb1,
     int i,j;
 
     for (i=0;i<ni1;i++) for (j=0;j<ni1;j++) Qb1[i*ni1+j]=Qy[index1[i]*ny+index1[j]];
-    for (i=0;i<ni2;i++) for (j=0;j<ni2;j++) Qb2[i+ni2+j]=Qy[index2[i]*ny+index2[j]];
+    for (i=0;i<ni2;i++) for (j=0;j<ni2;j++) Qb2[i*ni2+j]=Qy[index2[i]*ny+index2[j]];
     for (i=0;i<ni1;i++) for (j=0;j<ni2;j++) Q12[i+j*ni1]=Qy[index1[i]+index2[j]*ny];
 
     return ni1+ni2==rtk->amb_nb;  /* todo:this conditin maybe unnecessary */
@@ -1573,7 +1574,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
     int i,j,ny,nb,nx=rtk->nx,na=rtk->na,n1,n2,index1[MAXSAT],index2[MAXSAT],isat[MAXSAT],n=0;
-    double *D,*DP,*y,*Qy,*Qb,*Qab,s[2],*N;
+    double *D,*DP,*y,*Qy,*Qb,*Qab,s[2],*N,el,ratio1=0.0,ratio2=0.0;
 
     arc_log(ARC_INFO, "arc_resamb_group_LAMBDA : nx=%d\n", nx);
 
@@ -1590,6 +1591,9 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         free(D);
         return 0;
     }
+    /* adjust el-group options */
+    el=arc_amb_adjust_el(rtk,rtk->amb_index+1,rtk->amb_nb);
+
     ny=na+nb;  /* numbers of Qy states */
     y=arc_mat(ny,1); Qy=arc_mat(ny,ny); DP=arc_mat(ny,nx);
     Qb=arc_mat(nb,nb); Qab=arc_mat(na,nb);
@@ -1617,7 +1621,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_tracemat(ARC_MATPRINTF,Qab,na,nb,10,4);
 
     /* select satellites that meet altitude level angles */
-    n1=arc_amb_sel_sat(rtk,isat,index1,index2); n2=nb-n1;
+    n1=arc_amb_sel_sat(rtk,isat,index1,index2,el); n2=nb-n1;
 
     ARC_ASSERT_TRUE_DBG(Exception,n1+n2==rtk->amb_nb,
                         "arc_resamb_group_LAMBDA failed"); /* just for debug */
@@ -1625,7 +1629,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     /* get the double-difference ambiguity covariance matrix */
     double *Q1=arc_mat(n1,n1),*Q2=arc_mat(n2,n2),*yb1=arc_mat(n1,1),*yb2=arc_mat(n2,1),
            *b=arc_mat(nb,2),*db=arc_mat(nb,1),*Q12=arc_mat(n1,n2),*QQ=arc_mat(na,nb),
-           *N2=arc_mat(n2,1),*Qn2=arc_mat(n2,n2),ratio=0.0;  /* todo:maybe have more better way to allocate memory */
+           *N2=arc_mat(n2,1),*Qn2=arc_mat(n2,n2);  /* todo:maybe have more better way to allocate memory */
 
     arc_amb_get_Qb(rtk,Qy,ny,Q1,index1,n1,index2,n2,Q2,Q12);
 
@@ -1640,6 +1644,11 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     for (i=0;i<n1;i++) yb1[i]=y[index1[i]];  /* float ambiguity solution */
     for (i=0;i<n2;i++) yb2[i]=y[index2[i]];  /* float ambiguity solution */
 
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : yb1 = \n");
+    arc_tracemat(ARC_MATPRINTF,yb1,1,n1,10,4);
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : yb2 = \n");
+    arc_tracemat(ARC_MATPRINTF,yb2,1,n2,10,4);
+
     /* lambda/mlambda integer least-square estimation */
     if (!(arc_lambda(n1,2,yb1,Q1,b,s))) {
 
@@ -1648,24 +1657,34 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         arc_log(ARC_INFO, "N(2)=");
         arc_tracemat(ARC_MATPRINTF,b+n1,1,n1,10,3);
 
-        ratio=s[0]>0?(float)(s[1]/s[0]):0.0f; if (ratio>999.9) ratio=999.9f;
+        ratio1=s[0]>0?(float)(s[1]/s[0]):0.0f; if (ratio1>999.9) ratio1=999.9f;
 
         /* validation by popular ratio-test */
         if (s[0]<=0.0||s[1]/s[0]>=opt->thresar[0]) {
-            for (i=0;i<n1;i++) yb1[i]-=b[i],N[index1[i]-na]=b[i],n++;  /* todo:may have some unknown bugs,need to fix */
+            for (i=0;i<n1;i++) yb1[i]-=b[i],N[index1[i]-na]=b[i],n++; /* todo:may have some unknown bugs,need to fix */
+
+            arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : db = \n");
+            arc_tracemat(ARC_MATPRINTF,yb1,1,n1,10,4);
+
             if (!arc_matinv(Q1,n1)) {
                 arc_matmul("NN",n1,1,n1,1.0,Q1,yb1,0.0,db);
-                arc_matmul("NN",n2,1,n1,-1.0,Qab,db,1.0,N2);
+                arc_matmul("NN",n2,1,n1,-1.0,Q12,db,1.0,N2);
+
+                arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : N2 = \n");
+                arc_tracemat(ARC_MATPRINTF,N2,1,n2,10,4);
 
                 /* covariance of fixed solution (Qa=Qa-Qab*Qb^-1*Qab') */
-                arc_matmul("NN",n2,n1,n1,1.0,Qab,Qb,0.0,QQ);
-                arc_matmul("NT",n2,n2,n1,-1.0,QQ,Qab,1.0,Qn2);
+                arc_matmul("NN",n2,n1,n1, 1.0,Q12,Q1,0.0,QQ);
+                arc_matmul("NT",n2,n2,n1,-1.0,QQ,Q12,1.0,Qn2);
+
+                arc_log(ARC_MATPRINTF,"arc_resamb_group_LAMBDA : Qn2 = \n");
+                arc_tracemat(ARC_MATPRINTF,Qn2,n2,n2,10,4);
             }
-            else nb=0;  /* this step must to be set */
+            else n=0; /* this step must to be set */
 
             /* lambda/mlambda integer least-square estimation for other double-difference ambiguity */
             if (!(arc_lambda(n2,2,N2,Qn2,b,s))) {
-                ratio=s[0]>0?(float)(s[1]/s[0]):0.0f; if (ratio>999.9) ratio=999.9f;
+                ratio2=s[0]>0?(float)(s[1]/s[0]):0.0f; if (ratio2>999.9) ratio2=999.9f;
 
                 arc_log(ARC_INFO, "N(1)=");
                 arc_tracemat(ARC_MATPRINTF,b,1,n2,10,3);
@@ -1674,13 +1693,14 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
                 /* validation by popular ratio-test again */
                 if (s[0]<=0.0||s[1]/s[0]>=opt->thresar[0]) {
-                    for (i=0;i<n2;i++) N[index2[i]-na]=b[i],n++;  /* todo:maybe have bugs,need to fix and modified */
+                    for (i=0;i<n2;i++) N[index2[i]-na]=b[i],n++; /* todo:maybe have bugs,need to fix and modified */
                 }
             }
-            else n=0;  /* this step must to be set */
+            else n=0; /* this step must to be set */
         }
+        else n=0; /* this step is necessary */
     }
-    else n=0;  /* this step is very importance */
+    else n=0; /* this step is very importance */
 
     /* transform float to fixed solution (xa=xa-Qab*Qb\(b0-b)) */
     if (n>0) {
@@ -1690,8 +1710,10 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         }
         for (i=0;i<nb;i++) {
             bias[i]=N[i];  /* fixed solutions */
-            y[na+i]-=N[i];  /* b0-b */
+            y[na+i]-=N[i]; /* b0-b */
         }
+        arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : dy =\n");
+        arc_tracemat(ARC_MATPRINTF,y+na,1,nb,10,4);
         if (!arc_matinv(Qb,nb)) {
             arc_matmul("NN",nb,1,nb,1.0,Qb,y+na,0.0,db);
             arc_matmul("NN",na,1,nb,-1.0,Qab,db,1.0,rtk->xa);
@@ -1704,15 +1726,18 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                     nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
 
             /* restore single-differenced ambiguity */
-            arc_restamb(rtk,bias,xa);  /* bias is the fixed solutions */
+            arc_restamb(rtk,bias,xa); /* bias is the fixed solutions */
         }
         else n=0;
     }
+    rtk->sol.ratio=MAX((float)ratio1,(float)ratio2); /* save LAMBDA ratio */
+
     /* todo:to many free(),need to modified */
     free(Q1); free(Q2); free(Q12); free(yb1); free(yb2);
-    free(b); free(db); free(QQ); free(N2); free(Qn2);
-    free(N); free(Qb); free(Qab); free(Qy); free(y); free(DP); free(D);
-    return n;
+    free(b);  free(db); free(QQ);  free(N2);  free(Qn2);
+    free(N);  free(Qb); free(Qab); free(Qy);  free(y);
+    free(DP); free(D);
+    return n; /* numebers of double-diffrence ambiguity */
 }
 /* resolve integer ambiguity by LAMBDA ---------------------------------------*/
 static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
@@ -2471,7 +2496,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         else stat=SOLQ_NONE;
     }
     /* resolve integer ambiguity by LAMBDA */
-    if (stat!=SOLQ_NONE&&arc_resamb_LAMBDA(rtk,bias,xa)>1) {
+    if (stat!=SOLQ_NONE&&(opt->amb_sel_el_group?arc_resamb_group_LAMBDA(rtk,bias,xa)
+                                               :arc_resamb_LAMBDA(rtk,bias,xa)>1)) {
 
         /* resolve integer ambiguity by LAMBDA success */
         if (arc_zdres(0,obs,nu,rs,dts,svh,nav,xa,opt,0,y,e,azel,rtk,NULL)) {

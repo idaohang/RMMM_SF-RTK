@@ -893,7 +893,7 @@ extern void matfprint(const double A[], int n, int m, int p, int q, FILE *fp)
 extern void matfprinti(const int A[], int n, int m, int p, int q, FILE *fp)
 {
     int i,j;
-    fprintf(fp,"MAT:----------------------------------------------------------\n");
+    fprintf(fp,"------------------------------------------------------------\n");
     for (i=0;i<n;i++) {
         for (j=0;j<m;j++) fprintf(fp," %*.*d",p,q,A[i+j*n]);
         fprintf(fp,"\n");

@@ -1,4 +1,5 @@
 
+#include <arc.h>
 #include "arc.h"
 
 #define NUMINFILE 10
@@ -42,10 +43,12 @@ int main()
     arc_opt.ukf_beta=4;
     arc_opt.ukf_ZCount=0;
     arc_opt.reset_amb_all=0;
-    arc_opt.amb_part=1;
+    arc_opt.amb_part=0;
     arc_opt.amb_iter=3;
     arc_opt.amb_ref_thres=0.99;
     arc_opt.exclude_bds_geo=0;
+    arc_opt.amb_sel_el_group=1;
+    arc_opt.amb_el_group=45.0*D2R;
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
