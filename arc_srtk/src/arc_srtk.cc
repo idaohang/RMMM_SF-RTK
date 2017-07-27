@@ -1511,7 +1511,7 @@ static int arc_amb_get_Qb(const rtk_t* rtk,const double *Qy,int ny,double *Qb1,
 
     for (i=0;i<ni1;i++) for (j=0;j<ni1;j++) Qb1[i*ni1+j]=Qy[index1[i]*ny+index1[j]];
     for (i=0;i<ni2;i++) for (j=0;j<ni2;j++) Qb2[i*ni2+j]=Qy[index2[i]*ny+index2[j]];
-    for (i=0;i<ni1;i++) for (j=0;j<ni2;j++) Q12[i+j*ni1]=Qy[index1[i]+index2[j]*ny];
+    for (i=0;i<ni1;i++) for (j=0;j<ni2;j++) Q12[j+i*ni2]=Qy[index1[i]+index2[j]*ny];
 
     return ni1+ni2==rtk->amb_nb;  /* todo:this conditin maybe unnecessary */
 }
@@ -1639,7 +1639,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_tracemat(ARC_MATPRINTF,Q2,n2,n2,10,4);
 
     arc_log(ARC_INFO,"arc_amb_get_Qb : Qb12 = \n");
-    arc_tracemat(ARC_MATPRINTF,Q12,n1,n2,10,4);
+    arc_tracemat(ARC_MATPRINTF,Q12,n2,n1,10,4);
 
     for (i=0;i<n1;i++) yb1[i]=y[index1[i]];  /* float ambiguity solution */
     for (i=0;i<n2;i++) yb2[i]=y[index2[i]];  /* float ambiguity solution */
@@ -1667,6 +1667,8 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
             arc_tracemat(ARC_MATPRINTF,yb1,1,n1,10,4);
 
             if (!arc_matinv(Q1,n1)) {
+
+                arc_matcpy(N2,yb2,n2,1);
                 arc_matmul("NN",n1,1,n1,1.0,Q1,yb1,0.0,db);
                 arc_matmul("NN",n2,1,n1,-1.0,Q12,db,1.0,N2);
 
@@ -1674,7 +1676,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                 arc_tracemat(ARC_MATPRINTF,N2,1,n2,10,4);
 
                 /* covariance of fixed solution (Qa=Qa-Qab*Qb^-1*Qab') */
-                arc_matmul("NN",n2,n1,n1, 1.0,Q12,Q1,0.0,QQ);
+                arc_matmul("NN",n2,n1,n1,1.0,Q12,Q1,0.0,QQ);
                 arc_matmul("NT",n2,n2,n1,-1.0,QQ,Q12,1.0,Qn2);
 
                 arc_log(ARC_MATPRINTF,"arc_resamb_group_LAMBDA : Qn2 = \n");
