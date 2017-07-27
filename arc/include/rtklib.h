@@ -31,7 +31,6 @@
 #include <math.h>
 #include <time.h>
 #include <ctype.h>
-#include "arc_ceres_api.h"
 
 #ifdef WIN32
 #include <winsock2.h>
@@ -101,6 +100,7 @@ extern "C" {
 #define EFACT_CMP   1.0                 /* error factor: BeiDou */
 #define EFACT_IRN   1.5                 /* error factor: IRNSS */
 #define EFACT_SBS   3.0                 /* error factor: SBAS */
+#define EFACT_GEO   1.5                 /* error factor: BDS GEO */
 
 #define SYS_NONE    0x00                /* navigation system: none */
 #define SYS_GPS     0x01                /* navigation system: GPS */
@@ -120,6 +120,10 @@ extern "C" {
 #define TSYS_QZS    4                   /* time system: QZSS time */
 #define TSYS_CMP    5                   /* time system: BeiDou time */
 #define TSYS_IRN    6                   /* time system: IRNSS time */
+
+#define NUMOFGEO    4                   /* BDS system GEO numbers */
+#define NUMOFMEO    2                   /* BDS system MEO numbers */
+#define NUMOFIGSO   5                   /* BDS systen IGSO numbers */
 
 #ifndef NFREQ
 #define NFREQ       3                   /* number of carrier frequencies */
@@ -534,7 +538,7 @@ typedef struct {        /* GPS/QZS/GAL broadcast ephemeris type */
 } eph_t;
 
 typedef struct {        /* GLONASS broadcast ephemeris type */
-    int sat;              /* satellite number */
+    int sat;            /* satellite number */
     int iode;           /* IODE (0-6 bit of tb field) */
     int frq;            /* satellite frequency number */
     int svh,sva,age;    /* satellite health, accuracy, age of operation */
@@ -577,8 +581,8 @@ typedef struct {        /* SBAS ephemeris type */
     double af0,af1;     /* satellite clock-offset/drift (s,s/s) */
 } seph_t;
 
-typedef struct {        /* satellite fcb data type */
-    gtime_t ts,te;        /* start/end time (GPST) */
+typedef struct {            /* satellite fcb data type */
+    gtime_t ts,te;          /* start/end time (GPST) */
     double bias[MAXSAT][3]; /* fcb value   (cyc) */
     double std [MAXSAT][3]; /* fcb std-dev (cyc) */
 } fcbd_t;
@@ -674,10 +678,10 @@ typedef struct {        /* solution status buffer type */
     solstat_t *data;    /* solution status data */
 } solstatbuf_t;
 
-typedef struct {        /* option type */
-    const char *name;   /* option name */
-    int format;         /* option format (0:int,1:double,2:string,3:enum) */
-    void *var;          /* pointer to option variable */
+typedef struct {         /* option type */
+    const char *name;    /* option name */
+    int format;          /* option format (0:int,1:double,2:string,3:enum) */
+    void *var;           /* pointer to option variable */
     const char *comment; /* option comment/enum labels/unit */
 } opt_t;
 
@@ -685,12 +689,12 @@ typedef struct {        /* extended receiver error model */
     int ena[4];         /* model enabled */
     double cerr[4][NFREQ*2]; /* code errors (m) */
     double perr[4][NFREQ*2]; /* carrier-phase errors (m) */
-    double gpsglob[NFREQ]; /* gps-glonass h/w bias (m) */
-    double gloicb [NFREQ]; /* glonass interchannel bias (m/fn) */
+    double gpsglob[NFREQ];   /* gps-glonass h/w bias (m) */
+    double gloicb [NFREQ];   /* glonass interchannel bias (m/fn) */
 } exterr_t;
 
-typedef struct {        /* SNR mask type */
-    int ena[2];         /* enable flag {rover,base} */
+typedef struct {           /* SNR mask type */
+    int ena[2];            /* enable flag {rover,base} */
     double mask[NFREQ][9]; /* mask (dBHz) at 5,10,...85 deg */
 } snrmask_t;
 
@@ -769,6 +773,10 @@ typedef struct {        /* processing options type */
     int amb_part;          /* resolve part ambiguity */
     int amb_iter;          /* number of lambda  iteration */
     double amb_ref_thres;  /* confidence function threshold of round reference ambiguity */
+    int amb_sel_el_group;  /* single-difference ambiguity grouping for fix */
+    double amb_el_group;   /* single-difference ambiguity divided into two groups */
+
+    int exclude_bds_geo;   /* exclude bds geo satellite (1:exclude,0:included) */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -821,7 +829,7 @@ typedef struct {        /* RINEX options type */
     char runby [32];    /* run-by */
     char marker[64];    /* marker name */
     char markerno[32];  /* marker number */
-    char markertype[32]; /* marker type (ver.3) */
+    char markertype[32];/* marker type (ver.3) */
     char name[2][32];   /* observer/agency */
     char rec [3][32];   /* receiver #/type/vers */
     char ant [3][32];   /* antenna #/type */
@@ -927,11 +935,6 @@ typedef struct {         /* RTK control/result type */
     int neb;             /* bytes in error message buffer */
     char errbuf[MAXERRMSG]; /* error message buffer */
     prcopt_t opt;           /* processing options */
-                            /* ceres solver */
-    ceres_problem_t *ceres_problem;
-                            /* solve the single rtk position problem */
-    ceres_cost_function_t *ceres_cost_function;
-                            /* solve the single rtk position loss function */
     int *ceres_active_x;    /* ceres solver active states index in states list */
     double lam;             /* adaptive Kaman filter parameters */
     ukf_t* ukf;             /* unscented Kalman filter */

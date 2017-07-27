@@ -53,7 +53,7 @@ extern "C" {
 #define ARC_NOUKF       0
 /* single frequency rtk position post-processing ------------------------------*/
 extern int  arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
-                        const prcopt_t *popt, const solopt_t *sopt,
+                        prcopt_t *popt, const solopt_t *sopt,
                         const filopt_t *fopt, char **infile, int n, char *outfile,
                         const char *rov, const char *base);
 /* using particle filter solve single frequency position ---------------------*/
@@ -322,6 +322,8 @@ extern double arc_conffunc(int N, double B, double sig);
 extern int arc_showmsg(char *format, ...);
 extern void arc_settspan(gtime_t ts, gtime_t te);
 extern void arc_settime(gtime_t time);
+extern void arc_exclude_bds_geo(prcopt_t *opt);
+extern int arc_is_bds_geo(int sat);
 
 #ifdef __cplusplus
 }

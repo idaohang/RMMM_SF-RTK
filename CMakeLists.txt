@@ -39,6 +39,7 @@ endif()
 add_definitions(-w)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 if (WITH_GFLAGS)
     find_package (gflags 2.2.0 REQUIRED)
@@ -52,13 +53,12 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/arc/include
     ${GFLAGS_INCLUDE_DIR}
     ${PROJECT_SOURCE_DIR}/arc_pf/lib/include
-    ${PROJECT_SOURCE_DIR}/arc_ceres/include
     /usr/include/eigen3
 )
 
 add_subdirectory(arc_log)
 add_subdirectory(arc_pf)
-add_subdirectory(arc_ceres)
+#add_subdirectory(arc_ceres)
 
 add_library(${PROJECT_NAME}_rtk STATIC
     arc_cmn/src/arc_cmn.cc
@@ -72,7 +72,6 @@ add_library(${PROJECT_NAME}_rtk STATIC
     arc/src/arc_MovementModel.cc
     arc/src/arc_ObservationModel.cpp
     arc/src/arc_StatesDistribution.cpp
-    arc/src/arc_ceres_api.cc
     arc/src/arc_ukf.cc
 )
 

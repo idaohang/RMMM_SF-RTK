@@ -21,7 +21,6 @@
  * @brief ARC-SRTK UKF Functions
  * @author sujinglan
  */
-#include <rtklib.h>
 #include "arc.h"
 
 #define MAXSTATES 100
@@ -78,7 +77,7 @@ static void arc_ukf_cholesky_solve(double *A, unsigned n, double *sigma, double 
     int i,j,k;
     double t;
 
-    for (i =0;i<m;i++) { /* iterate over the lines of B */
+    for (i=0;i<m;i++) { /* iterate over the lines of B */
         for (j=0;j<n;j++) { /* solve Ly=B */
             t=B[i*n+j];
             for (k=j-1;k>=0;k--)

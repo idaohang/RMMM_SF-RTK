@@ -29,5 +29,6 @@
 #include "arc_srtk.h"
 #include "arc_PF.h"
 #include "arc_assert_macros.hpp"
+#include "glog/logging.h"
 
 #endif

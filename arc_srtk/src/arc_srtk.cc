@@ -1479,11 +1479,51 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
     }
     free(v); free(H);
 }
+/* select satellites that meet altitude level angles-------------------------*/
+static int arc_amb_sel_sat(const rtk_t* rtk,int *isat,int *index1,int *index2)
+{
+    int i,j,k;
+
+    for (i=0,j=0,k=0;i<rtk->nc;i++) {  /* todo:rtk->nc is equal to the numbers of double-difference ambiguity,but need to re-thinking */
+        if (rtk->ssat[rtk->amb_index[1+i]-1].azel[1]
+            >=rtk->opt.amb_el_group) {
+            isat[j]=rtk->amb_index[1+i]; /* satellites no. */
+            index1[j]=rtk->na+i; j++; /* start from na in Qy */
+        }                            /* todo:here may be have unkonwn bugs */
+        else index2[k++]=rtk->na+i;
+    }
+    arc_log(ARC_INFO,"arc_amb_sel_sat : states index = \n");
+    arc_tracemati(ARC_MATPRINTF,index1,1,j,2,0);
+    arc_tracemati(ARC_MATPRINTF,index2,1,k,2,0);
+
+    ARC_ASSERT_TRUE_DBG(Exception,j+k==rtk->nc,"arc_amb_sel_sat failed");  /* todo:just for debug */
+
+    return j; /* numbers of satellites */
+}
+/* get the ambiguity covariance matrix--------------------------------------*/
+static int arc_amb_get_Qb(const rtk_t* rtk,const double *Qy,int ny,double *Qb1,
+                           int *nb1,const int* index1,int ni1,int* index2,int ni2,
+                           double *Qb2,int *nb2)
+{
+    int i,j;
+
+    for (i=0;i<ni1;i++) for (j=0;j<ni1;j++) Qb1[i*ni1+j]=Qy[index1[i]*ny+index1[j]];
+    if (nb1) *nb1=ni1;
+    for (i=0;i<ni2;i++) for (j=0;j<ni2;j++) Qb2[i+ni2+j]=Qy[index2[i]+ny+index2[j]];
+    if (nb2) *nb2=ni2;
+
+    arc_log(ARC_INFO,"arc_amb_get_Qb : Qb1 = \n");
+    arc_tracemat(ARC_MATPRINTF,Qb1,*nb1,*nb1,10,4);
+    arc_log(ARC_INFO,"arc_amb_get_Qb : Qb2 = \n");
+    arc_tracemat(ARC_MATPRINTF,Qb2,*nb2,*nb2,10,4);
+
+    return *nb1+*nb2==rtk->nc;  /* todo:this conditin maybe unnecessary */
+}
 /* resolve part integer ambiguity by LAMBDA-----------------------------------
  * here just reduce the max variance of ambiguity
  * -------------------------------------------------------------------------*/
-static int arc_resamb_reduceQ(int _na_,int _nb_,int na,int nb,double *Qy,double *Qb,
-                              double *Qab,int *ix)
+static int arc_resamb_reduceQ(int _na_,int _nb_,int na,int nb,double *Qy,
+                              double *Qb,double *Qab,int *ix)
 {
     int i,j,k=0,*ixx=arc_imat(na+nb,1);
     double val=-9999.0;

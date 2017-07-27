@@ -9,6 +9,8 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <arc.h>
+
 #endif
 #include "arc.h"
 #include "glog/logging.h"
@@ -66,11 +68,12 @@ const double lam_carr[MAXFREQ]={ /* carrier wave length (m) */
     CLIGHT/FREQ1,CLIGHT/FREQ2,CLIGHT/FREQ5,CLIGHT/FREQ6,CLIGHT/FREQ7,
     CLIGHT/FREQ8,CLIGHT/FREQ9
 };
+/* todo:when the Ratio value is 1.5,the effect is better than 3.0 */
 const prcopt_t prcopt_default={ /* defaults processing options */
     PMODE_KINEMA,0,1,SYS_GPS|SYS_CMP,   /* mode,soltype,nf,navsys */
     15.0*D2R,{{0,0}},           /* elmin,snrmask */
     0,1,1,1,                    /* sateph,modear,glomodear,bdsmodear */
-    5,0,10,1,                   /* maxout,minlock,minfix,armaxiter */
+    10,5,5,1,                   /* maxout,minlock,minfix,armaxiter */
     0,0,0,0,                    /* estion,esttrop,dynamics,tidecorr */
     1,0,0,0,0,                  /* niter,codesmooth,intpref,sbascorr,sbassatsel */
     0,0,                        /* rovpos,refpos */
@@ -79,9 +82,9 @@ const prcopt_t prcopt_default={ /* defaults processing options */
     {30.0,0.03,0.3},            /* std[] */
     {1E-1,1E-2,1E-2,1E-1,1E-2,0.5}, /* prn[] */
     5E-12,                      /* sclkstab */
-    {3.0,0.9999,0.25,0.1,0.05}, /* thresar */
+    {1.2,0.9999,0.25,0.1,0.05}, /* thresar */
     0.0,0.0,0.05,               /* elmaskar,almaskhold,thresslip */
-    30.0,30.0,30.0,             /* maxtdif,maxinno,maxgdop */
+    30.0,15.0,30.0,             /* maxtdif,maxinno,maxgdop */
     {0},{0},{0},                /* baseline,ru,rb */
     {"",""},                    /* anttype */
     {{0}},{{0}},{0}             /* antdel,pcv,exsats */
@@ -126,6 +129,15 @@ static unsigned char obsfreqs[]={
     4, 4, 4, 4, 4,  4, 4, 6, 6, 6, /* 30-39 */
     2, 2, 4, 4, 3,  3, 3, 1, 1, 3, /* 40-49 */
     3, 3, 7, 7, 7,  7, 0, 0, 0, 0  /* 50-59 */
+};
+static char *bds_geo[]={    /* bds GEO satellite list */
+    "C01","C03","C04","C05",""
+};
+static char *bds_igso[]={   /* bds IGSO satellite list */
+    "C06","C07","C08","C09","C10",""
+};
+static char* bds_meo[]={    /* bds MEO satellite */
+    "C11","C12",""
 };
 static char codepris[7][MAXFREQ][16]={  /* code priority table */
    
@@ -326,7 +338,7 @@ extern int satexclude(int sat, int svh, const prcopt_t *opt)
     }
     if (sys==SYS_QZS) svh&=0xFE; /* mask QZSS LEX health */
     if (svh) {
-        arc_log(ARC_WARNING, "unhealthy satellite: sat=%3d svh=%02X\n", sat, svh);
+        arc_log(ARC_WARNING, "unhealthy satellite: sat=%3d svh=%02X\n",sat,svh);
         return 1;
     }
     return 0;
@@ -401,7 +413,7 @@ extern char *code2obs(unsigned char code, int *freq)
 *-----------------------------------------------------------------------------*/
 extern void setcodepri(int sys, int freq, const char *pri)
 {
-    arc_log(3, "setcodepri:sys=%d freq=%d pri=%s\n", sys, freq, pri);
+    arc_log(3, "setcodepri:sys=%d freq=%d pri=%s\n",sys,freq,pri);
     
     if (freq<=0||MAXFREQ<freq) return;
     if (sys&SYS_GPS) strcpy(codepris[0][freq-1],pri);
@@ -4193,6 +4205,35 @@ extern double arc_conffunc(int N, double B, double sig)
         p-=f_erfc((i-x)/(SQRT2*sig))-f_erfc((i+x)/(SQRT2*sig));
     }
     return p;
+}
+/* search bds sat no in its list------------------------------------------------*/
+static int arc_search_sat_geo(const char* prn)
+{
+    int i;
+    for (i=0;i<NUMOFGEO;i++) {
+        if (bds_geo[i]=="") break; /* todo:this condition may be have bugs */
+        if (strcmp(prn,bds_geo[i])==0) return 1;
+    }
+    return 0;
+}
+/* excluded bds geo satellites--------------------------------------------------*/
+extern void arc_exclude_bds_geo(prcopt_t *opt)
+{
+    int i;
+    char prn[6];
+
+    for (i=0;i<MAXSAT;i++) {
+        if (satsys(i+1,NULL)!=SYS_CMP) continue;
+        satno2id(i+1,prn);  /* todo:maybe have more bette way to excluded bds geo satellites */
+        if (arc_search_sat_geo(prn)) opt->exsats[i]=1;  /* set excluded flag */
+    }
+    arc_log(ARC_INFO,"arc_exclude_bds_geo : excluded bds geo list = %4s %4s %4s %4s",
+            bds_geo[0],bds_geo[1],bds_geo[2],bds_geo[3]);
+}
+/* judge this satellites whether it is bds geo---------------------------------*/
+extern int arc_is_bds_geo(int sat)
+{
+    char prn[8]; satno2id(sat,prn); return arc_search_sat_geo(prn);
 }
 /* dummy functions for lex extentions ----------------------------------------*/
 #ifndef EXTLEX

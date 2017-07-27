@@ -330,7 +330,7 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
             sol->qr[4]=(float)Q[2+NX]; /* cov yz */
             sol->qr[5]=(float)Q[2];    /* cov zx */
             sol->ns=(unsigned char)ns;
-            sol->age=sol->ratio=0.0;
+            sol->age=0.0;
             
             /* validate solution */
             if ((stat=arc_valsol(azel,vsat,n,opt,v,nv,NX,msg))) {
@@ -534,7 +534,7 @@ extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
         opt_.tropopt=TROPOPT_SAAS;
     }
     /* satellite positons, velocities and clocks */
-    arc_satposs(sol->time, obs, n, nav, opt_.sateph, rs, dts, var, svh);
+    arc_satposs(sol->time,obs,n,nav,opt_.sateph,rs,dts,var,svh);
     
     /* estimate receiver position with pseudorange */
     stat=arc_estpos(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);

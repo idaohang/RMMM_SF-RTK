@@ -30,6 +30,7 @@
 #include "arc_MovementModel.h"
 #include <iomanip>
 #include <fstream>
+#include <arc.h>
 
 using namespace std;
 /* constants/global variables ------------------------------------------------*/
@@ -109,7 +110,7 @@ static int arc_inputobs(obsd_t *obs, int solq, const prcopt_t *popt,int *nu,int 
     arc_log(ARC_INFO,"infunc  : revs=%d iobsu=%d iobsr=%d isbs=%d\n",revs,iobsu,iobsr,isbs);
     
     if (0<=iobsu&&iobsu<obss.n) {
-        arc_settime((time = obss.data[iobsu].time));
+        arc_settime((time=obss.data[iobsu].time));
         if (arc_checkbrk("processing : %s Q=%d",time_str(time,0),solq)) {
             aborts=1;
             arc_showmsg("aborted"); return -1;
@@ -298,6 +299,7 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
     obsd_t obs[MAXOBS*2]; /* for rover and base */
     double rb[3]={0};
     int i,nobs,n,pri[]={0,1,2,3,4,5,1,6},nu=0,nr=0;
+    char prn[8]={0};
 
     arc_log(ARC_INFO, "arc_procpos : mode=%d\n", mode);
 
@@ -311,8 +313,13 @@ static void arc_procpos(const prcopt_t *popt, const solopt_t *sopt,
         for (i=n=0;i<nobs;i++) {
             if ((satsys(obs[i].sat,NULL)&popt->navsys)&&
                 popt->exsats[obs[i].sat-1]!=1) obs[n++]=obs[i];
+            if (satsys(obs[i].sat,NULL)==SYS_CMP
+                &&popt->exsats[obs[i].sat-1]==1) {  /* just for debug */
+                satno2id(obs[i].sat,prn);
+                arc_log(ARC_WARNING,"arc_procpos : excluded bds geo satellite %s,sat no is %d",prn,obs[i].sat);
+            }
         }
-        if (n<=0) continue;
+        if (n<=0) continue; /* no observations */
 
         /* carrier-phase bias correction */
         if (navs.nf>0) {
@@ -372,8 +379,8 @@ static int arc_valcomb(const sol_t *solf, const sol_t *solb)
         if (dr[i]*dr[i]<=16.0*var[i]) continue; /* ok if in 4-sigma */
         
         time2str(solf->time,tstr,2);
-        arc_log(ARC_INFO, "degrade fix to float: %s dr=%.3f %.3f %.3f std=%.3f %.3f %.3f\n",
-                tstr + 11, dr[0], dr[1], dr[2], SQRT(var[0]), SQRT(var[1]), SQRT(var[2]));
+        arc_log(ARC_INFO,"degrade fix to float: %s dr=%.3f %.3f %.3f std=%.3f %.3f %.3f\n",
+                tstr+11,dr[0],dr[1],dr[2],SQRT(var[0]),SQRT(var[1]),SQRT(var[2]));
         return 0;
     }
     return 1;
@@ -386,7 +393,7 @@ static void arc_combres(const prcopt_t *popt, const solopt_t *sopt)
     double tt,Qf[9],Qb[9],Qs[9],rbs[3]={0},rb[3]={0},rr_f[3],rr_b[3],rr_s[3];
     int i,j,k,pri[]={0,1,2,3,4,5,1,6};
 
-    arc_log(ARC_INFO, "arc_combres : isolf=%d isolb=%d\n", isolf, isolb);
+    arc_log(ARC_INFO,"arc_combres : isolf=%d isolb=%d\n",isolf,isolb);
     
     for (i=0,j=isolb-1;i<isolf&&j>=0;i++,j--) {
         
@@ -431,11 +438,11 @@ static void arc_combres(const prcopt_t *popt, const solopt_t *sopt)
             if (popt->mode==PMODE_MOVEB) {
                 for (k=0;k<3;k++) rr_f[k]=solf[i].rr[k]-rbf[k+i*3];
                 for (k=0;k<3;k++) rr_b[k]=solb[j].rr[k]-rbb[k+j*3];
-                if (arc_smoother(rr_f, Qf, rr_b, Qb, 3, rr_s, Qs)) continue;
+                if (arc_smoother(rr_f,Qf,rr_b,Qb,3,rr_s,Qs)) continue;
                 for (k=0;k<3;k++) sols.rr[k]=rbs[k]+rr_s[k];
             }
             else {
-                if (arc_smoother(solf[i].rr, Qf, solb[j].rr, Qb, 3, sols.rr, Qs)) continue;
+                if (arc_smoother(solf[i].rr,Qf,solb[j].rr,Qb,3,sols.rr,Qs)) continue;
             }
             sols.qr[0]=(float)Qs[0];
             sols.qr[1]=(float)Qs[4];
@@ -527,8 +534,8 @@ static int arc_readobsnav(gtime_t ts, gtime_t te, double ti, char **infile,
             ind=index[i]; nobs=obs->n; 
         }
         /* read rinex obs and nav file */
-        if (arc_readrnxt(infile[i], rcv, ts, te, ti, prcopt->rnxopt[rcv <= 1 ? 0 : 1], obs, nav,
-                         rcv <= 2 ? sta + rcv - 1 : NULL)<0) {
+        if (arc_readrnxt(infile[i],rcv,ts,te,ti,prcopt->rnxopt[rcv<=1?0:1],obs,nav,
+                         rcv<=2?sta+rcv-1:NULL)<0) {
             arc_log(ARC_WARNING, "insufficient memory\n");
             return 0;
         }
@@ -568,7 +575,7 @@ static int arc_avepos(double *ra, int rcv, const obs_t *obs, const nav_t *nav,
     int i,j,n=0,m,iobs;
     char msg[128];
 
-    arc_log(ARC_INFO, "arc_avepos: rcv=%d obs.n=%d\n", rcv, obs->n);
+    arc_log(ARC_INFO,"arc_avepos: rcv=%d obs.n=%d\n",rcv,obs->n);
     
     for (i=0;i<3;i++) ra[i]=0.0;
     
@@ -635,7 +642,7 @@ static int arc_openses(const prcopt_t *popt, const solopt_t *sopt,
     int i;
 
     arc_log(ARC_INFO, "arc_openses :\n");
-    
+
     /* read satellite antenna parameters */
     if (*fopt->satantp&&!(arc_readpcv(fopt->satantp, pcvs))) {
         arc_log(ARC_WARNING, "sat antenna pcv read error: %s\n", fopt->satantp);
@@ -824,7 +831,6 @@ static int arc_execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
     }
     /* free obs and nav data */
     arc_freeobsnav(&obss,&navs);
-    
     return aborts?1:0;
 }
 /* execute processing session for each rover ---------------------------------*/
@@ -863,14 +869,19 @@ static int arc_execses_b(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt
 }
 /* post-processing positioning ------------------------------------------------*/
 extern int arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
-                       const prcopt_t *popt, const solopt_t *sopt,
+                       prcopt_t *popt, const solopt_t *sopt,
                        const filopt_t *fopt, char **infile, int n, char *outfile,
                        const char *rov, const char *base)
 {
     int i,stat=0,index[MAXINFILE]={0};
 
     arc_log(ARC_INFO,"arc_postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n", ti,tu,n,outfile);
-    
+
+    /* exclude bds geo satellite */
+    if (popt->exclude_bds_geo) {
+        arc_log(ARC_INFO,"arc_postpos : exclude bds geo satellite");
+        arc_exclude_bds_geo(popt);  /* todo:maybe no effects,need to think again */
+    }
     /* open processing session */
     if (!arc_openses(popt,sopt,fopt,&navs,&pcvss,&pcvsr)) return -1;
 
@@ -883,4 +894,5 @@ extern int arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
     arc_closeses(&navs,&pcvss,&pcvsr);
     return stat;
 }
+
 
