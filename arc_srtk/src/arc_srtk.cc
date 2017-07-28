@@ -1592,7 +1592,9 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
     int nx=rtk->nx,nb,sat1[MAXSAT],sat2[MAXSAT],nb1=0,nb2=0,ns1=0,ns2=0,ns,*sat;
-    double *D1,*D2,el;
+    int ny1,ny2,na=rtk->na,i,j,f1,f2;
+    double *D1,*D2,el,*y1,*y2,*Qy1,*Qy2,*DP,*Qb1,*Qb2,*Qab1,*Qab2,s1[2],s2[2],*b1,*b2;
+    double ratio1,ratio2;
 
     arc_log(ARC_INFO, "arc_resamb_LAMBDA : nx=%d\n",nx);
 
@@ -1619,6 +1621,82 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     D1=arc_mat(nx,nx); D2=arc_mat(nx,nx);
     nb1=arc_amb_group_dd(0,rtk,sat1,ns1,D1); /* first group */
     nb2=arc_amb_group_dd(1,rtk,sat2,ns2,D2); /* second group */
+
+    /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
+    ny1=na+nb1; ny2=na+nb2;
+    y1=arc_mat(ny1,1); y2=arc_mat(ny2,1); Qy1=arc_mat(ny1,ny1); Qy2=arc_mat(ny2,ny2); DP=arc_mat(MAX(ny1,ny2),nx);
+    arc_matmul("TN",ny1,1,nx,1.0, D1,rtk->x,0.0,y1);
+    arc_matmul("TN",ny1,nx,nx,1.0,D1,rtk->P,0.0,DP);
+    arc_matmul("NN",ny1,ny1,nx,1.0,DP,D1,0.0,Qy1); /* for first group */
+
+    arc_matmul("TN",ny2,1,nx,1.0, D2,rtk->x,0.0,y2);
+    arc_matmul("TN",ny2,nx,nx,1.0,D2,rtk->P,0.0,DP);
+    arc_matmul("NN",ny2,ny2,nx,1.0,DP,D2,0.0,Qy2); /* for second group */
+
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy1=\n");
+    arc_tracemat(ARC_MATPRINTF,Qy1,na+nb1,na+nb1,10,4);
+
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy2=\n");
+    arc_tracemat(ARC_MATPRINTF,Qy2,na+nb2,na+nb2,10,4);
+
+    /* allocate memory */
+    Qb1=arc_mat(nb1,nb1); Qb2=arc_mat(nb2,nb2); Qab1=arc_mat(na,nb1); Qab2=arc_mat(na,nb2);
+
+    /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
+    for (i=0;i<nb1;i++) for (j=0;j<nb1;j++) Qb1 [i+j*nb1]=Qy1[na+i+(na+j)*ny1];
+    for (i=0;i<na;i++)  for (j=0;j<nb1;j++) Qab1[i+j*na ]=Qy1[   i+(na+j)*ny1]; /* first group */
+
+    for (i=0;i<nb2;i++) for (j=0;j<nb2;j++) Qb2 [i+j*nb2]=Qy2[na+i+(na+j)*ny2];
+    for (i=0;i<na;i++)  for (j=0;j<nb2;j++) Qab2[i+j*na ]=Qy2[   i+(na+j)*ny2]; /* second group */
+
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb1 =\n");
+    arc_tracemat(ARC_MATPRINTF,Qb1,nb1,nb1,10,4);
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab1 =\n");
+    arc_tracemat(ARC_MATPRINTF,Qab1,na,nb1,10,4);
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb2 =\n");
+    arc_tracemat(ARC_MATPRINTF,Qb2,nb2,nb2,10,4);
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab2 =\n");
+    arc_tracemat(ARC_MATPRINTF,Qab2,na,nb2,10,4);
+
+    b1=arc_mat(2,nb1); b2=arc_mat(2,nb2);
+
+    /* lambda/mlambda integer least-square estimation */
+    if (!(arc_lambda(nb1,2,y1+na,Qb1,b1,s1))) {
+        arc_log(ARC_INFO, "first group N(1)=");
+        arc_tracemat(ARC_MATPRINTF,b1,1,nb1,10,3);
+        arc_log(ARC_INFO, "second group N(2)=");
+        arc_tracemat(ARC_MATPRINTF,b1+nb1,1,nb1,10,3);
+
+        ratio1=s1[0]>0?(float)(s1[1]/s1[0]):0.0f;
+        if (ratio1>999.9) ratio1=999.9f; /* first group ratio */
+        f1=1; /* first group ambiguity lambda success */
+    }
+    else {
+        arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : first group lambda is failed");
+        f1=0; /* failed */
+    }
+    /* lambda/mlambda integer least-square estimation for second group */
+    if (!(arc_lambda(nb2,2,y2+na,Qb2,b2,s2))) {
+        arc_log(ARC_INFO, "first group N(1)=");
+        arc_tracemat(ARC_MATPRINTF,b2,1,nb2,10,3);
+        arc_log(ARC_INFO, "second group N(2)=");
+        arc_tracemat(ARC_MATPRINTF,b2+nb2,1,nb2,10,3);
+
+        ratio2=s2[0]>0?(float)(s2[1]/s2[0]):0.0f;
+        if (ratio2>999.9) ratio2=999.9f; /* first group ratio */
+        f2=1; /* first group ambiguity lambda success */
+    }
+    else {
+        arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : second group lambda is failed");
+        f2=0; /* failed */
+    }
+
+
+
+
+
+
+
 
 
 }
