@@ -1590,7 +1590,7 @@ static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,
         /* construct D matrix */
         ref=IB(j,0,&rtk->opt);
         for (i=0;i<ns;i++) {
-            if (sat[i]==ref
+            if (IB(sat[i],0,&rtk->opt)==ref
                 ||!arc_test_sys(rtk->ssat[sat[i]-1].sys,m)) continue;
             if (D) D[                   ref+(na+nb)*nx]= 1.0;
             if (D) D[IB(sat[i],0,&rtk->opt)+(na+nb)*nx]=-1.0;
@@ -1604,8 +1604,7 @@ static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,
     return nb; /* numbers of double-difference ambiguity */
 }
 /* resolve part integer ambiguity by LAMBDA-----------------------------------
- * here just reduce the max variance of ambiguity
- * -------------------------------------------------------------------------*/
+ * here just reduce the max variance of ambiguity---------------------------*/
 static int arc_resamb_reduceQ(int _na_,int _nb_,int na,int nb,double *Qy,
                               double *Qb,double *Qab,int *ix)
 {
