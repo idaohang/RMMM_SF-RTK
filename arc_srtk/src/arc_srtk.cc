@@ -1246,7 +1246,7 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
                         sat[i],sat[j],f<nf?"L":"P",f%nf+1,v[nv]);
                 continue;
             }
-            /* save double-difference satellite pair index */
+            /* save double-difference satellite pair index and its observation index*/
             rtk->sat[nv*2]=sat[i]; rtk->sat[nv*2+1]=sat[j];
             rtk->obs_ind[2*nv]=i;  rtk->obs_ind[2*nv+1]=j;
 
@@ -1406,7 +1406,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
     return nb; /* numbers of double-difference ambiguity */
 }
 /* restore single-differenced ambiguity --------------------------------------*/
-static void arc_restamb(rtk_t *rtk, const double *bias, double *xa)
+static void arc_restamb(rtk_t *rtk, const double *bias, double *xa,int group)
 {
     int i,n,m,index[MAXSAT],nv=0,ref=-1;
     double tmp=0.0;
@@ -1419,13 +1419,16 @@ static void arc_restamb(rtk_t *rtk, const double *bias, double *xa)
     for (m=0;m<4;m++) {  /* m==3 is bds */
         for (n=i=0;i<MAXSAT;i++) {
             if (!arc_test_sys(rtk->ssat[i].sys,m)
-                ||rtk->ssat[i].fix[0]!=2) {
+                ||rtk->ssat[i].fix[0]!=2||
+                   (group==0?(i+1==rtk->amb_refsat[m]):
+                   (group==1?(i+1==rtk->amb_group_refsat[m][0]):
+                             (i+1==rtk->amb_group_refsat[m][1])))) {
                 continue;
             }
             index[n++]=IB(i+1,0,&rtk->opt);  /* include reference single-differnce ambiguity */
         }
         if (n<2) continue;
-        ref=IB(rtk->amb_refsat,0,&rtk->opt); /* refenrence single-differnce ambiguity */
+        ref=IB(rtk->amb_refsat[m],0,&rtk->opt); /* refenrence single-differnce ambiguity */
 
         if (arc_conffunc(ROUND(xa[ref]),xa[ref],
                          SQRT(rtk->P[ref+ref*rtk->nx]))>=rtk->opt.amb_ref_thres) {
@@ -1438,29 +1441,32 @@ static void arc_restamb(rtk_t *rtk, const double *bias, double *xa)
     }
 }
 /* hold integer ambiguity ----------------------------------------------------*/
-static void arc_holdamb(rtk_t *rtk, const double *xa)
+static void arc_holdamb(rtk_t *rtk, const double *xa,int group)
 {
     double *v,*H,*R;
-    int i,n,m,f,info,index[MAXSAT],nb=rtk->nx-rtk->na,nv=0,nf=1,ref=-1;
+    int i,n,m,f,info,index[MAXSAT],nb=rtk->nx-rtk->na,nv=0,nf=1,ref=-1,refsat=0;
 
     arc_log(ARC_INFO, "arc_holdamb :\n");
 
     v=arc_mat(nb,1); H=arc_zeros(nb,rtk->nx);
 
-    for (m=0;m<4;m++) for (f=0;f<nf;f++) {
+    for (m=0;m<NUMOFSYS;m++) for (f=0;f<nf;f++) { /* m=0:gps/qzs/sbs,1:glo,2:gal,3:bds */
+
+        refsat=group==0?rtk->amb_refsat[m]: /* reference single-difference satellite */
+               (group==1?rtk->amb_group_refsat[m][0]:rtk->amb_group_refsat[m][1]);
 
         for (n=i=0;i<MAXSAT;i++) {
             if (!arc_test_sys(rtk->ssat[i].sys,m)
                 ||rtk->ssat[i].fix[f]!=2||
                 rtk->ssat[i].azel[1]<rtk->opt.elmaskhold||
-                (i+1==rtk->amb_refsat)) { /* exclued reference single-difference ambiguity */
+                (i+1==refsat)) { /* exclued reference single-difference ambiguity */
                 continue;
             }
-            index[n++]=IB(i+1,f,&rtk->opt); /* index of fixing single-difference ambiguity */
-            rtk->ssat[i].fix[f]=3; /* hold */
+            index[n++]=IB(i+1,0,&rtk->opt); /* index of fixing single-difference ambiguity */
+            rtk->ssat[i].fix[f]=3; /* hold this single-difference ambiguity */
         }
-        /* refenrence single-differnce ambiguity */
-        ref=IB(rtk->amb_refsat,0,&rtk->opt);
+        /* states index of reference single-differnce ambiguity */
+        ref=IB(refsat,0,&rtk->opt);
 
         /* constraint to fixed ambiguity */
         for (i=1;i<n;i++) {
@@ -1483,7 +1489,7 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
     }
     free(v); free(H);
 }
-static int arc_cmpel(const void *p1, const void *p2)
+static int arc_cmpel(const void *p1,const void *p2)
 {
     return *((double*)p1)>=*((double*)p2);
 }
@@ -1508,24 +1514,23 @@ static int arc_amb_sel_sat(const rtk_t* rtk,const int* sat,int ns,int *sat1,
     int i,j,k;
 
     for (i=0,j=0,k=0;i<ns;i++) {
-        if (rtk->ssat[rtk->amb_index[i]-1].azel[1]
+        if (rtk->ssat[sat[i]-1].azel[1]
             >=el) {
-            sat1[j]=rtk->amb_index[i]; /* satellites no. */
+            sat1[j++]=sat[i]; /* first group satellites */
         }
-        else sat2[k++]=rtk->amb_index[i];
+        else sat2[k++]=sat[i]; /* second group satellites */
     }
-    arc_log(ARC_INFO,"arc_amb_sel_sat : states index = \n");
+    arc_log(ARC_INFO,"arc_amb_sel_sat : states index= \n");
     arc_tracemati(ARC_MATPRINTF,sat1,1,j,2,0);
     arc_tracemati(ARC_MATPRINTF,sat2,1,k,2,0);
 
-    ARC_ASSERT_TRUE_DBG(Exception,j+k==rtk->amb_nb+1,
-                        "arc_amb_sel_sat failed");  /* just for debug */
     return j; /* numbers of satellites */
 }
 /* single to double-difference transformation matrix (D')-------------------*/
-static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,double *D)
+static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,
+                            double *D)
 {
-    int i,j,nb=0,nx=rtk->nx,na=rtk->na,ref=0;
+    int i,j,m,nb=0,nx=rtk->nx,na=rtk->na,ref=0;
     double el=-999.0;
 
     arc_log(ARC_INFO, "arc_amb_group_dd   :\n");
@@ -1534,22 +1539,33 @@ static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,dou
     for (i=0;i<na;i++) D[i+i*nx]=1.0;
 
     /* select the reference single-difference ambiguity */
-    for (i=0,j=0;i<ns;i++) {
-        if (rtk->ssat[sat[i]-1].azel[1]>=el)
-            el=rtk->ssat[sat[i]-1].azel[1],j=sat[i];
-    }
-    /* save the reference satellite */
-    if (index!=2) rtk->amb_group_refsat[index]=j;
+    for (m=0;m<NUMOFSYS;m++) { /* m=0:gps/qzs/sbs,1:glo,2:gal,3:bds */
 
-    /* construct D matrix */
-    ref=IB(j,0,&rtk->opt);
-    for (i=0;i<ns;i++) {
-        if (sat[i]==j) continue;
-        if (D) D[ref+(na+nb)*nx]= 1.0;  /* reference single-difference ambiguity */
-        if (D) D[i  +(na+nb)*nx]=-1.0;  /* other single-difference ambiguity */
-        nb++;
+        for (i=0,j=0;i<ns;i++) {
+            if (!arc_test_sys(rtk->ssat[sat[i]-1].sys,m)) {
+                continue;
+            }
+            if (rtk->ssat[sat[i]-1].azel[1]>=el)
+                el=rtk->ssat[sat[i]-1].azel[1],j=sat[i]; /* reference satellite */
+        }
+        /* save the reference satellite */
+        if (index!=2) rtk->amb_group_refsat[m][index]=j;
+
+        /* construct D matrix */
+        ref=IB(j,0,&rtk->opt);
+        for (i=0;i<ns;i++) {
+            if (sat[i]==ref
+                ||!arc_test_sys(rtk->ssat[sat[i]-1].sys,m)) continue;
+            if (D) D[                   ref+(na+nb)*nx]= 1.0;
+            if (D) D[IB(sat[i],0,&rtk->opt)+(na+nb)*nx]=-1.0;
+            nb++;
+        }
     }
-    return nb;
+    if (D) {
+        arc_log(ARC_INFO, "D=\n");
+        arc_tracemat(ARC_MATPRINTF,D,nx,na+nb,2,0);
+    }
+    return nb; /* numbers of double-difference ambiguity */
 }
 /* resolve part integer ambiguity by LAMBDA-----------------------------------
  * here just reduce the max variance of ambiguity
@@ -1629,10 +1645,10 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
     int nx=rtk->nx,nb,sat1[MAXSAT],sat2[MAXSAT],sat12[4],nb1=0,nb2=0,ns1=0,ns2=0,ns,*sat;
-    int ny1,ny2,na=rtk->na,i,j,f1,f2,f3,ny12,nb12;
-    double *D1,*D2,el,*y1,*y2,*Qy1,*Qy2,*Qb1,*Qb2,*Qab1,*Qab2,s1[2],s2[2],s12[2],*b1,*b2,*b12;
-    double ratio1,ratio2,ratio12;
-    double *D12,*Qy12,*Qb12,*Qab12,*y12,*db,*QQ;
+    int ny1,ny2,na=rtk->na,i,j,f1,f2;
+    double *D1,*D2,el,*y1,*y2,*Qy1,*Qy2,*Qb1,*Qb2,*Qab1,*Qab2,s1[2],s2[2],*b1,*b2;
+    double ratio1,ratio2;
+    double *db,*QQ;
 
     arc_log(ARC_INFO,"arc_resamb_LAMBDA : nx=%d\n",nx);
 
@@ -1654,24 +1670,20 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
     /* select two group satellite */
     ns1=arc_amb_sel_sat(rtk,sat,ns,sat1,sat2,el); ns2=ns-ns1;
-    sat12[0]=rtk->amb_group_refsat[0]; /* first group reference satellite */
-    sat12[1]=rtk->amb_group_refsat[1]; /* second group reference satellite */
 
     /* construct two group transformation matrix(D1,D2) */
-    D1=arc_mat(nx,nx); D2=arc_mat(nx,nx); D12=arc_mat(nx,nx);
+    D1=arc_mat(nx,nx); D2=arc_mat(nx,nx);
     nb1 =arc_amb_group_dd(0,rtk,sat1,ns1,D1); /* first group */
     nb2 =arc_amb_group_dd(1,rtk,sat2,ns2,D2); /* second group */
-    nb12=arc_amb_group_dd(2,rtk,sat12,2,D12); /* first-second group ambiguity */
 
     /* transform single to double-differenced phase-bias (y=D'*x,Qy=D'*P*D) */
-    ny1=na+nb1; ny2=na+nb2; ny12=na+nb12;
-    y1 =arc_mat(ny1,1);    y2=arc_mat(ny2,1);    y12=arc_mat(ny12,1);
-    Qy1=arc_mat(ny1,ny1); Qy2=arc_mat(ny2,ny2); Qy12=arc_mat(ny12,ny12);
-    db =arc_mat(nb,1);     QQ=arc_mat(na,nb1+nb2+nb12);
+    ny1=na+nb1; ny2=na+nb2;
+    y1 =arc_mat(ny1,1);    y2=arc_mat(ny2,1);
+    Qy1=arc_mat(ny1,ny1); Qy2=arc_mat(ny2,ny2);
+    db =arc_mat(nb,1);     QQ=arc_mat(na,nb1+nb2);
 
-    arc_amb_s2d(rtk,D1, y1, Qy1, ny1, nx); /* for first group */
-    arc_amb_s2d(rtk,D2, y2, Qy2, ny2, nx); /* for second group */
-    arc_amb_s2d(rtk,D12,y12,Qy12,ny12,nx); /* for first-second group */
+    arc_amb_s2d(rtk,D1,y1,Qy1,ny1,nx); /* for first group */
+    arc_amb_s2d(rtk,D2,y2,Qy2,ny2,nx); /* for second group */
 
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy1=\n");
     arc_tracemat(ARC_MATPRINTF,Qy1,na+nb1,na+nb1,10,4);
@@ -1679,42 +1691,34 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy2=\n");
     arc_tracemat(ARC_MATPRINTF,Qy2,na+nb2,na+nb2,10,4);
 
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA :Qy12=\n");
-    arc_tracemat(ARC_MATPRINTF,Qy12,na,na+nb12,10,4);
-
     /* allocate memory */
-    Qb1 =arc_mat(nb1,nb1); Qb2=arc_mat(nb2,nb2); Qab1=arc_mat(na,nb1);
-    Qb12=arc_mat(1,1);   Qab12=arc_mat(na,1);    Qab2=arc_mat(na,nb2);
+    Qb1 =arc_mat(nb1,nb1); Qb2=arc_mat(nb2,nb2);
+    Qab1=arc_mat(na,nb1); Qab2=arc_mat(na,nb2);
 
     /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
     arc_amb_group_Qb(nb1, na,ny1, Qb1, Qab1, Qy1 ); /* first group */
     arc_amb_group_Qb(nb1, na,ny1, Qb1, Qab1, Qy2 ); /* second group */
-    arc_amb_group_Qb(nb12,na,ny12,Qb12,Qab12,Qy12); /* first-second group */
 
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb1=\n");
     arc_tracemat(ARC_MATPRINTF,Qb1,nb1,nb1,10,4);
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab1=\n");
     arc_tracemat(ARC_MATPRINTF,Qab1,na,nb1,10,4);
+
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb2=\n");
     arc_tracemat(ARC_MATPRINTF,Qb2,nb2,nb2,10,4);
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab2=\n");
     arc_tracemat(ARC_MATPRINTF,Qab2,na,nb2,10,4);
 
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb12=\n");
-    arc_tracemat(ARC_MATPRINTF,Qb12,nb12,nb12,10,4);
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab12=\n");
-    arc_tracemat(ARC_MATPRINTF,Qab12,na,nb12,10,4);
-
-    b1=arc_mat(2,nb1); b2=arc_mat(2,nb2); b12=arc_mat(2,nb12);
+    b1=arc_mat(2,nb1); b2=arc_mat(2,nb2);
 
     /* lambda/mlambda integer least-square estimation */
-    f1=arc_amb_lambda(nb1, y1+na, Qb1, b1, s1, &ratio1 ); /* first group */
-    f2=arc_amb_lambda(nb2, y2+na, Qb2, b2, s2, &ratio2 ); /* second group */
-    f3=arc_amb_lambda(nb12,y12+na,Qb12,b12,s12,&ratio12); /* first-second group */
+    f1=arc_amb_lambda(nb1,y1+na,Qb1,b1,s1,&ratio1); /* first group */
+    f2=arc_amb_lambda(nb2,y2+na,Qb2,b2,s2,&ratio2); /* second group */
 
     /* only first group ambiguity fix */
-    if (f1==0&&f2==1&&f3==1&&ratio1>=opt->thresar[0]) {
-        /* transform float to fixed solution (xa=xa-Qab*Qb\(b0-b)) */
+    if (f1==0&&ratio1>=opt->thresar[0]) {
+
+        /* initial fixed solutions for rover station positions and velecity */
         for (i=0;i<na;i++) {
             rtk->xa[i]=rtk->x[i];
             for (j=0;j<na;j++) rtk->Pa[i+j*na]=rtk->P[i+j*nx];
@@ -1722,6 +1726,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         /* fix solutions and double-difference ambiguity residuals */
         for (i=0;i<nb;i++) bias[i]=b1[i],y1[na+i]-=b1[i];
 
+        /* transform float to fixed solution (xa=xa-Qab*Qb\(b0-b)) */
         if (!arc_matinv(Qb1,nb1)) {
             arc_matmul("NN",nb1,1,nb1,1.0,Qb1,y1+na,0.0,db);
             arc_matmul("NN",na,1,nb1,-1.0,Qab1,db,1.0,rtk->xa);
@@ -1734,13 +1739,10 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                     nb,s1[0]==0.0?0.0:s1[1]/s1[0],s1[0],s1[1]);
 
             /* reset single-diffrence ambiguity fix flag */
-            for (i=0;i<ns2;i++) {
-                if (sat2[i]==rtk->amb_group_refsat[1]) continue;
-                rtk->ssat[sat2[i]-1].fix[0]=0; /* no fix this ambiguity */
-            }
+            for (i=0;i<ns2;i++) rtk->ssat[sat2[i]-1].fix[0]=0; /* no fix this ambiguity */
 
             /* restore single-differenced ambiguity */
-            arc_restamb(rtk,bias,xa);  /* bias is the fixed solutions */
+            arc_restamb(rtk,bias,xa,1); /* bias is the fixed solutions */
         }
         else nb1=0;
     }
@@ -1838,7 +1840,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                             nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
 
                     /* restore single-differenced ambiguity */
-                    arc_restamb(rtk,bias,xa);  /* bias is the fixed solutions */
+                    arc_restamb(rtk,bias,xa,0);  /* bias is the fixed solutions */
                     break;  /* lambda solve success */
                 }
                 else nb=0;

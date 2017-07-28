@@ -946,10 +946,10 @@ typedef struct {         /* RTK control/result type */
     int np;                 /* pseudorange observation numbers */
     int amb_refsat[NUMOFSYS];
                             /* ambiguity solve reference satellite(0:GPS,1:GLONASS,2:GAL,3:BDS) */
-    int amb_index[NUMOFSYS+MAXSAT];
-                            /* double-difference index list : amb_index[i] - sat no. */
+    int amb_index[MAXSAT];  /* double-difference index list : amb_index[i] - sat no. */
     int amb_nb;             /* numbers of being fixed double-differnce ambiguity */
-    int amb_group_refsat[2];/* two group double-diffrence ambiguity reference satellite */
+    int amb_group_refsat[NUMOFSYS][2];
+                            /* two group double-diffrence ambiguity reference satellite */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */
