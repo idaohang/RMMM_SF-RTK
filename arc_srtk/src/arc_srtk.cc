@@ -1690,16 +1690,16 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_amb_group_Qb(nb1, na,ny1, Qb1, Qab1, Qy2 ); /* second group */
     arc_amb_group_Qb(nb12,na,ny12,Qb12,Qab12,Qy12); /* first-second group */
 
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb1 =\n");
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb1=\n");
     arc_tracemat(ARC_MATPRINTF,Qb1,nb1,nb1,10,4);
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab1 =\n");
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab1=\n");
     arc_tracemat(ARC_MATPRINTF,Qab1,na,nb1,10,4);
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb2 =\n");
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb2=\n");
     arc_tracemat(ARC_MATPRINTF,Qb2,nb2,nb2,10,4);
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab2 =\n");
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab2=\n");
     arc_tracemat(ARC_MATPRINTF,Qab2,na,nb2,10,4);
 
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb12 =\n");
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb12=\n");
     arc_tracemat(ARC_MATPRINTF,Qb12,nb12,nb12,10,4);
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab12=\n");
     arc_tracemat(ARC_MATPRINTF,Qab12,na,nb12,10,4);
@@ -1707,9 +1707,14 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     b1=arc_mat(2,nb1); b2=arc_mat(2,nb2); b12=arc_mat(2,nb12);
 
     /* lambda/mlambda integer least-square estimation */
-    f1=arc_amb_lambda(nb1, y1, Qb1, b1, s1, &ratio1 ); /* first group */
-    f2=arc_amb_lambda(nb2, y2, Qb2, b2, s2, &ratio2 ); /* second group */
-    f3=arc_amb_lambda(nb12,y12,Qb12,b12,s12,&ratio12); /* first-second group */
+    f1=arc_amb_lambda(nb1, y1+na, Qb1, b1, s1, &ratio1 ); /* first group */
+    f2=arc_amb_lambda(nb2, y2+na, Qb2, b2, s2, &ratio2 ); /* second group */
+    f3=arc_amb_lambda(nb12,y12+na,Qb12,b12,s12,&ratio12); /* first-second group */
+
+    /* validation by popular ratio-test */
+    if ((!f1)&&ratio1>=opt->thresar[0]) { /* check first group ambiguity  */
+
+    }
 
 
 }
@@ -1717,7 +1722,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
-    int i,j,ny,nb,info,nx=rtk->nx,na=rtk->na,k,n,*ix,_na_,_nb_;
+    int i,j,ny,nb,nx=rtk->nx,na=rtk->na,k,n,*ix,_na_,_nb_,info;
     double *D,*DP,*y,*Qy,*b,*db,*Qb,*Qab,*QQ,s[2],*yb;
 
     arc_log(ARC_INFO, "arc_resamb_LAMBDA : nx=%d\n", nx);
@@ -1802,7 +1807,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
                     arc_log(ARC_INFO, "arc_resamb_LAMBDA : validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
                             nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
-                    
+
                     /* restore single-differenced ambiguity */
                     arc_restamb(rtk,bias,xa);  /* bias is the fixed solutions */
                     break;  /* lambda solve success */
