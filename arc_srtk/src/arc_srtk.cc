@@ -1539,7 +1539,7 @@ static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,dou
             el=rtk->ssat[sat[i]-1].azel[1],j=sat[i];
     }
     /* save the reference satellite */
-    rtk->amb_group_refsat[index]=j;
+    if (index!=2) rtk->amb_group_refsat[index]=j;
 
     /* construct D matrix */
     ref=IB(j,0,&rtk->opt);
@@ -1587,14 +1587,52 @@ static int arc_resamb_reduceQ(int _na_,int _nb_,int na,int nb,double *Qy,
     ix[_na_+k]=0;
     free(ixx); return k;
 }
+/* lambda/mlambda integer least-square estimation-----------------------------*/
+static int arc_amb_lambda(int nb,double *y,double *Qb,double *b,double *s,
+                          double*ratio)
+{
+    int info=1; if (!(info=arc_lambda(nb,2,y,Qb,b,s))) {
+        arc_log(ARC_INFO, "N(1)=");
+        arc_tracemat(ARC_MATPRINTF,b,1,nb,10,3);
+        arc_log(ARC_INFO, "N(2)=");
+        arc_tracemat(ARC_MATPRINTF,b+nb,1,nb,10,3);
+        *ratio=s[0]>0?(float)(s[1]/s[0]):0.0f;
+        if (*ratio>999.9) *ratio=999.9f;
+    }
+    else {
+        info=1; arc_log(ARC_WARNING,"arc_amb_lambda : lambda failed");
+    }
+    return info;
+}
+/* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) -----*/
+static void arc_amb_s2d(const rtk_t *rtk,const double *D,double *y,double *Qy,
+                        int ny,int nx)
+{
+    double *DP=arc_mat(ny,nx);
+    if (y) arc_matmul("TN",ny,1,nx,1.0, D,rtk->x,0.0,y);
+    if (Qy) {
+        arc_matmul("TN",ny,nx,nx,1.0,D,rtk->P,0.0,DP);
+        arc_matmul("NN",ny,ny,nx,1.0,DP,D,0.0,Qy);
+    }
+    free(DP);
+}
+/* extract ambiguity covariance matrix----------------------------------------*/
+static void arc_amb_group_Qb(int nb,int na,int ny,double* Qb,double*Qab,
+                             const double* Qy)
+{
+    int i,j;
+    for (i=0;i<nb;i++) for (j=0;j<nb;j++) Qb [i+j*nb]=Qy[na+i+(na+j)*ny];
+    for (i=0;i<na;i++) for (j=0;j<nb;j++) Qab[i+j*na]=Qy[   i+(na+j)*ny];
+}
 /* resolve integer ambiguity by group-LAMBDA ---------------------------------*/
 static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
-    int nx=rtk->nx,nb,sat1[MAXSAT],sat2[MAXSAT],nb1=0,nb2=0,ns1=0,ns2=0,ns,*sat;
-    int ny1,ny2,na=rtk->na,i,j,f1,f2;
-    double *D1,*D2,el,*y1,*y2,*Qy1,*Qy2,*DP,*Qb1,*Qb2,*Qab1,*Qab2,s1[2],s2[2],*b1,*b2;
-    double ratio1,ratio2;
+    int nx=rtk->nx,nb,sat1[MAXSAT],sat2[MAXSAT],sat12[4],nb1=0,nb2=0,ns1=0,ns2=0,ns,*sat;
+    int ny1,ny2,na=rtk->na,i,j,f1,f2,f3,ny12,nb12;
+    double *D1,*D2,el,*y1,*y2,*Qy1,*Qy2,*Qb1,*Qb2,*Qab1,*Qab2,s1[2],s2[2],s12[2],*b1,*b2,*b12;
+    double ratio1,ratio2,ratio12;
+    double *D12,*Qy12,*Qb12,*Qab12,*y12;
 
     arc_log(ARC_INFO, "arc_resamb_LAMBDA : nx=%d\n",nx);
 
@@ -1616,22 +1654,23 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
     /* select two group satellite */
     ns1=arc_amb_sel_sat(rtk,sat,ns,sat1,sat2,el); ns2=rtk->amb_nb+1-ns1;
+    sat12[0]=rtk->amb_group_refsat[0]; /* first group reference satellite */
+    sat12[1]=rtk->amb_group_refsat[1]; /* second group reference satellite */
 
     /* construct two group transformation matrix(D1,D2) */
-    D1=arc_mat(nx,nx); D2=arc_mat(nx,nx);
-    nb1=arc_amb_group_dd(0,rtk,sat1,ns1,D1); /* first group */
-    nb2=arc_amb_group_dd(1,rtk,sat2,ns2,D2); /* second group */
+    D1=arc_mat(nx,nx); D2=arc_mat(nx,nx); D12=arc_mat(nx,nx);
+    nb1 =arc_amb_group_dd(0,rtk,sat1,ns1,D1); /* first group */
+    nb2 =arc_amb_group_dd(1,rtk,sat2,ns2,D2); /* second group */
+    nb12=arc_amb_group_dd(2,rtk,sat12,2,D12); /* first-second group ambiguity */
 
     /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
-    ny1=na+nb1; ny2=na+nb2;
-    y1=arc_mat(ny1,1); y2=arc_mat(ny2,1); Qy1=arc_mat(ny1,ny1); Qy2=arc_mat(ny2,ny2); DP=arc_mat(MAX(ny1,ny2),nx);
-    arc_matmul("TN",ny1,1,nx,1.0, D1,rtk->x,0.0,y1);
-    arc_matmul("TN",ny1,nx,nx,1.0,D1,rtk->P,0.0,DP);
-    arc_matmul("NN",ny1,ny1,nx,1.0,DP,D1,0.0,Qy1); /* for first group */
+    ny1=na+nb1; ny2=na+nb2; ny12=na+nb12;
+    y1=arc_mat(ny1,1); y2=arc_mat(ny2,1); y12=arc_mat(ny12,1);
+    Qy1=arc_mat(ny1,ny1); Qy2=arc_mat(ny2,ny2); Qy12=arc_mat(ny12,ny12);
 
-    arc_matmul("TN",ny2,1,nx,1.0, D2,rtk->x,0.0,y2);
-    arc_matmul("TN",ny2,nx,nx,1.0,D2,rtk->P,0.0,DP);
-    arc_matmul("NN",ny2,ny2,nx,1.0,DP,D2,0.0,Qy2); /* for second group */
+    arc_amb_s2d(rtk,D1, y1, Qy1, ny1, nx); /* for first group */
+    arc_amb_s2d(rtk,D2, y2, Qy2, ny2, nx); /* for second group */
+    arc_amb_s2d(rtk,D12,y12,Qy12,ny12,nx); /* for first-second group */
 
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy1=\n");
     arc_tracemat(ARC_MATPRINTF,Qy1,na+nb1,na+nb1,10,4);
@@ -1639,15 +1678,17 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy2=\n");
     arc_tracemat(ARC_MATPRINTF,Qy2,na+nb2,na+nb2,10,4);
 
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA :Qy12=\n");
+    arc_tracemat(ARC_MATPRINTF,Qy12,na,na+nb12,10,4);
+
     /* allocate memory */
     Qb1=arc_mat(nb1,nb1); Qb2=arc_mat(nb2,nb2); Qab1=arc_mat(na,nb1); Qab2=arc_mat(na,nb2);
+    Qb12=arc_mat(1,1); Qab12=arc_mat(na,1);
 
     /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
-    for (i=0;i<nb1;i++) for (j=0;j<nb1;j++) Qb1 [i+j*nb1]=Qy1[na+i+(na+j)*ny1];
-    for (i=0;i<na;i++)  for (j=0;j<nb1;j++) Qab1[i+j*na ]=Qy1[   i+(na+j)*ny1]; /* first group */
-
-    for (i=0;i<nb2;i++) for (j=0;j<nb2;j++) Qb2 [i+j*nb2]=Qy2[na+i+(na+j)*ny2];
-    for (i=0;i<na;i++)  for (j=0;j<nb2;j++) Qab2[i+j*na ]=Qy2[   i+(na+j)*ny2]; /* second group */
+    arc_amb_group_Qb(nb1, na,ny1, Qb1, Qab1, Qy1 ); /* first group */
+    arc_amb_group_Qb(nb1, na,ny1, Qb1, Qab1, Qy2 ); /* second group */
+    arc_amb_group_Qb(nb12,na,ny12,Qb12,Qab12,Qy12); /* first-second group */
 
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb1 =\n");
     arc_tracemat(ARC_MATPRINTF,Qb1,nb1,nb1,10,4);
@@ -1658,45 +1699,17 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab2 =\n");
     arc_tracemat(ARC_MATPRINTF,Qab2,na,nb2,10,4);
 
-    b1=arc_mat(2,nb1); b2=arc_mat(2,nb2);
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb12 =\n");
+    arc_tracemat(ARC_MATPRINTF,Qb12,nb12,nb12,10,4);
+    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qab12=\n");
+    arc_tracemat(ARC_MATPRINTF,Qab12,na,nb12,10,4);
+
+    b1=arc_mat(2,nb1); b2=arc_mat(2,nb2); b12=arc_mat(2,nb12);
 
     /* lambda/mlambda integer least-square estimation */
-    if (!(arc_lambda(nb1,2,y1+na,Qb1,b1,s1))) {
-        arc_log(ARC_INFO, "first group N(1)=");
-        arc_tracemat(ARC_MATPRINTF,b1,1,nb1,10,3);
-        arc_log(ARC_INFO, "second group N(2)=");
-        arc_tracemat(ARC_MATPRINTF,b1+nb1,1,nb1,10,3);
-
-        ratio1=s1[0]>0?(float)(s1[1]/s1[0]):0.0f;
-        if (ratio1>999.9) ratio1=999.9f; /* first group ratio */
-        f1=1; /* first group ambiguity lambda success */
-    }
-    else {
-        arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : first group lambda is failed");
-        f1=0; /* failed */
-    }
-    /* lambda/mlambda integer least-square estimation for second group */
-    if (!(arc_lambda(nb2,2,y2+na,Qb2,b2,s2))) {
-        arc_log(ARC_INFO, "first group N(1)=");
-        arc_tracemat(ARC_MATPRINTF,b2,1,nb2,10,3);
-        arc_log(ARC_INFO, "second group N(2)=");
-        arc_tracemat(ARC_MATPRINTF,b2+nb2,1,nb2,10,3);
-
-        ratio2=s2[0]>0?(float)(s2[1]/s2[0]):0.0f;
-        if (ratio2>999.9) ratio2=999.9f; /* first group ratio */
-        f2=1; /* first group ambiguity lambda success */
-    }
-    else {
-        arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : second group lambda is failed");
-        f2=0; /* failed */
-    }
-
-
-
-
-
-
-
+    f1=arc_amb_lambda(nb1, y1, Qb1, b1, s1, &ratio1 ); /* first group */
+    f2=arc_amb_lambda(nb2, y2, Qb2, b2, s2, &ratio2 ); /* second group */
+    f3=arc_amb_lambda(nb12,y12,Qb12,b12,s12,&ratio12); /* first-second group */
 
 
 }
