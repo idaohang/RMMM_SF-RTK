@@ -1379,8 +1379,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
             }
             /* set the reference ambiguity index */
             rtk->ssat[ref-k].fix[f]=2;  /* fix */
-            rtk->amb_refsat=ref-k+1;    /* sat no.todo:this step need to modified */
-            rtk->amb_index[0]=ref-k+1;  /* ambiguity index for sat no.,first is the reference sat no. */
+            rtk->amb_refsat[m]=ref-k+1; /* sat no.todo:this step need to modified */
 
             for (j=k;j<k+MAXSAT;j++) {
                 if (ref==j||rtk->x[j]==0.0||!arc_test_sys(rtk->ssat[j-k].sys,m)||
@@ -1392,9 +1391,9 @@ static int arc_ddmat(rtk_t *rtk, double *D)
                     rtk->ssat[j-k].azel[1]>=rtk->opt.elmaskar&&!nofix) {
                     if (D) D[ref+(na+nb)*nx]= 1.0;  /* reference single-difference ambiguity */
                     if (D) D[j  +(na+nb)*nx]=-1.0;  /* other single-difference ambiguity */
-                    rtk->amb_index[nb+1]=j-k+1;  /* double-difference ambiguity index (sat no) */
-                    nb++;                        /* numbers of double-difference ambiguity */
-                    rtk->ssat[j-k].fix[f]=2;     /* fix this ambiguity*/
+                    rtk->amb_index[nb]=j-k+1;       /* double-difference ambiguity index (sat no) */
+                    nb++;                           /* numbers of double-difference ambiguity */
+                    rtk->ssat[j-k].fix[f]=2;        /* fix this ambiguity*/
                 }
             }
         }
@@ -1453,14 +1452,15 @@ static void arc_holdamb(rtk_t *rtk, const double *xa)
         for (n=i=0;i<MAXSAT;i++) {
             if (!arc_test_sys(rtk->ssat[i].sys,m)
                 ||rtk->ssat[i].fix[f]!=2||
-                rtk->ssat[i].azel[1]<rtk->opt.elmaskhold) {
+                rtk->ssat[i].azel[1]<rtk->opt.elmaskhold||
+                (i+1==rtk->amb_refsat)) { /* exclued reference single-difference ambiguity */
                 continue;
             }
-            index[n++]=IB(i+1,f,&rtk->opt);
+            index[n++]=IB(i+1,f,&rtk->opt); /* index of fixing single-difference ambiguity */
             rtk->ssat[i].fix[f]=3; /* hold */
         }
         /* refenrence single-differnce ambiguity */
-        ref=IB(rtk->amb_refsat,0,&rtk->opt);  /* todo:maybe have some unknown bugs */
+        ref=IB(rtk->amb_refsat,0,&rtk->opt);
 
         /* constraint to fixed ambiguity */
         for (i=1;i<n;i++) {
@@ -1632,12 +1632,12 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     int ny1,ny2,na=rtk->na,i,j,f1,f2,f3,ny12,nb12;
     double *D1,*D2,el,*y1,*y2,*Qy1,*Qy2,*Qb1,*Qb2,*Qab1,*Qab2,s1[2],s2[2],s12[2],*b1,*b2,*b12;
     double ratio1,ratio2,ratio12;
-    double *D12,*Qy12,*Qb12,*Qab12,*y12;
+    double *D12,*Qy12,*Qb12,*Qab12,*y12,*db,*QQ;
 
-    arc_log(ARC_INFO, "arc_resamb_LAMBDA : nx=%d\n",nx);
+    arc_log(ARC_INFO,"arc_resamb_LAMBDA : nx=%d\n",nx);
 
     rtk->sol.ratio=0.0;
-    ns=rtk->amb_nb+1; /* numbers of all satellite,included reference satellite */
+    ns=rtk->amb_nb+1;   /* numbers of all satellite,included reference satellite */
     sat=rtk->amb_index; /* all satellite list,included reference satellite */
 
     if (rtk->opt.mode<=PMODE_DGPS||rtk->opt.modear==ARMODE_OFF||
@@ -1653,7 +1653,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     el=arc_amb_adjust_el(rtk,sat,ns);
 
     /* select two group satellite */
-    ns1=arc_amb_sel_sat(rtk,sat,ns,sat1,sat2,el); ns2=rtk->amb_nb+1-ns1;
+    ns1=arc_amb_sel_sat(rtk,sat,ns,sat1,sat2,el); ns2=ns-ns1;
     sat12[0]=rtk->amb_group_refsat[0]; /* first group reference satellite */
     sat12[1]=rtk->amb_group_refsat[1]; /* second group reference satellite */
 
@@ -1663,10 +1663,11 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     nb2 =arc_amb_group_dd(1,rtk,sat2,ns2,D2); /* second group */
     nb12=arc_amb_group_dd(2,rtk,sat12,2,D12); /* first-second group ambiguity */
 
-    /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
+    /* transform single to double-differenced phase-bias (y=D'*x,Qy=D'*P*D) */
     ny1=na+nb1; ny2=na+nb2; ny12=na+nb12;
-    y1=arc_mat(ny1,1); y2=arc_mat(ny2,1); y12=arc_mat(ny12,1);
+    y1 =arc_mat(ny1,1);    y2=arc_mat(ny2,1);    y12=arc_mat(ny12,1);
     Qy1=arc_mat(ny1,ny1); Qy2=arc_mat(ny2,ny2); Qy12=arc_mat(ny12,ny12);
+    db =arc_mat(nb,1);     QQ=arc_mat(na,nb1+nb2+nb12);
 
     arc_amb_s2d(rtk,D1, y1, Qy1, ny1, nx); /* for first group */
     arc_amb_s2d(rtk,D2, y2, Qy2, ny2, nx); /* for second group */
@@ -1682,8 +1683,8 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_tracemat(ARC_MATPRINTF,Qy12,na,na+nb12,10,4);
 
     /* allocate memory */
-    Qb1=arc_mat(nb1,nb1); Qb2=arc_mat(nb2,nb2); Qab1=arc_mat(na,nb1); Qab2=arc_mat(na,nb2);
-    Qb12=arc_mat(1,1); Qab12=arc_mat(na,1);
+    Qb1 =arc_mat(nb1,nb1); Qb2=arc_mat(nb2,nb2); Qab1=arc_mat(na,nb1);
+    Qb12=arc_mat(1,1);   Qab12=arc_mat(na,1);    Qab2=arc_mat(na,nb2);
 
     /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
     arc_amb_group_Qb(nb1, na,ny1, Qb1, Qab1, Qy1 ); /* first group */
@@ -1711,9 +1712,37 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     f2=arc_amb_lambda(nb2, y2+na, Qb2, b2, s2, &ratio2 ); /* second group */
     f3=arc_amb_lambda(nb12,y12+na,Qb12,b12,s12,&ratio12); /* first-second group */
 
-    /* validation by popular ratio-test */
-    if ((!f1)&&ratio1>=opt->thresar[0]) { /* check first group ambiguity  */
+    /* only first group ambiguity fix */
+    if (f1==0&&f2==1&&f3==1&&ratio1>=opt->thresar[0]) {
+        /* transform float to fixed solution (xa=xa-Qab*Qb\(b0-b)) */
+        for (i=0;i<na;i++) {
+            rtk->xa[i]=rtk->x[i];
+            for (j=0;j<na;j++) rtk->Pa[i+j*na]=rtk->P[i+j*nx];
+        }
+        /* fix solutions and double-difference ambiguity residuals */
+        for (i=0;i<nb;i++) bias[i]=b1[i],y1[na+i]-=b1[i];
 
+        if (!arc_matinv(Qb1,nb1)) {
+            arc_matmul("NN",nb1,1,nb1,1.0,Qb1,y1+na,0.0,db);
+            arc_matmul("NN",na,1,nb1,-1.0,Qab1,db,1.0,rtk->xa);
+
+            /* covariance of fixed solution (Qa=Qa-Qab*Qb^-1*Qab') */
+            arc_matmul("NN",na,nb1,nb1,1.0,Qab1,Qb1,0.0,QQ);
+            arc_matmul("NT",na,na,nb1,-1.0,QQ,Qab1,1.0,rtk->Pa);
+
+            arc_log(ARC_INFO,"arc_resamb_LAMBDA : validation ok of first group (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
+                    nb,s1[0]==0.0?0.0:s1[1]/s1[0],s1[0],s1[1]);
+
+            /* reset single-diffrence ambiguity fix flag */
+            for (i=0;i<ns2;i++) {
+                if (sat2[i]==rtk->amb_group_refsat[1]) continue;
+                rtk->ssat[sat2[i]-1].fix[0]=0; /* no fix this ambiguity */
+            }
+
+            /* restore single-differenced ambiguity */
+            arc_restamb(rtk,bias,xa);  /* bias is the fixed solutions */
+        }
+        else nb1=0;
     }
 
 
@@ -1840,8 +1869,8 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                     /* reset the numbers of ambiguitys */
                     nb=j;
                     /* reset fix flag */
-                    rtk->ssat[rtk->amb_index[k+1]-1].fix[0]=0;  /* no fix this double-differnce ambiguity,
-                                                                 * don't warn about reference ambiguity */
+                    rtk->ssat[rtk->amb_index[k]-1].fix[0]=0;  /* no fix this double-differnce ambiguity,
+                                                               * don't warn about reference ambiguity */
                     /* todo:may be the reference single-difference ambiguity,need to fix this bug */
                 }
                 else nb=0;

@@ -125,6 +125,8 @@ extern "C" {
 #define NUMOFMEO    2                   /* BDS system MEO numbers */
 #define NUMOFIGSO   5                   /* BDS systen IGSO numbers */
 
+#define NUMOFSYS    4                   /* numbers of navigation system */
+
 #ifndef NFREQ
 #define NFREQ       3                   /* number of carrier frequencies */
 #endif
@@ -942,8 +944,10 @@ typedef struct {         /* RTK control/result type */
     int obs_ind[2*MAXSAT];  /* index of observations for every double-difference observations */
     int nc;                 /* phase observation numbers */
     int np;                 /* pseudorange observation numbers */
-    int amb_refsat;         /* ambiguity solve reference satellite */
-    int amb_index[MAXSAT];  /* double-difference index list : amb_index[i] - sat no. */
+    int amb_refsat[NUMOFSYS];
+                            /* ambiguity solve reference satellite(0:GPS,1:GLONASS,2:GAL,3:BDS) */
+    int amb_index[NUMOFSYS+MAXSAT];
+                            /* double-difference index list : amb_index[i] - sat no. */
     int amb_nb;             /* numbers of being fixed double-differnce ambiguity */
     int amb_group_refsat[2];/* two group double-diffrence ambiguity reference satellite */
 } rtk_t;
