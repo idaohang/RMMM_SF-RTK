@@ -775,7 +775,7 @@ typedef struct {        /* processing options type */
     int amb_part;          /* resolve part ambiguity */
     int amb_iter;          /* number of lambda  iteration */
     double amb_ref_thres;  /* confidence function threshold of round reference ambiguity */
-    int amb_sel_el_group;  /* single-difference ambiguity grouping for fix */
+    int amb_group;         /* single-difference ambiguity grouping for fix */
     double amb_el_group;   /* single-difference ambiguity divided into two groups */
 
     int exclude_bds_geo;   /* exclude bds geo satellite (1:exclude,0:included) */
@@ -876,6 +876,7 @@ typedef struct {        /* satellite status type */
     gtime_t pt[2][NFREQ]; /* previous carrier-phase time */
     double  ph[2][NFREQ]; /* previous carrier-phase observable (cycle) */
     double  r0[2];
+    unsigned group;       /* id of its double-difference ambiguity group(1:first group,2:second group) */
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */
