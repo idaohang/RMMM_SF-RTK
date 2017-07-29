@@ -2284,12 +2284,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*xa,*bias,dt;
     int i,j,f,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter;
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
-    int stat=rtk->opt.mode<=PMODE_DGPS?SOLQ_DGPS:SOLQ_FLOAT;
     int nf=1;
-
-#ifdef ARC_TEST
-    I++;  /* just for debug */
-#endif
 
     arc_log(ARC_INFO, "arc_relpos  : nx=%d nu=%d nr=%d\n", rtk->nx, nu, nr);
 
@@ -2496,7 +2491,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             /* adaptive kaman filter */
             if (opt->adapt_filter) {
                 if (!adap_kaman_filter(rtk,xp,Pp,H,v,R,rtk->nx,nv)) {
-                    arc_log(ARC_WARNING, "arc_relpos : adaptive filter error (info=%d)\n",info);
+                    arc_log(ARC_WARNING,"arc_relpos : adaptive filter error (info=%d)\n",info);
                     stat=SOLQ_NONE;
                     break;
                 }
