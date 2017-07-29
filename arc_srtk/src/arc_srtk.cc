@@ -1,4 +1,23 @@
 
+/*********************************************************************************
+ *  ARC-SRTK - Single Frequency RTK Pisitioning Library
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ *  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ *  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ *  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ *  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  Created on: July 07, 2017
+ *      Author: SuJingLan
+ *********************************************************************************/
+
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
@@ -570,7 +589,7 @@ static int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const i
     double *H,*v,*er,*eb;
     double dx[4],Qx[4*4];
     double dr,db;
-    int i,j,k,nv;
+    int i,j,k,nv,stat=0;
     int sat[MAXSAT];
 
     arc_log(ARC_INFO,"arc_detslp_ddre : \n");
@@ -579,7 +598,6 @@ static int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const i
         arc_log(ARC_WARNING,"arc_detslp_ddre: lack of satellate,ns=%d",ns);
         return 0;
     }
-
     H=arc_mat(ns,4); v=arc_mat(ns,1); er=arc_mat(ns,3); eb=arc_mat(ns,3);
     for (nv=i=0;i<ns;i++) {
         if (obs[iu[i]].sat!=obs[ir[i]].sat) continue;  /* rover and base station common satellite */
@@ -593,11 +611,11 @@ static int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const i
         if (rtk->ssat[sat[nv]-1].r0[0]==0
             ||rtk->ssat[sat[nv]-1].r0[1]==0) continue;
 
-        dr=arc_geodist(rs+iu[i]*6,rtk->sol.rr,er+i*3);  /* rover station to satellite distance */
-        db=arc_geodist(rs+ir[i]*6,rtk->rb,eb+i*3);  /* base station to satellite distance */
+        dr=arc_geodist(rs+iu[i]*6,rtk->sol.rr,er+i*3); /* rover station to satellite distance */
+        db=arc_geodist(rs+ir[i]*6,rtk->rb,eb+i*3); /* base station to satellite distance */
 
         for (j=0;j<3;j++) {
-            H[nv*4+j]=-er[i*3+j];  /* fill design matrix */
+            H[nv*4+j]=-er[i*3+j]; /* fill design matrix */
         }
         H[nv*4+3]=1;
 
@@ -606,28 +624,28 @@ static int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const i
         nv++;
     }
     if (nv<5) {
-        arc_log(ARC_WARNING, "arc_detslp_ddre: lack of satellate,nv=%d", nv);
+        arc_log(ARC_WARNING,"arc_detslp_ddre: lack of satellate,nv=%d",nv);
         free(H); free(v); free(er); free(eb);
         return 0;
     }
     if (arc_lsq(H,v,4,nv,dx,Qx)>0) {
-        arc_log(ARC_WARNING, "arc_detslp_ddre: lsq error");
+        arc_log(ARC_WARNING,"arc_detslp_ddre: lsq error");
         free(H); free(v); free(er); free(eb);
         return 0;
     }
     arc_tracemat(ARC_MATPRINTF,v,1,nv,10,4);
-    arc_matmul("TN",nv,1,4,1.0,H,dx,-1,v);  /* v=H'*dx-v */
+    arc_matmul("TN",nv,1,4,1.0,H,dx,-1,v); /* v=H'*dx-v */
 
     double *Q; Q=arc_mat(4,4);
-    arc_matmul("NT",4,4,nv,1.0,H,H,0.0,Q);  /* Q=H*H' */
+    arc_matmul("NT",4,4,nv,1.0,H,H,0.0,Q); /* Q=H*H' */
     arc_matinv(Q,4);
     double *QH; QH=arc_mat(nv,4);
-    arc_matmul("TN",nv,4,4,1.0,H,Q,0.0,QH);  /* QH=H'*Q-1 */
+    arc_matmul("TN",nv,4,4,1.0,H,Q,0.0,QH); /* QH=H'*Q-1 */
     double *Qvv; Qvv=arc_eye(nv);
-    arc_matmul("NN",nv,nv,4,-1.0,QH,H,1,Qvv);  /* Qvv=Qvv^-1-H'*Q-1*H */
+    arc_matmul("NN",nv,nv,4,-1.0,QH,H,1,Qvv); /* Qvv=Qvv^-1-H'*Q-1*H */
 
     double delta;
-    delta=sqrt(arc_dot(v,v,nv)/(nv-1));
+    delta=sqrt(arc_dot(v,v,nv)/(nv-4));
     double *vv;
     vv=arc_mat(nv,1);
     for (i=0;i<nv;i++) {
@@ -640,13 +658,12 @@ static int arc_detslp_ddre(rtk_t *rtk, const obsd_t *obs, const int *iu, const i
             maxv=vv[i]; k=i;
         }
     }
+    if (fabs(maxv)>2&&fabs(v[k])>0.02) stat=sat[k];
+
     free(H); free(v); free(er); free(eb);
     free(Q); free(QH); free(Qvv); free(vv);
 
-    if (fabs(maxv)>2&&fabs(v[k])>0.02) {
-        return sat[k];
-    }
-    return 0;
+    return stat;
 }
 /* ------------------------------------------------------------------------- */
 static void arc_detsl_new(rtk_t *rtk, const obsd_t *obs, const int *iu, const int *ir,
@@ -1359,7 +1376,9 @@ static int arc_ddmat(rtk_t *rtk, double *D)
         rtk->ssat[i].fix[0]=0; /* initial fix flag,this step is very importance */
         rtk->ssat[i].group=0;  /* initial state,all satellite is un-groupping */
     }
-    for (i=0;i<na;i++) D[i+i*nx]=1.0; /* initial single-difference to double-diffrence transformation matrix */
+
+    /* initial single-difference to double-diffrence transformation matrix */
+    if (D) for (i=0;i<na;i++) D[i+i*nx]=1.0;
 
     for (m=0;m<4;m++) { /* m=0:gps/qzs/sbs,1:glo,2:gal,3:bds */
 
@@ -1411,7 +1430,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
 /* restore single-differenced ambiguity --------------------------------------*/
 static void arc_restamb(rtk_t *rtk, const double *bias, double *xa,int group)
 {
-    int i,j,n,m,index[MAXSAT],nv=0,ref=-1,refsat;
+    int i,j,n,m,index[MAXSAT],nv=0,ref=-1,refsat,k=0;
     double x[MAXSAT];
 
     arc_log(ARC_INFO, "arc_restamb :\n");
@@ -1419,7 +1438,7 @@ static void arc_restamb(rtk_t *rtk, const double *bias, double *xa,int group)
     for (i=0;i<rtk->nx;i++) xa[i]=rtk->x [i];  /* ambiguity */
     for (i=0;i<rtk->na;i++) xa[i]=rtk->xa[i];  /* station position/trp/iono/clock and so on */
 
-    for (j=1;j<group==0?2:3;j++) for (m=0;m<4;m++) {  /* m==3 is bds */
+    for (j=1;j<(group==0?2:3);j++) for (m=0;m<NUMOFSYS;m++) {  /* m==3 is bds */
 
         /* reference single-difference ambiguity */
         refsat=group==0?rtk->amb_refsat[m]:
@@ -1447,17 +1466,7 @@ static void arc_restamb(rtk_t *rtk, const double *bias, double *xa,int group)
                     "ambiguity is round(sat=%4d)",refsat);
             xa[ref]=ROUND(xa[ref]);
         }
-        for (i=0;i<n;i++) x[i]=xa[index[i]]; /* just for debug */
-
-        arc_log(ARC_INFO,"before restore single-differenced ambiguity amb=\n");
-        arc_tracemat(ARC_MATPRINTF,x,1,n,10,4);
-
         for (i=0;i<n;i++) xa[index[i]]=xa[ref]-bias[nv++];
-
-        for (i=0;i<n;i++) x[i]=xa[index[i]]; /* just for debug */
-
-        arc_log(ARC_INFO,"after restore single-differenced ambiguity amb=\n");
-        arc_tracemat(ARC_MATPRINTF,x,1,n,10,4);
     }
 }
 /* hold integer ambiguity ----------------------------------------------------*/
@@ -1541,7 +1550,7 @@ static double arc_amb_adjust_el(const rtk_t *rtk,const int* sat,int ns)
     return el;  /* ensure two-el-group have elements */
 }
 /* select satellites that meet altitude level angles-------------------------*/
-static int arc_amb_sel_sat(const rtk_t* rtk,const int* sat,int ns,int *sat1,
+static int arc_amb_sel_sat(rtk_t* rtk,const int* sat,int ns,int *sat1,
                            int *sat2,double el)
 {
     int i,j,k;
@@ -1562,7 +1571,7 @@ static int arc_amb_sel_sat(const rtk_t* rtk,const int* sat,int ns,int *sat1,
     return j; /* numbers of satellites */
 }
 /* single to double-difference transformation matrix (D')-------------------*/
-static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,
+static int arc_amb_group_dd(int index,rtk_t* rtk,const int *sat,int ns,
                             double *D)
 {
     int i,j,m,nb=0,nx=rtk->nx,na=rtk->na,ref=0;
@@ -1585,7 +1594,7 @@ static int arc_amb_group_dd(int index,const rtk_t* rtk,const int *sat,int ns,
                 el=rtk->ssat[sat[i]-1].azel[1],j=sat[i]; /* reference satellite */
         }
         /* save the reference satellite */
-        rtk->amb_group_refsat[m][index]=j;
+        rtk->amb_group_refsat[m][index]=j; /* index is group id */
 
         /* construct D matrix */
         ref=IB(j,0,&rtk->opt);
@@ -1695,7 +1704,7 @@ static int arc_amb_fix_sol(rtk_t *rtk,int nb,int na,double *Qb,const double *y,
         arc_log(ARC_INFO,"arc_amb_fix_sol : xa=\n");
         arc_tracemat(ARC_MATPRINTF,rtk->xa,na,1,13,4);
         arc_log(ARC_INFO,"arc_amb_fix_sol : Pa=\n");
-        arc_tracemat(ARC_MATPRINTF,rtk->Pa,na,na,13,4)
+        arc_tracemat(ARC_MATPRINTF,rtk->Pa,na,na,13,4);
     }
     free(db); free(QQ);
     return info;
@@ -1731,7 +1740,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     ns1=arc_amb_sel_sat(rtk,sat,ns,sat1,sat2,el); ns2=ns-ns1;
 
     /* construct two group transformation matrix(D1,D2) */
-    D1=arc_mat(nx,nx); D2=arc_mat(nx,nx);
+    D1=arc_zeros(nx,nx); D2=arc_zeros(nx,nx);
     nb1=arc_amb_group_dd(0,rtk,sat1,ns1,D1); /* first group */
     nb2=arc_amb_group_dd(1,rtk,sat2,ns2,D2); /* second group */
 
@@ -2750,8 +2759,8 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
         for (i=0;i<6;i++) rtk->rb[i]=i<3?opt->rb[i]:0.0;
     }
     /* count rover/base station observations */
-    for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ;   /* rover */
-    for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ;   /* base */
+    for (nu=0;nu   <n&&obs[nu   ].rcv==1;nu++) ; /* rover */
+    for (nr=0;nu+nr<n&&obs[nu+nr].rcv==2;nr++) ; /* base */
 
     time=rtk->sol.time; /* previous epoch */
 
@@ -2813,3 +2822,14 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     arc_relpos(rtk,obs,nu,nr,nav);
     return 1;
 }
+/********************************************************************************************
+ *                                  备注
+ *  2017.07.29  1.静态模式,GPS和BDS系统单独解算的精度较高(2cm左右),但是BDS和GPS两个系统联合解算的
+ *                精度并没有两者单独解算的精度高,推测是两个模糊度系统的双差模糊度固定时出现问题
+ *              2.部分模糊度固定策略,在静态模式效果改善不多,在动态模式则改善较为明显
+ *              3.ARMODE_FIXHOLD和ARMODE_INST两种模糊度解算模式对于静态基线,相差不大,对于动态基线,
+ *                则差别较为明显,一般动态模式时,ARMODE_INST的效果比ARMODE_FIXHOLD好,ARMODE_INST
+ *                每个历元都初始化模糊度,ARMODE_FIXHOLD则利用上一个历元的模糊度信息
+ *              4.完善分组模糊度固定策略,考虑若某一组中有BDS个GPS卫星,此时该组中包含有两颗参考星
+ *
+ *******************************************************************************************/
