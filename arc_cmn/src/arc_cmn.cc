@@ -1,4 +1,3 @@
-
 /*********************************************************************************
  *  ARC-SRTK - Single Frequency RTK Pisitioning Library
  *
@@ -15,7 +14,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *
  *  Created on: July 07, 2017
- *      Author: SuJingLan
  *********************************************************************************/
 
 #define _POSIX_C_SOURCE 199506

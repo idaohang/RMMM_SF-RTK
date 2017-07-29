@@ -14,7 +14,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *
  *  Created on: July 07, 2017
- *      Author: SuJingLan
  *********************************************************************************/
 /**
  * @file rtklib.h
