@@ -47,7 +47,7 @@ int main()
     arc_opt.amb_iter=3;
     arc_opt.amb_ref_thres=0.99;
     arc_opt.exclude_bds_geo=0;
-    arc_opt.amb_group=1;
+    arc_opt.amb_group=0;
     arc_opt.amb_el_group=45.0*D2R;
 
     arc_solopt.posf = SOLF_XYZ;
