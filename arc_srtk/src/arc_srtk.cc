@@ -2275,6 +2275,118 @@ static int arc_ukf_dd_meas()
     if (k!=_UKF_NV_) return 0;  /* todo:this condition may be not best */
     return k;
 }
+/* difference pseudorange positioning-----------------------------------------*/
+static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
+                              const nav_t *nav)
+{
+    prcopt_t *opt=&rtk->opt;
+    gtime_t time=obs[0].time;
+    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*xa,*bias,dt;
+    int i,j,f,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter;
+    int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
+    int stat=rtk->opt.mode<=PMODE_DGPS?SOLQ_DGPS:SOLQ_FLOAT;
+    int nf=1;
+
+#ifdef ARC_TEST
+    I++;  /* just for debug */
+#endif
+
+    arc_log(ARC_INFO, "arc_relpos  : nx=%d nu=%d nr=%d\n", rtk->nx, nu, nr);
+
+    dt=timediff(time,obs[nu].time);
+
+    rs=arc_mat(6,n); dts=arc_mat(2,n);
+    var=arc_mat(1,n); y=arc_mat(nf*2,n); e=arc_mat(3,n);
+    azel=arc_zeros(2,n);
+
+    /* initial satellite valid flag and snr */
+    for (i=0;i<MAXSAT;i++) {
+        rtk->ssat[i].sys=satsys(i+1,NULL);
+        rtk->ssat[i].vsat[0]=0;
+        rtk->ssat[i].snr [0]=0;
+    }
+    /* satellite positions/clocks */
+    arc_satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
+
+    /* exclude measurements of eclipsing satellite (block IIA) */
+    if (rtk->opt.posopt[3]) {
+        arc_testeclipse(obs,n,nav,rs);
+    }
+    /* undifferenced residuals for base station */
+    if (!arc_zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,rtk->rb,opt,1,
+                   y+nu*nf*2,e+nu*3,azel+nu*2,rtk,NULL)) {
+        arc_log(ARC_WARNING, "arc_relpos : initial base station position error\n");
+        free(rs); free(dts); free(var); free(y); free(e); free(azel);
+        return 0;
+    }
+    /* time-interpolation of residuals (for post-processing) */
+    if (opt->intpref) {
+        dt=arc_intpres(time,obs+nu,nr,nav,rtk,y+nu*nf*2);
+    }
+    /* select common satellites between rover and base-station */
+    if ((ns=arc_selsat(obs,azel,nu,nr,opt,sat,iu,ir))<=0) {
+        arc_log(ARC_WARNING, "arc_relpos : no common satellite\n");
+
+        free(rs); free(dts); free(var); free(y); free(e); free(azel);
+        return 0;
+    }
+
+    xp=arc_mat(rtk->nx,1); Pp=arc_zeros(rtk->nx,rtk->nx);
+    xa=arc_mat(rtk->nx,1);
+    arc_matcpy(xp,rtk->x,rtk->nx,1);
+
+    ny=ns*nf*2+2;
+    v=arc_mat(ny,1); H=arc_zeros(rtk->nx,ny);
+    R=arc_mat(ny,ny); bias=arc_mat(rtk->nx,1);
+
+    /* add 2 iterations for baseline-constraint moving-base */
+    niter=opt->niter+(opt->mode==PMODE_MOVEB&&opt->baseline[0]>0.0?2:0);
+
+    for (i=0;i<niter;i++) {  /* iterations compute */
+
+        /* undifferenced residuals for rover */
+        if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk,NULL)) {
+            arc_log(ARC_WARNING, "arc_relpos : rover initial position error\n");
+            stat=SOLQ_NONE;
+            break;
+        }
+        /* double-differenced residuals and partial derivatives */
+        if ((nv=arc_ddres(rtk,nav,dt,xp,Pp,sat,y,e,azel,iu,ir,ns,v,H,R,vflg))<1) {
+            arc_log(ARC_WARNING, "arc_relpos : no double-differenced residual\n");
+            stat=SOLQ_NONE;
+            break;
+        }
+        arc_log(ARC_INFO,"arc_relpos ： double-differenced residual vector : \n");
+        arc_tracemat(ARC_MATPRINTF,v,nv,1,10,4);
+
+        arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
+        /* adaptive kaman filter */
+        if (opt->adapt_filter) {
+            if (!adap_kaman_filter(rtk,xp,Pp,H,v,R,rtk->nx,nv)) {
+                arc_log(ARC_WARNING, "arc_relpos : adaptive filter error (info=%d)\n",info);
+                stat=SOLQ_NONE;
+                break;
+            }
+        }
+        /* kalman filter measurement update */
+        else {
+            if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv))) {
+                arc_log(ARC_WARNING, "arc_relpos : filter error (info=%d)\n",info);
+                stat=SOLQ_NONE;
+                break;
+            }
+            arc_log(ARC_INFO,"arc_relpos : x(%d)=",i+1);
+            if (opt->mode==PMODE_STATIC)                arc_tracemat(ARC_MATPRINTF,xp,3,1,10,4);
+            if (opt->mode==PMODE_KINEMA&&opt->dynamics) arc_tracemat(ARC_MATPRINTF,xp,6,1,10,4);
+
+            arc_log(ARC_INFO,"arc_relpos : P(%d)=",i+1);
+            arc_tracemat(ARC_MATPRINTF,Pp,rtk->nx,rtk->nx,10,4);
+        }
+    }
+    free(rs); free(dts); free(var); free(y); free(e); free(azel);
+    free(xp); free(Pp);  free(xa);  free(v); free(H); free(R); free(bias);
+    return 1;
+}
 /* relative positioning ------------------------------------------------------*/
 #ifdef ARC_TEST
 ofstream fp_ukf_ceres("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_ukf_pos");
