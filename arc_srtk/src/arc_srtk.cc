@@ -1325,6 +1325,106 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
 
     return nv;
 }
+/* difference pseudorange for initialing--------------------------------------*/
+static int arc_init_dc_res(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
+                           const double *P,const int *sat,double *y,double *e,
+                           double *azel,const int *iu,const int *ir,int ns,double *v,
+                           double *H,double *R,int *vflg)
+{
+    prcopt_t *opt=&rtk->opt;
+    double bl,dr[3],posu[3],posr[3];
+    double *Ri,*Rj,lami,lamj,fi,fj,*Hi=NULL;
+    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1;
+
+    arc_log(ARC_INFO,"arc_init_dc_res   : dt=%.1f nx=%d ns=%d\n",dt,rtk->nx,ns);
+
+    bl=arc_baseline(x,rtk->rb,dr);
+    ecef2pos(x,posu); ecef2pos(rtk->rb,posr);
+
+    Ri=arc_mat(ns*nf*2+2,1); Rj=arc_mat(ns*nf*2+2,1);
+
+    for (m=0;m<NUMOFSYS;m++) /* m=0:gps/qzs/sbs,1:glo,2:gal,3:bds */
+
+        for (f=nf;f<nf*2;f++) {
+
+            /* search reference satellite with highest elevation */
+            for (i=-1,j=0;j<ns;j++) {
+                sysi=rtk->ssat[sat[j]-1].sys;
+                if (!arc_test_sys(sysi,m)) continue;
+
+                /* y[i] may be zero,so must check out,this step is importance */
+                if (y) if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
+
+                /* set the reference satellite index */
+                if (i<0||azel[1+iu[j]*2]>=azel[1+iu[i]*2]) i=j;
+            }
+            if (i<0) continue;  /* i is the reference satellite */
+
+            /* make double difference */
+            for (j=0;j<ns;j++) {
+                if (i==j) continue;  /* sat[i] is reference satellite */
+                sysi=rtk->ssat[sat[i]-1].sys;
+                sysj=rtk->ssat[sat[j]-1].sys;
+                if (!arc_test_sys(sysj,m)) continue;
+
+                /* todo:may be have bugs on running,need to fix in future */
+                if (y) if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
+
+                ff=f%nf;
+                lami=nav->lam[sat[i]-1][ff];
+                lamj=nav->lam[sat[j]-1][ff];
+                if (lami<=0.0||lamj<=0.0) continue;
+                if (H) {
+                    Hi=H+nv*rtk->nx;
+                    for (k=0;k<rtk->nx;k++) Hi[k]=0.0;
+                }
+                /* double-differenced residual */
+                if (v) v[nv]=(y[f+iu[i]*nf*2]-y[f+ir[i]*nf*2])
+                             -(y[f+iu[j]*nf*2]-y[f+ir[j]*nf*2]);
+
+                /* partial derivatives by rover position */
+                if (H) {
+                    for (k=0;k<3;k++) {
+                        Hi[k]=-e[k+iu[i]*3]+e[k+iu[j]*3];
+                    }
+                }
+                /* test innovation */
+                if (v) if (opt->maxinno>0.0  /* todo:test innovation need to modify,have bugs for ukf */
+                           &&fabs(v[nv])>opt->maxinno) {
+                    arc_log(ARC_WARNING,"arc_init_dc_res : outlier rejected (sat=%3d-%3d %s%d v=%.3f)\n",
+                            sat[i],sat[j],f<nf?"L":"P",f%nf+1,v[nv]);
+                    continue;
+                }
+                /* single-differenced measurement error variances */
+                if (R) {
+                    Rj[nv]=arc_varerr(sat[j],sysj,azel[1+iu[j]*2],bl,dt,f,opt);
+                    Ri[nv]=arc_varerr(sat[i],sysi,azel[1+iu[i]*2],bl,dt,f,opt);
+                }
+
+                arc_log(ARC_INFO,"arc_init_dc_res : sat=%3d-%3d %s%d v=%13.3f R=%8.6f %8.6f\n",
+                        sat[i],sat[j],f<nf?"L":"P",f%nf+1,v[nv],
+                        R==NULL?-999.0:Ri[nv],R==NULL?-999.0:Rj[nv]);
+
+                if (vflg) vflg[nv]=(sat[i]<<16)|(sat[j]<<8)|((f<nf?0:1)<<4)|(f%nf);
+
+                nb[b]++;
+                nv++;  /* increase double-residual index */
+            }
+            b++;
+        }
+    /* end of system loop */
+
+    if (H) {
+        arc_log(ARC_INFO,"arc_init_dc_res : H=\n");
+        arc_tracemat(ARC_MATPRINTF, H,rtk->nx,nv,7,4);
+    }
+    /* double-differenced measurement error covariance */
+    if (R) {
+        arc_ddcov(nb,b,Ri,Rj,nv,R);
+    }
+    free(Ri); free(Rj);
+    return nv;
+}
 /* time-interpolation of residuals (for post-mission) ------------------------*/
 static double arc_intpres(gtime_t time, const obsd_t *obs, int n, const nav_t *nav,
                           rtk_t *rtk, double *y)

@@ -778,6 +778,9 @@ typedef struct {        /* processing options type */
     double amb_el_group;   /* single-difference ambiguity divided into two groups */
 
     int exclude_bds_geo;   /* exclude bds geo satellite (1:exclude,0:included) */
+
+    int init_dc;           /* using difference-pseudorange to initial if it sets to 1,
+                            * ohterwise using standard positioning */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
