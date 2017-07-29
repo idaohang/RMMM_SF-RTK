@@ -1430,31 +1430,35 @@ static int arc_ddmat(rtk_t *rtk, double *D)
 /* restore single-differenced ambiguity --------------------------------------*/
 static void arc_restamb(rtk_t *rtk, const double *bias, double *xa,int group)
 {
-    int i,j,n,m,index[MAXSAT],nv=0,ref=-1,refsat,k=0;
-    double x[MAXSAT];
+    int i,j,n,m,index[MAXSAT],nv=0,ref=-1,refsat;
 
     arc_log(ARC_INFO, "arc_restamb :\n");
 
     for (i=0;i<rtk->nx;i++) xa[i]=rtk->x [i];  /* ambiguity */
     for (i=0;i<rtk->na;i++) xa[i]=rtk->xa[i];  /* station position/trp/iono/clock and so on */
 
-    for (j=1;j<(group==0?2:3);j++) for (m=0;m<NUMOFSYS;m++) {  /* m==3 is bds */
+    for (j=1;j<(group==0?2:3);j++)  /* loop for first and second group */
+
+        for (m=0;m<NUMOFSYS;m++) {  /* m==3 is bds */
 
         /* reference single-difference ambiguity */
-        refsat=group==0?rtk->amb_refsat[m]:
-                        rtk->amb_group_refsat[m][j];
+        refsat=(group==0?rtk->amb_refsat[m]:
+                         rtk->amb_group_refsat[m][j-1]);
 
         if (refsat<=0) continue; /* no double-difference satellites */
 
-        arc_log(ARC_INFO,"m=%4d,reference single-difference satellites : %4d",m,refsat);
+        arc_log(ARC_INFO,"m=%d,reference single-difference satellites : %d",m,refsat);
 
         for (n=i=0;i<MAXSAT;i++) {
             if (!arc_test_sys(rtk->ssat[i].sys,m)
                 ||rtk->ssat[i].fix[0]!=2
-                ||rtk->ssat[i].group!=j
-                ||refsat==i+1) {
+                ||rtk->ssat[i].group!=j /* j=1 is first group,j=2 is second group */
+                ||(refsat==i+1)) {
                 continue; /* no included reference satellite */
             }
+            arc_log(ARC_INFO,"double-difference ambiguity : (m=%d,j=%d,refsat=%d),"
+                    "fix=%d,group=%d,sat=%d",m,j,refsat,rtk->ssat[i].fix[0],rtk->ssat[i].group,i+1);
+
             index[n++]=IB(i+1,0,&rtk->opt); /* include reference single-differnce ambiguity */
         }
         if (n<1) continue;
@@ -1564,6 +1568,9 @@ static int arc_amb_sel_sat(rtk_t* rtk,const int* sat,int ns,int *sat1,
             sat2[k++]=sat[i]; rtk->ssat[sat[i]-1].group=2;
         }
     }
+    arc_log(ARC_INFO,"arc_amb_sel_sat : all satellites=\n");
+    arc_tracemati(ARC_MATPRINTF,sat,1,ns,2,0);
+
     arc_log(ARC_INFO,"arc_amb_sel_sat : two group satellites= \n");
     arc_tracemati(ARC_MATPRINTF,sat1,1,j,2,0);
     arc_tracemati(ARC_MATPRINTF,sat2,1,k,2,0);
@@ -1713,7 +1720,7 @@ static int arc_amb_fix_sol(rtk_t *rtk,int nb,int na,double *Qb,const double *y,
 static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
-    int nx=rtk->nx,nb,sat1[MAXSAT],sat2[MAXSAT],nb1=0,nb2=0,ns1=0,ns2=0,ns,*sat;
+    int nx=rtk->nx,nb,sat1[MAXSAT],sat2[MAXSAT],nb1=0,nb2=0,ns1=0,ns2=0,ns,sat[MAXSAT];
     int ny1,ny2,na=rtk->na,i,j,n=0,f1,f2,ok=0,h1=0,h2=0;
     double *D1,*D2,el,*y1,*y2,*Qy1,*Qy2,*Qb1,*Qb2,*Qab1,*Qab2,s1[2],s2[2],*b1,*b2;
     double ratio1,ratio2;
@@ -1721,7 +1728,6 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_log(ARC_INFO,"arc_resamb_LAMBDA : nx=%d\n",nx);
 
     rtk->sol.ratio=0.0;
-    sat=rtk->amb_index; /* all satellite list,included reference satellite */
 
     if (rtk->opt.mode<=PMODE_DGPS
         ||rtk->opt.modear==ARMODE_OFF
@@ -1733,8 +1739,14 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         arc_log(ARC_WARNING,"arc_resamb_group_LAMBDA : no valid double-difference\n");
         return 0;
     }
+    /* all satellite list,included reference satellite */
+    for (i=0,ns=0;i<nb;i++)  sat[ns++]=rtk->amb_index[i];
+
+    /* must included reference satellite */
+    for (i=0;i<NUMOFSYS;i++) if (rtk->amb_refsat[i]>0) sat[ns++]=rtk->amb_refsat[i];
+
     /* adjust el-group options，ensure two group have elments */
-    ns=nb+1; el=arc_amb_adjust_el(rtk,sat,ns);
+    el=arc_amb_adjust_el(rtk,sat,ns);
 
     /* select two group satellite */
     ns1=arc_amb_sel_sat(rtk,sat,ns,sat1,sat2,el); ns2=ns-ns1;
@@ -1753,10 +1765,10 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_amb_s2d(rtk,D2,y2,Qy2,ny2,nx); /* for second group */
 
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : y1=\n");
-    arc_tracemat(ARC_MATPRINTF,y1,1,ny1,10,4);
+    arc_tracemat(ARC_MATPRINTF,y1+na,1,nb1,10,4);
 
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : y2=\n");
-    arc_tracemat(ARC_MATPRINTF,y2,1,ny2,10,4);
+    arc_tracemat(ARC_MATPRINTF,y2+na,1,nb2,10,4);
 
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qy1=\n");
     arc_tracemat(ARC_MATPRINTF,Qy1,na+nb1,na+nb1,10,4);
@@ -1770,7 +1782,7 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
     /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
     arc_amb_group_Qb(nb1,na,ny1,Qb1,Qab1,Qy1); /* first group */
-    arc_amb_group_Qb(nb1,na,ny1,Qb1,Qab1,Qy2); /* second group */
+    arc_amb_group_Qb(nb2,na,ny2,Qb2,Qab2,Qy2); /* second group */
 
     arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : Qb1=\n");
     arc_tracemat(ARC_MATPRINTF,Qb1,nb1,nb1,10,4);
@@ -1834,14 +1846,19 @@ static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         arc_log(ARC_WARNING, "arc_resamb_LAMBDA : ambiguity validation failed,"
                 "first group ratio=%.2f,second group ratio=%.2f",ratio1,ratio2);
     }
+    /* restore single-differenced ambiguity,include reference ambiguity */
+    if (h1==0) for (i=0;i<nb1+1;i++) rtk->ssat[sat1[i]-1].fix[0]=0; /* no fix first group ambiguity */
+    if (h2==0) for (i=0;i<nb2+1;i++) rtk->ssat[sat2[i]-1].fix[0]=0; /* no fix second group ambiguity */
+
     /* restore single-differenced ambiguity */
-    if (h1==0) for (i=0;i<nb1;i++) rtk->ssat[sat1[i]-1].fix[0]=0; /* no fix first group ambiguity */
-    if (h2==0) for (i=0;i<nb2;i++) rtk->ssat[sat2[i]-1].fix[0]=0; /* no fix second group ambiguity */
+    if (h1==1||h2==1) {
 
-    arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : bias=\n");
-    arc_tracemat(ARC_MATPRINTF,bias,1,n,10,4);
+        arc_log(ARC_INFO,"arc_resamb_group_LAMBDA : bias=\n");
+        arc_tracemat(ARC_MATPRINTF,bias,1,n,10,4);
 
-    arc_restamb(rtk,bias,xa,1); /* bias is the fixed solutions */
+        arc_restamb(rtk,bias,xa,1); /* bias is the fixed solutions */
+    }
+    rtk->sol.ratio=MAX((float)ratio1,(float)ratio2);
 
     free(D1); free(D2); free(y1); free(y2);
     free(Qy1); free(Qy2); free(Qb1); free(Qb2);
