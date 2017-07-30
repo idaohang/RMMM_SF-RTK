@@ -1247,7 +1247,10 @@ static void arc_kalman_robust_phi(const rtk_t *rtk,const double *vn,int nv,
 
     arc_log(ARC_INFO,"arc_kalman_phi :\n");
 
-    for (i=0;i<nv;i++);
+    for (i=0;i<nv;i++) phi[i+i*nv]=arc_robust_chk(nv,alpha,fabs(vn[i]));
+
+    arc_log(ARC_INFO,"Phi=\n");
+    arc_tracemat(ARC_MATPRINTF,phi,nv,nv,10,4);
 }
 /* double-differenced phase/code residuals -----------------------------------*/
 static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
@@ -1642,16 +1645,16 @@ static int arc_ddmat(rtk_t *rtk, double *D)
 /* adop---------------------------------------------------------------------- */
 static double arc_amb_adop(const double *Qb,const double *xb,int nb)
 {
-    double det=0.0; arc_matdet(Qb,nb,&det); return det;
+    double det=0.0; arc_matdet(Qb,nb,&det); return det; /* todo:need to test */
 }
 /* sucess probability value of ambiguity -------------------------------------*/
 static double arc_amb_success(double adop,int nb)
 {
     double pb=0.0; pb=arc_norm_distri(1.0/(2.0*adop));
-    return pow(2.0*pb-1.0,nb);
+    return pow(2.0*pb-1.0,nb); /* todo:need to test */
 }
 /* FF-ratio------------------------------------------------------------------*/
-static int arc_FFRatio(int namb,double ffailure,double ratio,double pf)
+static int arc_FFRatio(int namb,double ffailure,double ratio,double pf) /* todo:need to test */
 {
     int i,j,n;
     const double *tp=NULL;
@@ -1673,9 +1676,12 @@ static int arc_FFRatio(int namb,double ffailure,double ratio,double pf)
     ffratio=(tp[i*n+namb]-tp[(i-1)*n+namb])
             /(tp[i*n]-tp[(i-1)*n])*(pf-tp[(i-1)*n])+tp[(i-1)*n+namb];
 
+    arc_log(ARC_INFO,"FF-ratio=%8.4lf \n",ffratio);
+
     /* check ffratio */
     if (ffratio<=0.0) return 0;
-    if (ratio>=(1.0/ffratio)) return 1;
+    if (ratio>=(1.0/ffratio)) return 1; /* valid ok */
+
     return 0; /* valid failed */
 }
 /* restore single-differenced ambiguity --------------------------------------*/
