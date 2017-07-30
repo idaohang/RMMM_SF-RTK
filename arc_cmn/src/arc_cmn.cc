@@ -806,9 +806,10 @@ extern int arc_lsq(const double *A, const double *y, int n, int m, double *x,
 *-----------------------------------------------------------------------------*/
 static int arc_filter_(const double *x, const double *P, const double *H,
                        const double *v, const double *R, int n, int m,
-                       double *xp, double *Pp)
+                       double *xp, double *Pp,double *D)
 {
-    double *F= arc_mat(n,m),*Q= arc_mat(m,m),*K=arc_mat(n,m),*I=arc_eye(n);
+    double *F=arc_mat(n,m),*Q= arc_mat(m,m),*K=arc_mat(n,m),*I=arc_eye(n),
+           *KK=arc_mat(n,m);
     int info;
 
     arc_matcpy(Q,R,m,m);
@@ -817,32 +818,35 @@ static int arc_filter_(const double *x, const double *P, const double *H,
     arc_matmul("TN",m,m,n,1.0,H,F,1.0,Q);
     if (!(info= arc_matinv(Q, m))) {
         arc_matmul("NN",n,m,m,1.0,F,Q,0.0,K);   /* K=P*H*Q^-1 */
-        arc_matmul("NN",n,1,m,1.0,K,v,1.0,xp);  /* xp=x+K*v */
-        arc_matmul("NT",n,n,m,-1.0,K,H,1.0,I);  /* Pp=(I-K*H')*P */
+        arc_matmul("NN",n,m,m,1.0,K,D,0.0,KK);  /* robust */
+        arc_matmul("NN",n,1,m,1.0,KK,v,1.0,xp); /* xp=x+K*v */
+        arc_matmul("NT",n,n,m,-1.0,KK,H,1.0,I); /* Pp=(I-K*H')*P */
         arc_matmul("NN",n,n,n,1.0,I,P,0.0,Pp);
     }
-    free(F); free(Q); free(K); free(I);
+    free(F); free(Q); free(K); free(I); free(KK);
     return info;
 }
 extern int arc_filter(double *x, double *P, const double *H, const double *v,
-                      const double *R, int n, int m)
+                      const double *R, int n, int m,double *D)
 {
-    double *x_,*xp_,*P_,*Pp_,*H_;
+    double *x_,*xp_,*P_,*Pp_,*H_,*D_=arc_eye(m);
     int i,j,k,info,*ix;
+
+    if (D) arc_matcpy(D_,D,m,m);
     
-    ix= arc_imat(n,1); for (i=k=0;i<n;i++) if (x[i]!=0.0&&P[i+i*n]>0.0) ix[k++]=i;
-    x_= arc_mat(k,1); xp_=arc_mat(k,1); P_=arc_mat(k,k); Pp_=arc_mat(k,k); H_=arc_mat(k,m);
+    ix=arc_imat(n,1); for (i=k=0;i<n;i++) if (x[i]!=0.0&&P[i+i*n]>0.0) ix[k++]=i;
+    x_=arc_mat(k,1); xp_=arc_mat(k,1); P_=arc_mat(k,k); Pp_=arc_mat(k,k); H_=arc_mat(k,m);
     for (i=0;i<k;i++) {
         x_[i]=x[ix[i]];
         for (j=0;j<k;j++) P_[i+j*k]=P[ix[i]+ix[j]*n];
         for (j=0;j<m;j++) H_[i+j*k]=H[ix[i]+j*n];
     }
-    info=arc_filter_(x_,P_,H_,v,R,k,m,xp_,Pp_);
+    info=arc_filter_(x_,P_,H_,v,R,k,m,xp_,Pp_,D_);
     for (i=0;i<k;i++) {
         x[ix[i]]=xp_[i];
         for (j=0;j<k;j++) P[ix[i]+ix[j]*n]=Pp_[i+j*k];
     }
-    free(ix); free(x_); free(xp_); free(P_); free(Pp_); free(H_);
+    free(ix); free(x_); free(xp_); free(P_); free(Pp_); free(H_); free(D_);
     return info;
 }
 /* smoother --------------------------------------------------------------------

@@ -668,7 +668,7 @@ typedef struct {        /* solution type */
     float thres;        /* AR ratio threshold for valiation */
     diff_pr_sol_t prsol;/* double-difference pseudorange positioning solution */
     dop_t dop;          /* positioning dops */
-    float p_ar;         /* AR sucess probability */
+    double p_ar;        /* AR sucess probability */
 } sol_t;
 
 typedef struct {        /* solution status type */
@@ -792,6 +792,7 @@ typedef struct {        /* processing options type */
     int amb_group;         /* single-difference ambiguity grouping for fix */
     double amb_el_group;   /* single-difference ambiguity divided into two groups */
     double amb_ffailure;   /* ambiguity fix failure rate */
+    int amb_ffratio;       /* FF-ratio test for fixing ambiguity */
 
     int exclude_bds_geo;   /* exclude bds geo satellite (1:exclude,0:included) */
 

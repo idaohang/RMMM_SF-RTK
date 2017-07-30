@@ -20,6 +20,7 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
+#include <arc.h>
 
 using namespace std;
 
@@ -1220,7 +1221,7 @@ static void arc_kalman_norm_Qino(const double *v,int nv,double *Qv)
 
     arc_log(ARC_INFO,"average of innovation series=%10.6lf\n",ave_v);
 
-    arc_matcpy(ve,v,1,nv); for (i=0;i<nv;i++) ve[i]-=ave_v;
+    for (i=0;i<nv;i++) ve[i]=v[i]-ave_v;
     if (Qv) arc_matmul("NT",nv,nv,1,1.0,ve,ve,0.0,Qv);
 
     arc_log(ARC_INFO,"Qv=\n"); arc_tracemat(ARC_MATPRINTF,Qv,nv,nv,10,4);
@@ -1240,7 +1241,7 @@ static double arc_robust_chk(int nv,double alpha,double rk)
 }
 /* kalman filter Phi matrix---------------------------------------------------*/
 static void arc_kalman_robust_phi(const rtk_t *rtk,const double *vn,int nv,
-                                  double *phi)
+                                  double *phi) /* todo:need to test */
 {
     int i;
     double alpha=rtk->opt.kalman_robust_alpha;
@@ -1442,7 +1443,6 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
 
     free(Ri); free(Rj); free(im);
     free(tropu); free(tropr); free(dtdxu); free(dtdxr);
-
     return nv;
 }
 /* difference pseudorange for initialing--------------------------------------*/
@@ -1779,7 +1779,7 @@ static void arc_holdamb(rtk_t *rtk, const double *xa,int group)
         for (i=0;i<nv;i++) R[i+i*nv]=VAR_HOLDAMB;
 
         /* update states with constraints */
-        if ((info=arc_filter(rtk->x,rtk->P,H,v,R,rtk->nx,nv))) {
+        if ((info=arc_filter(rtk->x,rtk->P,H,v,R,rtk->nx,nv,NULL))) {
             arc_log(ARC_WARNING,"filter error (info=%d)\n",info);
         }
         free(R);
@@ -1908,7 +1908,7 @@ static int arc_amb_fix_sol(rtk_t *rtk,int nb,int na,double *Qb,const double *y,
 static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
-    int i,j,ny,nb,nx=rtk->nx,na=rtk->na,k,n,*ix,_na_,_nb_;
+    int i,j,ny,nb,nx=rtk->nx,na=rtk->na,k,n,*ix,_na_,_nb_,ok=0;
     double *D,*DP,*y,*Qy,*b,*db,*Qb,*Qab,*QQ,s[2],*yb;
 
     arc_log(ARC_INFO, "arc_resamb_LAMBDA : nx=%d\n", nx);
@@ -1961,7 +1961,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_log(ARC_INFO,"ADOP=%8.4lf \n",rtk->sol.dop.dops[4]);
 
     /* updates ar sucess probability value */
-    rtk->sol.p_ar=(float)arc_amb_success(rtk->sol.dop.dops[4],nb); /* todo:need to test */
+    rtk->sol.p_ar=arc_amb_success(rtk->sol.dop.dops[4],nb); /* todo:need to test */
 
     arc_log(ARC_INFO,"AR sucess probability=%8.4f \n",rtk->sol.p_ar);
 
@@ -1983,7 +1983,10 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
             if (rtk->sol.ratio>999.9) rtk->sol.ratio=999.9f;
 
             /* validation by popular ratio-test */
-            if (s[0]<=0.0||s[1]/s[0]>=opt->thresar[0]) {
+            ok=(opt->amb_ffratio?arc_FFRatio(nb,opt->amb_ffailure,
+                                             rtk->sol.ratio,1.0-rtk->sol.p_ar):
+                                 (s[0]<=0.0||s[1]/s[0]>=(opt->thresar[0]))); /* todo:need to test */
+            if (ok) {
 
                 /* transform float to fixed solution (xa=xa-Qab*Qb\(b0-b)) */
                 for (i=0;i<na;i++) {
@@ -2540,7 +2543,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 {
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
-    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*bias,dt;
+    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*bias,dt,*D=NULL,*Qv=NULL;
     int i,j,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter,nx=NP(&rtk->opt);
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
     int nf=1;
@@ -2621,6 +2624,12 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         arc_log(ARC_INFO,"arc_diff_pr_relpos ：double-differenced residual vector : \n");
         arc_tracemat(ARC_MATPRINTF,v,nv,1,10,4);
 
+        /* robust kalman filter */
+        if (opt->kalman_robust) {
+            D=arc_eye(nv); Qv=arc_mat(nv,nv);
+            arc_kalman_norm_inno(rtk,v,nv,H,R); arc_kalman_norm_Qino(v,nv,Qv);
+            arc_kalman_robust_phi(rtk,v,nv,D); /* todo:need to test */
+        }
         /* adaptive kaman filter */
         if (opt->adapt_filter) {
             if (!adap_kaman_filter(rtk,xp,Pp,H,v,R,nx,nv)) {
@@ -2630,7 +2639,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         }
         /* kalman filter measurement update */
         else {
-            if ((info=arc_filter(xp,Pp,H,v,R,nx,nv))) {
+            if ((info=arc_filter(xp,Pp,H,v,R,nx,nv,opt->kalman_robust?D:NULL))) {
                 arc_log(ARC_WARNING,"arc_diff_pr_relpos : filter error (info=%d)\n",info);
                 break;
             }
@@ -2653,6 +2662,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 
     /* todo:difference pseudorange positioning just for initialing for rtk-postioning */
 
+    if (D) free(D); if (Qv) free(Qv);
     free(rs); free(dts); free(var); free(y); free(e); free(azel);
     free(xp); free(Pp);  free(v); free(H); free(R); free(bias);
     return 1;
@@ -2667,7 +2677,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 {
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
-    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*xa,*bias,dt;
+    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*xa,*bias,dt,*D=NULL,*Qv=NULL;
     int i,j,f,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter;
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
     int stat=rtk->opt.mode<=PMODE_DGPS?SOLQ_DGPS:SOLQ_FLOAT;
@@ -2762,7 +2772,14 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             arc_log(ARC_INFO,"arc_relpos ： double-differenced residual vector : \n");
             arc_tracemat(ARC_MATPRINTF,v,nv,1,10,4);
 
+            /* robust kalman filter */
+            if (opt->kalman_robust) {
+                D=arc_eye(nv); Qv=arc_mat(nv,nv);
+                arc_kalman_norm_inno(rtk,v,nv,H,R); arc_kalman_norm_Qino(v,nv,Qv);
+                arc_kalman_robust_phi(rtk,v,nv,D); /* todo:need to test */
+            }
             arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
+
             /* adaptive kaman filter */
             if (opt->adapt_filter) {
                 if (!adap_kaman_filter(rtk,xp,Pp,H,v,R,rtk->nx,nv)) {
@@ -2773,7 +2790,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             }
             /* kalman filter measurement update */
             else {
-                if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv))) {
+                if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv,opt->kalman_robust?D:NULL))) {
                     arc_log(ARC_WARNING, "arc_relpos : filter error (info=%d)\n",info);
                     stat=SOLQ_NONE;
                     break;
@@ -2951,6 +2968,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         if (rtk->ssat[i].fix[j]==2&&stat==SOLQ_FIX) rtk->ssat[i].fix[j]=1;
         if (rtk->ssat[i].slip[j]&1) rtk->ssat[i].slipc[j]++;
     }
+    if (D) free(D); if (Qv) free(Qv);
     free(rs); free(dts); free(var); free(y); free(e); free(azel);
     free(xp); free(Pp);  free(xa);  free(v); free(H); free(R); free(bias);
 

@@ -163,7 +163,7 @@ extern int  arc_solve(const char *tr, const double *A, const double *Y, int n,
 extern int  arc_lsq(const double *A, const double *y, int n, int m, double *x,
                     double *Q);
 extern int  arc_filter(double *x, double *P, const double *H, const double *v,
-                       const double *R, int n, int m);
+                       const double *R, int n, int m,double * D);
 extern int  arc_smoother(const double *xf, const double *Qf, const double *xb,
                          const double *Qb, int n, double *xs, double *Qs);
 extern void arc_add_fatal(fatalfunc_t *func);
