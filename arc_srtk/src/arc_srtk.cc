@@ -470,24 +470,27 @@ static void arc_udpos(rtk_t *rtk,double tt)
     /* reset rover station pistion and its variance */
     /* todo:using standard positioning to initial ukf prior states and its covariacne matrix,
      * todo:and may have more better methids to do this */
-#ifndef ARC_UKF_USEPNT_INIT
 
-    /* kinmatic mode without dynamics */
-    if (!rtk->opt.dynamics) for (i=0;i<3;i++) {
-        arc_initx(rtk,rtk->sol.rr[i],rtk->sol.qr[i],i);
-        return;
-    }
-#else
-    /* kinmatic mode without dynamics */
+    /* kinamic without dynamic mode */
     if (!rtk->opt.dynamics) {
-        if (rtk->sol.ratio>=rtk->opt.thresar[0]) {
-            for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS_AMB,i);
+        if (rtk->opt.init_pnt) { /* use pnt to initial rtk */
+            for (i=0;i<3;i++) {
+                arc_initx(rtk,rtk->sol.rr[i],rtk->sol.qr[i],i); return;
+            }
+        }
+        else if (rtk->opt.init_dc) { /* use dd-pseudorange to initial rtk */
+            for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.prsol.rr[i],
+                                        rtk->sol.prsol.qr[i],i);
             return;
         }
-        for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
-        return;
+        else { /* use prior information to initial rtk */
+            if (rtk->sol.ratio>=rtk->opt.thresar[0]) {
+                for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS_AMB,i);
+                return;
+            }
+            for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i); return;
+        }
     }
-#endif
     /* check variance of estimated postion */
     for (i=0;i<3;i++) var+=rtk->P[i+i*rtk->nx]; var/=3.0;
 
@@ -1342,10 +1345,10 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
 {
     prcopt_t *opt=&rtk->opt;
     double bl,dr[3],posu[3],posr[3];
-    double *Ri,*Rj,lami,lamj,fi,fj,*Hi=NULL;
-    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1;
+    double *Ri,*Rj,lami,lamj,*Hi=NULL;
+    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1,nx=NP(&rtk->opt);
 
-    arc_log(ARC_INFO,"arc_init_dc_res   : dt=%.1f nx=%d ns=%d\n",dt,rtk->nx,ns);
+    arc_log(ARC_INFO,"arc_init_dc_res   : dt=%.1f nx=%d ns=%d\n",dt,nx,ns);
 
     bl=arc_baseline(x,rtk->rb,dr);
     ecef2pos(x,posu); ecef2pos(rtk->rb,posr);
@@ -1384,8 +1387,8 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
                 lamj=nav->lam[sat[j]-1][ff];
                 if (lami<=0.0||lamj<=0.0) continue;
                 if (H) {
-                    Hi=H+nv*rtk->nx;
-                    for (k=0;k<rtk->nx;k++) Hi[k]=0.0;
+                    Hi=H+nv*nx;
+                    for (k=0;k<nx;k++) Hi[k]=0.0;
                 }
                 /* double-differenced residual */
                 if (v) v[nv]=(y[f+iu[i]*nf*2]-y[f+ir[i]*nf*2])
@@ -1425,7 +1428,7 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
 
     if (H) {
         arc_log(ARC_INFO,"arc_init_dc_res : H=\n");
-        arc_tracemat(ARC_MATPRINTF, H,rtk->nx,nv,7,4);
+        arc_tracemat(ARC_MATPRINTF, H,nx,nv,7,4);
     }
     /* double-differenced measurement error covariance */
     if (R) {
@@ -2312,27 +2315,24 @@ static void arc_diff_pr_update(const rtk_t* rtk,double *xp,double *Pp,double tt)
     /* static mode */
     if (rtk->opt.mode==PMODE_STATIC) return;
 
-    /* reset rover station pistion and its variance */
     /* todo:using standard positioning to initial ukf prior states and its covariacne matrix,
      * todo:and may have more better methids to do this */
-#ifndef ARC_UKF_USEPNT_INIT
 
     /* kinmatic mode without dynamics */
-    if (!rtk->opt.dynamics) for (i=0;i<3;i++) {
-        arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],rtk->sol.qr[i],i,nx);
-        return;
-    }
-#else
-    /* kinmatic mode without dynamics */
     if (!rtk->opt.dynamics) {
-        if (rtk->sol.ratio>=rtk->opt.thresar[0]) {
-            for (i=0;i<3;i++) arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],VAR_POS_AMB,i,nx);
+        if (rtk->opt.init_pnt) for (i=0;i<3;i++) {
+            if (rtk->opt.init_pnt) arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],rtk->sol.qr[i],i,nx);
             return;
         }
-        for (i=0;i<3;i++) arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],VAR_POS,i,nx);
-        return;
+        else {
+            if (rtk->sol.ratio>=rtk->opt.thresar[0]) {
+                for (i=0;i<3;i++) arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],VAR_POS_AMB,i,nx);
+                return;
+            }
+            for (i=0;i<3;i++) arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],VAR_POS,i,nx);
+            return;
+        }
     }
-#endif
     /* check variance of estimated postion */
     for (i=0;i<3;i++) var+=rtk->P[i+i*rtk->nx]; var/=3.0;
 
@@ -2483,8 +2483,14 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         }
     }
     /* save solution status */
-    arc_matcpy(rtk->x,xp,nx,1);
-    arc_matcpy(rtk->P,Pp,nx,nx);
+    arc_matcpy(rtk->sol.prsol.rr,xp,nx,1); /* position/velecity */
+
+    for (j=0;j<nx;j++) rtk->sol.prsol.qr[j]=(float)Pp[j+j*nx];
+
+    rtk->sol.prsol.qr[3]=(float)Pp[1];    /* cov xy */
+    rtk->sol.prsol.qr[4]=(float)Pp[2+nx]; /* cov yz */
+    rtk->sol.prsol.qr[5]=(float)Pp[2];    /* cov zx */
+
     /* todo:difference pseudorange positioning just for initialing for rtk-postioning */
 
     free(rs); free(dts); free(var); free(y); free(e); free(azel);

@@ -643,6 +643,11 @@ typedef struct {        /* station parameter type */
     double hgt;         /* antenna height (m) */
 } sta_t;
 
+typedef struct {        /* double-difference pseudorange positioning solution type */
+    double rr[6];       /* position/velocity (m|m/s) */
+    double qr[6];       /* position variance/covariance (m^2) */
+} diff_pr_sol_t;
+
 typedef struct {        /* solution type */
     gtime_t time;       /* time (GPST) */
     double rr[6];       /* position/velocity (m|m/s) */
@@ -657,6 +662,7 @@ typedef struct {        /* solution type */
     float age;          /* age of differential (s) */
     float ratio;        /* AR ratio factor for valiation */
     float thres;        /* AR ratio threshold for valiation */
+    diff_pr_sol_t prsol;/* double-difference pseudorange positioning solution */
 } sol_t;
 
 typedef struct {        /* solution status type */
@@ -781,6 +787,7 @@ typedef struct {        /* processing options type */
 
     int init_dc;           /* using difference-pseudorange to initial if it sets to 1,
                             * ohterwise using standard positioning */
+    int init_pnt;          /* using standard positioning to initial rtk */
 
     int auto_ajust_opt;    /* adjust option,this step just for optimize positioning process */
 } prcopt_t;
