@@ -1645,7 +1645,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
 /* adop---------------------------------------------------------------------- */
 static double arc_amb_adop(const double *Qb,const double *xb,int nb)
 {
-    double det=0.0; arc_matdet(Qb,nb,&det); return det; /* todo:need to test */
+    double det=0.0; arc_matdet(Qb,nb,&det); return pow(det,1.0/(2.0*nb)); /* todo:need to test */
 }
 /* sucess probability value of ambiguity -------------------------------------*/
 static double arc_amb_success(double adop,int nb)
