@@ -76,10 +76,12 @@ add_library(${PROJECT_NAME}_rtk STATIC
 )
 
 target_link_libraries(${PROJECT_NAME}_rtk glog PF ceres)
+
 add_executable(arc_test1
-               arc_test/src/test1.cc)
+               arc_test/src/test1.cpp)
 add_executable(arc_test2
                arc_test/src/test2.cpp)
+
 target_link_libraries(arc_test1 ${PROJECT_NAME}_rtk)
 target_link_libraries(arc_test2 ${PROJECT_NAME}_rtk)
 

@@ -781,6 +781,8 @@ typedef struct {        /* processing options type */
 
     int init_dc;           /* using difference-pseudorange to initial if it sets to 1,
                             * ohterwise using standard positioning */
+
+    int auto_ajust_opt;    /* adjust option,this step just for optimize positioning process */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
