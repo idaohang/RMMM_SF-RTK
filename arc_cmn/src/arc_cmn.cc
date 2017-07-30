@@ -2530,6 +2530,7 @@ extern void arc_tracet(int level, const char *format, ...)
 extern void arc_tracemat(int level, const double *A, int n, int m, int p, int q)
 {
     if (level!=ARC_MATPRINTF) return;
+    if (A==NULL) return;
 #ifdef ARC_TRACE_MAT
     matfprint(A,n,m,p,q,stderr); fflush(stderr);
 #endif

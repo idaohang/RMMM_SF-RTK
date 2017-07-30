@@ -775,6 +775,7 @@ typedef struct {        /* processing options type */
     double ukf_alpha;      /* ukf compute weight parameter-1 */
     double ukf_ZCount;     /* ukf compute weight parameter-2 */
     double ukf_beta;       /* ukf compute weight parameter-3 */
+    int kalman_robust;     /* kalman filter with M-estimate */
 
     int reset_amb_all;     /* every epoch all ambiguity reset */
     int amb_part;          /* resolve part ambiguity */

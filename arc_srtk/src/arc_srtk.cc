@@ -479,16 +479,23 @@ static void arc_udpos(rtk_t *rtk,double tt)
             }
         }
         else if (rtk->opt.init_dc) { /* use dd-pseudorange to initial rtk */
-            for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.prsol.rr[i],
-                                        rtk->sol.prsol.qr[i],i);
+            for (i=0;i<3;i++) rtk->P[i+i*rtk->nx]=rtk->sol.prsol.qr[i];
+            rtk->P[1+rtk->nx*0]=rtk->P[0+rtk->nx*1]=rtk->sol.prsol.qr[3];
+            rtk->P[2+rtk->nx*0]=rtk->P[0+rtk->nx*2]=rtk->sol.prsol.qr[5];
+            rtk->P[1+rtk->nx*2]=rtk->P[2+rtk->nx*1]=rtk->sol.prsol.qr[4]; /* todo:may be have more better way to do this */
             return;
         }
         else { /* use prior information to initial rtk */
             if (rtk->sol.ratio>=rtk->opt.thresar[0]) {
                 for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS_AMB,i);
-                return;
+                return; /* here may more better than just use pnt to initial */
             }
-            for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i); return;
+            /* pnt to initial */
+            for (i=0;i<3;i++) rtk->P[i+i*rtk->nx]=rtk->sol.qr[i];
+            rtk->P[1+rtk->nx*0]=rtk->P[0+rtk->nx*1]=rtk->sol.qr[3];
+            rtk->P[2+rtk->nx*0]=rtk->P[0+rtk->nx*2]=rtk->sol.qr[5];
+            rtk->P[1+rtk->nx*2]=rtk->P[2+rtk->nx*1]=rtk->sol.qr[4]; /* todo:may be have more better way to do this */
+            return;
         }
     }
     /* check variance of estimated postion */
@@ -1143,6 +1150,84 @@ static int arc_ukf_ddmeas(rtk_t* rtk,const nav_t* nav,double dt,double *x,const 
     free(dtdxu); free(dtdxr);
     return nv;
 }
+/* exctract actcive H of kalman filter----------------------------------------*/
+static int arc_kalman_exct_xHP(const rtk_t *rtk,const double *Hi,double *Ho,
+                                int nv,double *x,double *P)
+{
+    int i,j,k,nx=rtk->nx,*ix;
+
+    arc_log(ARC_INFO,"arc_kalman_exct_H:\n");
+
+    ix=arc_imat(nx,1); for (i=0,j=0;i<nx;i++) if (rtk->ceres_active_x[i]) ix[j++]=i;
+
+    arc_log(ARC_INFO,"active sates index =\n");
+    arc_tracemati(ARC_MATPRINTF,ix,1,j,2,0);
+
+    if (x) for (i=0;i<j;i++) x[i]=rtk->x[ix[i]];
+    if (P) for (i=0;i<j;i++) for (k=0;k<j;k++) P[i*j+k]=rtk->P[ix[i]*nx+ix[k]];
+
+    if (Ho) for (i=0;i<nv;i++) for (k=0;k<j;k++) Ho[i*j+k]=Hi[i*nx+ix[k]];
+
+    arc_log(ARC_INFO,"x=\n"); arc_tracemat(ARC_MATPRINTF,x,1,j,10,4);
+    arc_log(ARC_INFO,"P=\n"); arc_tracemat(ARC_MATPRINTF,P,j,j,10,4);
+    arc_log(ARC_INFO,"H=\n"); arc_tracemat(ARC_MATPRINTF,Ho,j,nv,10,4);
+
+    free(ix);
+    return j; /* numbers of active states */
+}
+/* normalization of innovation series of kalman filter------------------------*/
+static int arc_kalman_norm_inno(const rtk_t *rtk,double *v,int nv,const double *H,
+                                const double *R)
+{
+    int i,nx=rtk->nx,n,info=1;
+    double *He,*Pe,*HP,*Qe,*L=NULL,*ve;
+
+    arc_log(ARC_INFO,"arc_kalman_norm_inno :\n");
+
+    He=arc_mat(nx,nv); Pe=arc_zeros(nx,nx);
+
+    n=arc_kalman_exct_xHP(rtk,H,He,nv,NULL,Pe);
+
+    HP=arc_mat(nv,n); Qe=arc_mat(nv,nv); ve=arc_mat(nv,1);
+    arc_matmul("TN",nv,n,n,1.0,He,Pe,0.0,HP);
+    arc_matcpy(Qe,R,nv,nv);
+    arc_matmul("NN",nv,nv,n,1.0,HP,H,1.0,Qe);
+
+    arc_log(ARC_INFO,"Qe=\n"); arc_tracemat(ARC_MATPRINTF,Qe,nv,nv,10,4);
+
+    if (!(info=arc_matinv(Qe,nv))) {
+
+        /* cholesky matrix decomposition */
+        L=arc_cholesky(Qe,nv);
+
+        arc_log(ARC_INFO,"L=\n"); arc_tracemat(ARC_MATPRINTF,L,nv,nv,10,4);
+
+        /* normalization */
+        if (L) arc_matmul("NN",nv,1,nv,1.0,L,v,0.0,ve);
+
+        arc_log(ARC_INFO,"ve=\n"); arc_tracemat(ARC_MATPRINTF,ve,1,nv,10,4);
+    }
+    if (L) free(L); free(He); free(Pe); free(ve); free(Qe);
+    return info;
+}
+/* covariance matrix of normalization of innovation series of kalman filte----*/
+static void arc_kalman_norm_Qino(const double *v,int nv,double *Qv)
+{
+    arc_log(ARC_INFO,"arc_kalman_norm_Qino :\n");
+
+    int i;
+    double ave_v=0.0,*ve=arc_mat(nv,1);
+    for (i=0;i<nv;i++) ave_v+=v[i]; ave_v/=nv;
+
+    arc_log(ARC_INFO,"average of innovation series=%10.6lf\n",ave_v);
+
+    arc_matcpy(ve,v,1,nv); for (i=0;i<nv;i++) ve[i]-=ave_v;
+    if (Qv) arc_matmul("NT",nv,nv,1,1.0,ve,ve,0.0,Qv);
+
+    arc_log(ARC_INFO,"Qv=\n"); arc_tracemat(ARC_MATPRINTF,Qv,nv,nv,10,4);
+
+    free(ve);
+}
 /* double-differenced phase/code residuals -----------------------------------*/
 static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
                      const double *P,const int *sat,double *y,double *e,
@@ -1322,8 +1407,7 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
     /* end of system loop */
 
     if (H&&nv) {
-        arc_log(ARC_INFO, "arc_ddres : H=\n");
-        arc_tracemat(ARC_MATPRINTF, H,rtk->nx,nv,7,4);
+        arc_log(ARC_INFO, "arc_ddres : H=\n"); arc_tracemat(ARC_MATPRINTF, H,rtk->nx,nv,7,4);
     }
     /* double-differenced measurement error covariance */
     if (R&&nv) {
@@ -1427,13 +1511,11 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
     /* end of system loop */
 
     if (H) {
-        arc_log(ARC_INFO,"arc_init_dc_res : H=\n");
-        arc_tracemat(ARC_MATPRINTF, H,nx,nv,7,4);
+        arc_log(ARC_INFO,"arc_init_dc_res : H=\n"); arc_tracemat(ARC_MATPRINTF,H,nx,nv,7,4);
     }
     /* double-differenced measurement error covariance */
-    if (R) {
-        arc_ddcov(nb,b,Ri,Rj,nv,R);
-    }
+    if (R) arc_ddcov(nb,b,Ri,Rj,nv,R);
+
     free(Ri); free(Rj);
     return nv;
 }
@@ -1532,8 +1614,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
     }
     rtk->amb_nb=nb; /* save numbers of double-difference ambiguity */
     if (D) {
-        arc_log(ARC_INFO, "D=\n");
-        arc_tracemat(ARC_MATPRINTF,D,nx,na+nb,2,0);
+        arc_log(ARC_INFO, "D=\n"); arc_tracemat(ARC_MATPRINTF,D,nx,na+nb,2,0);
     }
     return nb; /* numbers of double-difference ambiguity */
 }
@@ -2320,8 +2401,11 @@ static void arc_diff_pr_update(const rtk_t* rtk,double *xp,double *Pp,double tt)
 
     /* kinmatic mode without dynamics */
     if (!rtk->opt.dynamics) {
-        if (rtk->opt.init_pnt) for (i=0;i<3;i++) {
-            if (rtk->opt.init_pnt) arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],rtk->sol.qr[i],i,nx);
+        if (rtk->opt.init_pnt) {
+            for (i=0;i<3;i++) Pp[i+i*nx]=rtk->sol.prsol.qr[i];
+            Pp[1+nx*0]=Pp[0+nx*1]=rtk->sol.prsol.qr[3];
+            Pp[2+nx*0]=Pp[0+nx*2]=rtk->sol.prsol.qr[5];
+            Pp[1+nx*2]=Pp[2+nx*1]=rtk->sol.prsol.qr[4]; /* todo:may be have more better way to do this */
             return;
         }
         else {
@@ -2350,10 +2434,10 @@ static void arc_diff_pr_update(const rtk_t* rtk,double *xp,double *Pp,double tt)
     /* compute the state transition matrix */
     for (i=0;i<3;i++) F[i+(i+3)*nx]=tt;
 
-    arc_log(ARC_INFO,"arc_diff_pr_update : state transition matrix =\n");
+    arc_log(ARC_INFO,"arc_diff_pr_update : state transition matrix=\n");
     arc_tracemat(ARC_MATPRINTF,F,nx,nx,10,4);
 
-    arc_log(ARC_INFO,"arc_diff_pr_update : before state transition P =\n");
+    arc_log(ARC_INFO,"arc_diff_pr_update : before state transition P=\n");
     arc_tracemat(ARC_MATPRINTF,Pp,nx,nx,10,4);
 
     /* x=F*x, P=F*P*F+Q */
@@ -2362,7 +2446,7 @@ static void arc_diff_pr_update(const rtk_t* rtk,double *xp,double *Pp,double tt)
     arc_matmul("NN",nx,nx,nx,1.0,F,Pp,0.0,FP);
     arc_matmul("NT",nx,nx,nx,1.0,FP,F,0.0,Pp);
 
-    arc_log(ARC_INFO,"arc_diff_pr_update : after state transition P = \n");
+    arc_log(ARC_INFO,"arc_diff_pr_update : after state transition P= \n");
     arc_tracemat(ARC_MATPRINTF,Pp,nx,nx,10,4);
 
     /* process noise added to only velecity */
