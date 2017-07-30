@@ -304,7 +304,7 @@ extern int arc_pppnx(const prcopt_t *opt);
 
 /* integer ambiguity resolution ----------------------------------------------*/
 extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
-                      double *s);
+                      double *s,double *D,double *L);
 extern int lambda_reduction(int n, const double *Q, double *Z);
 extern int lambda_search(int n, int m, const double *a, const double *Q,
                          double *F, double *s);
@@ -330,6 +330,7 @@ extern double arc_norm_distri(const double u);
 extern double arc_re_norm(double p);
 extern int arc_mateigenvalue(const double* A,int n,double *u,double *v);
 extern int arc_matdet(const double*A,int n,double*det);
+extern double arc_normcdf(double X);
 
 #ifdef __cplusplus
 }

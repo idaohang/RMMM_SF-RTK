@@ -164,16 +164,24 @@ static int search(int n, int m, const double *L, const double *D,
 * notes  : matrix stored by column-major order (fortran convension)
 *-----------------------------------------------------------------------------*/
 extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
-                      double *s)
+                      double *s,double *Do,double *Lo)
 {
     int info;
     double *L,*D,*Z,*z,*E;
+
+    arc_log(ARC_INFO,"arc_lambda :\n");
     
     if (n<=0||m<=0) return -1;
-    L= arc_zeros(n,n); D=arc_mat(n,1); Z=arc_eye(n); z=arc_mat(n,1); E=arc_mat(n,m);
+    L=arc_zeros(n,n); D=arc_mat(n,1); Z=arc_eye(n); z=arc_mat(n,1); E=arc_mat(n,m);
     
     /* LD factorization */
     if (!(info=LD(n,Q,L,D))) {
+
+        arc_log(ARC_INFO,"L=\n");
+        arc_tracemat(ARC_MATPRINTF,L,n,n,10,4);
+
+        arc_log(ARC_INFO,"D=\n");
+        arc_tracemat(ARC_MATPRINTF,D,1,n,10,4);
         
         /* lambda reduction */
         reduction(n,L,D,Z);
@@ -182,9 +190,12 @@ extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
         /* mlambda search */
         if (!(info=search(n,m,L,D,z,E,s))) {
             
-            info= arc_solve("T",Z,E,n,m,F); /* F=Z'\E */
+            info=arc_solve("T",Z,E,n,m,F); /* F=Z'\E */
         }
     }
+    if (Do) arc_matcpy(Do,D,n,1);
+    if (Lo) arc_matcpy(Lo,L,n,n);
+
     free(L); free(D); free(Z); free(z); free(E);
     return info;
 }

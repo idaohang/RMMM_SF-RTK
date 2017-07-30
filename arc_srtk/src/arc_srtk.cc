@@ -1653,6 +1653,13 @@ static double arc_amb_success(double adop,int nb)
     double pb=0.0; pb=arc_norm_distri(1.0/(2.0*adop));
     return pow(2.0*pb-1.0,nb); /* todo:need to test */
 }
+/* compute the bootstrapped success rate ------------------------------------*/
+static double arc_amb_bs_success(const double *D,int n)
+{
+    double s=1.0;
+    int i; for (i=0;i<n;i++) s*=(2.0*arc_norm_distri(0.5/SQRT(D[i]))-1.0);
+    return s;
+}
 /* FF-ratio------------------------------------------------------------------*/
 static int arc_FFRatio(int namb,double ffailure,double ratio,double pf) /* todo:need to test */
 {
@@ -1689,7 +1696,7 @@ static void arc_restamb(rtk_t *rtk, const double *bias, double *xa,int group)
 {
     int i,j,n,m,index[MAXSAT],nv=0,ref=-1,refsat;
 
-    arc_log(ARC_INFO, "arc_restamb :\n");
+    arc_log(ARC_INFO,"arc_restamb :\n");
 
     for (i=0;i<rtk->nx;i++) xa[i]=rtk->x [i];  /* ambiguity */
     for (i=0;i<rtk->na;i++) xa[i]=rtk->xa[i];  /* station position/trp/iono/clock and so on */
@@ -1733,7 +1740,7 @@ static void arc_holdamb(rtk_t *rtk, const double *xa,int group)
     double *v,*H,*R;
     int i,j,n,m,info,index[MAXSAT],nb=rtk->nx-rtk->na,nv=0,ref=-1,refsat=0;
 
-    arc_log(ARC_INFO, "arc_holdamb :\n");
+    arc_log(ARC_INFO,"arc_holdamb :\n");
 
     v=arc_mat(nb,1); H=arc_zeros(nb,rtk->nx);
 
@@ -1846,7 +1853,7 @@ static int arc_resamb_reduceQ(int _na_,int _nb_,int na,int nb,double *Qy,
 static int arc_amb_lambda(int nb,double *y,double *Qb,double *b,double *s,
                           double*ratio)
 {
-    int info=1; if (!(info=arc_lambda(nb,2,y,Qb,b,s))) {
+    int info=1; if (!(info=arc_lambda(nb,2,y,Qb,b,s,NULL,NULL))) {
 
         arc_log(ARC_INFO, "N(1)=");
         arc_tracemat(ARC_MATPRINTF,b,1,nb,10,3);
@@ -1909,7 +1916,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     prcopt_t *opt=&rtk->opt;
     int i,j,ny,nb,nx=rtk->nx,na=rtk->na,k,n,*ix,_na_,_nb_,ok=0;
-    double *D,*DP,*y,*Qy,*b,*db,*Qb,*Qab,*QQ,s[2],*yb;
+    double *D,*DP,*y,*Qy,*b,*db,*Qb,*Qab,*QQ,s[2],*yb,*DB=NULL;
 
     arc_log(ARC_INFO, "arc_resamb_LAMBDA : nx=%d\n", nx);
 
@@ -1932,6 +1939,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     Qab=arc_mat(na,nb); QQ=arc_mat(na,nb);
     yb=arc_mat(nb+na,1);  /* save the reduce y value */
     ix=arc_imat(na+nb,1);  /* hold active ambiguity index */
+    DB=arc_mat(1,nb);
 
     /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
     arc_matmul("TN",ny,1,nx,1.0, D,rtk->x,0.0,y);
@@ -1956,15 +1964,10 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_tracemat(ARC_MATPRINTF,Qab,na,nb,10,4);
 
     /* updates adop */
-    rtk->sol.dop.dops[4]=arc_amb_adop(Qb,y+na,nb); /* todo:need to test */
-
-    arc_log(ARC_INFO,"ADOP=%8.4lf \n",rtk->sol.dop.dops[4]);
-
-    /* updates ar sucess probability value */
-    rtk->sol.p_ar=arc_amb_success(rtk->sol.dop.dops[4],nb); /* todo:need to test */
-
-    arc_log(ARC_INFO,"AR sucess probability=%8.4f \n",rtk->sol.p_ar);
-
+    if (rtk->opt.amb_adop) {
+        rtk->sol.dop.dops[4]=arc_amb_adop(Qb,y+na,nb);
+        arc_log(ARC_INFO,"ADOP=%8.4lf \n",rtk->sol.dop.dops[4]); /* todo:need to test */
+    }
     arc_matcpy(yb,y,nb+na,1);
 
     /* lambda/mlambda integer least-square estimation */
@@ -1972,12 +1975,17 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
         if (nb==0) break;  /* no ambiguitys */
 
-        if (!(arc_lambda(nb,2,yb+na,Qb,b,s))) {
+        if (!(arc_lambda(nb,2,yb+na,Qb,b,s,DB,NULL))) {
 
             arc_log(ARC_INFO, "N(1)=");
             arc_tracemat(ARC_MATPRINTF,b,1,nb,10,3);
             arc_log(ARC_INFO, "N(2)=");
             arc_tracemat(ARC_MATPRINTF,b+nb,1,nb,10,3);
+
+            /* updates ar sucess probability value */
+            rtk->sol.p_ar=arc_amb_bs_success(DB,nb);
+
+            arc_log(ARC_INFO,"AR sucess probability=%8.4f \n",rtk->sol.p_ar);
 
             rtk->sol.ratio=s[0]>0?(float)(s[1]/s[0]):0.0f;
             if (rtk->sol.ratio>999.9) rtk->sol.ratio=999.9f;
@@ -2052,7 +2060,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         arc_log(ARC_WARNING, "arc_resamb_LAMBDA : ambiguity validation "
                         "failed (nb=%d ratio=%.2f s=%.2f/%.2f)\n",nb,s[1]/s[0],s[0],s[1]);
     }
-    free(D); free(y); free(Qy); free(DP); free(ix);
+    free(D); free(y); free(Qy); free(DP); free(ix); free(DB);
     free(b); free(db); free(Qb); free(Qab); free(QQ); free(yb);
 
     return nb; /* number of ambiguities */

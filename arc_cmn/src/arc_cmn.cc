@@ -4485,6 +4485,24 @@ extern int arc_matdet(const double*A,int n,double*det)
     free(u);free(v);
     return 1;
 }
+extern double arc_normcdf(double X)
+{
+    double A1=0.4361836;
+    double A2=-0.1201676;
+    double A3=0.9372980;
+    double P=0.33267;
+    double Eps=1.0E-12;
+    double T;
+
+    if (X>0.0) T=X; else T=-X; T=(1.0+P*T);
+
+    if ((T>-Eps)&&(T<Eps)) T=Eps;
+
+    T=1.0/T;
+    T=1.0-exp(-0.5*X*X)*(T*(A1+T*(A2+A3*T)))/sqrt(2.0*PI);
+
+    return ((X>0.0)?T:1.0-T);
+}
 /* dummy functions for lex extentions ----------------------------------------*/
 #ifndef EXTLEX
 #endif /* EXTLEX */

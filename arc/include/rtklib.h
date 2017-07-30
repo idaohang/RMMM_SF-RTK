@@ -793,6 +793,7 @@ typedef struct {        /* processing options type */
     double amb_el_group;   /* single-difference ambiguity divided into two groups */
     double amb_ffailure;   /* ambiguity fix failure rate */
     int amb_ffratio;       /* FF-ratio test for fixing ambiguity */
+    int amb_adop;          /* ADOP */
 
     int exclude_bds_geo;   /* exclude bds geo satellite (1:exclude,0:included) */
 
