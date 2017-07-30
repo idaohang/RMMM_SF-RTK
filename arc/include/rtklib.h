@@ -648,6 +648,10 @@ typedef struct {        /* double-difference pseudorange positioning solution ty
     double qr[6];       /* position variance/covariance (m^2) */
 } diff_pr_sol_t;
 
+typedef struct {        /* dop parameters type */
+    double dops[5];     /* GDOP,PDOP,HDOP,VDOP,ADOP */
+} dop_t;
+
 typedef struct {        /* solution type */
     gtime_t time;       /* time (GPST) */
     double rr[6];       /* position/velocity (m|m/s) */
@@ -663,6 +667,8 @@ typedef struct {        /* solution type */
     float ratio;        /* AR ratio factor for valiation */
     float thres;        /* AR ratio threshold for valiation */
     diff_pr_sol_t prsol;/* double-difference pseudorange positioning solution */
+    dop_t dop;          /* positioning dops */
+    float p_ar;         /* AR sucess probability */
 } sol_t;
 
 typedef struct {        /* solution status type */
@@ -776,6 +782,8 @@ typedef struct {        /* processing options type */
     double ukf_ZCount;     /* ukf compute weight parameter-2 */
     double ukf_beta;       /* ukf compute weight parameter-3 */
     int kalman_robust;     /* kalman filter with M-estimate */
+    double kalman_robust_alpha;
+                           /* kalman robust filter alpha */
 
     int reset_amb_all;     /* every epoch all ambiguity reset */
     int amb_part;          /* resolve part ambiguity */
@@ -783,6 +791,7 @@ typedef struct {        /* processing options type */
     double amb_ref_thres;  /* confidence function threshold of round reference ambiguity */
     int amb_group;         /* single-difference ambiguity grouping for fix */
     double amb_el_group;   /* single-difference ambiguity divided into two groups */
+    double amb_ffailure;   /* ambiguity fix failure rate */
 
     int exclude_bds_geo;   /* exclude bds geo satellite (1:exclude,0:included) */
 
@@ -983,6 +992,8 @@ extern const prcopt_t prcopt_default;  /* default positioning options */
 extern const solopt_t solopt_default;  /* default solution output options */
 extern const filopt_t fileopt_default; /* default file options */
 extern opt_t sysopts[];                /* system options table */
+extern const double ff_ratio_table1[31*64];
+extern const double ff_ratio_table2[31*41];
 
 #ifdef __cplusplus
 }

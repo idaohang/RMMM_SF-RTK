@@ -96,18 +96,38 @@ static double arc_prange(const obsd_t *obs, const nav_t *nav, const double *azel
 extern int arc_ionocorr(gtime_t time, const nav_t *nav, int sat, const double *pos,
                         const double *azel, int ionoopt, double *ion, double *var)
 {
-    arc_log(ARC_INFO, "ionocorr: time=%s opt=%d sat=%2d pos=%.3f %.3f azel=%.3f %.3f\n",
-            time_str(time, 3), ionoopt, sat, pos[0] * R2D, pos[1] * R2D, azel[0] * R2D,
-            azel[1] * R2D);
+    arc_log(ARC_INFO,"ionocorr: time=%s opt=%d sat=%2d pos=%.3f %.3f azel=%.3f %.3f\n",
+            time_str(time,3),ionoopt,sat,pos[0]*R2D,pos[1]*R2D,azel[0]*R2D,azel[1]*R2D);
+
+    int sys,i;
+    double ion_paras[8]={0.0};
+    sys=satsys(sat,NULL);
+
+    /* todo:here need to test and fix some debugs*/
+
+    if      (sys==SYS_GPS) {
+        for (i=0;i<8;i++) ion_paras[i]=nav->ion_gps[i];
+    }
+    else if (sys==SYS_GLO) {
+        for (i=0;i<8;i++) ion_paras[i]=nav->ion_gps[i];
+    }
+    else if (sys==SYS_GAL) {
+        for (i=0;i<8;i++) ion_paras[i]=nav->ion_gal[i];
+    }
+    else if (sys==SYS_CMP) {
+        for (i=0;i<8;i++) ion_paras[i]=nav->ion_cmp[i];
+    }
+    else for (i=0;i<8;i++) ion_paras[i]=nav->ion_gps[i];
+
     /* broadcast model */
     if (ionoopt==IONOOPT_BRDC) {
-        *ion= arc_ionmodel(time, nav->ion_gps, pos, azel);
+        *ion= arc_ionmodel(time,ion_paras,pos,azel);
         *var=SQR(*ion*ERR_BRDCI);
         return 1;
     }
     /* qzss broadcast model */
-    if (ionoopt==IONOOPT_QZS&& arc_norm(nav->ion_qzs, 8)>0.0) {
-        *ion= arc_ionmodel(time, nav->ion_qzs, pos, azel);
+    if (ionoopt==IONOOPT_QZS&& arc_norm(ion_paras,8)>0.0) {
+        *ion= arc_ionmodel(time,ion_paras,pos,azel);
         *var=SQR(*ion*ERR_BRDCI);
         return 1;
     }
@@ -270,15 +290,15 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
 /* validate solution ---------------------------------------------------------*/
 static int arc_valsol(const double *azel, const int *vsat, int n,
                       const prcopt_t *opt, const double *v, int nv, int nx,
-                      char *msg)
+                      char *msg,sol_t* sol)
 {
     double azels[MAXOBS*2],dop[4],vv;
     int i,ns;
 
-    arc_log(ARC_INFO, "valsol  : n=%d nv=%d\n", n, nv);
+    arc_log(ARC_INFO,"valsol  : n=%d nv=%d\n",n,nv);
     
     /* chi-square validation of residuals */
-    vv= arc_dot(v, v, nv);
+    vv=arc_dot(v,v,nv);
     if (nv>nx&&vv>chisqr[nv-nx-1]) {
         sprintf(msg,"chi-square error nv=%d vv=%.1f"
                 " cs=%.1f",nv,vv,chisqr[nv-nx-1]);
@@ -291,7 +311,9 @@ static int arc_valsol(const double *azel, const int *vsat, int n,
         azels[1+ns*2]=azel[1+i*2];
         ns++;
     }
-    arc_dops(ns, azels, opt->elmin, dop);
+    arc_dops(ns,azels,opt->elmin,dop);
+    for (i=0;i<4;i++) sol->dop.dops[i]=dop[i]; /* todo:need to test */
+
     if (dop[0]<=0.0||dop[0]>opt->maxgdop) {
         sprintf(msg,"gdop error nv=%d gdop=%.1f",nv,dop[0]);
         return 0;
@@ -351,7 +373,7 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
             sol->age=0.0;
             
             /* validate solution */
-            if ((stat=arc_valsol(azel,vsat,n,opt,v,nv,NX,msg))) {
+            if ((stat=arc_valsol(azel,vsat,n,opt,v,nv,NX,msg,sol))) {
                 sol->stat=SOLQ_SINGLE;
             }
             free(v); free(H); free(var);

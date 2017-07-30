@@ -1,6 +1,9 @@
 
-#include <arc.h>
 #include "arc.h"
+#include <iomanip>
+#include <fstream>
+
+using namespace std;
 
 #define NUMINFILE 10
 

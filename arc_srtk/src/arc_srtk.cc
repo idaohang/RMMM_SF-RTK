@@ -20,7 +20,6 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
-#include <arc.h>
 
 using namespace std;
 
@@ -1228,6 +1227,28 @@ static void arc_kalman_norm_Qino(const double *v,int nv,double *Qv)
 
     free(ve);
 }
+/* kalman robust check function-----------------------------------------------*/
+static double arc_robust_chk(int nv,double alpha,double rk)
+{
+    if (alpha<=0.0) {
+        if (rk>=chisqr[nv]) return SQRT(chisqr[nv]/rk); /* alpha=0.001 */
+    }
+    else {
+        if (rk>=arc_re_chi2(nv,alpha)) return SQRT(chisqr[nv]/rk);
+    }
+    return 1.0; /* todo:need to test */
+}
+/* kalman filter Phi matrix---------------------------------------------------*/
+static void arc_kalman_robust_phi(const rtk_t *rtk,const double *vn,int nv,
+                                  double *phi)
+{
+    int i;
+    double alpha=rtk->opt.kalman_robust_alpha;
+
+    arc_log(ARC_INFO,"arc_kalman_phi :\n");
+
+    for (i=0;i<nv;i++);
+}
 /* double-differenced phase/code residuals -----------------------------------*/
 static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
                      const double *P,const int *sat,double *y,double *e,
@@ -1618,6 +1639,45 @@ static int arc_ddmat(rtk_t *rtk, double *D)
     }
     return nb; /* numbers of double-difference ambiguity */
 }
+/* adop---------------------------------------------------------------------- */
+static double arc_amb_adop(const double *Qb,const double *xb,int nb)
+{
+    double det=0.0; arc_matdet(Qb,nb,&det); return det;
+}
+/* sucess probability value of ambiguity -------------------------------------*/
+static double arc_amb_success(double adop,int nb)
+{
+    double pb=0.0; pb=arc_norm_distri(1.0/(2.0*adop));
+    return pow(2.0*pb-1.0,nb);
+}
+/* FF-ratio------------------------------------------------------------------*/
+static int arc_FFRatio(int namb,double ffailure,double ratio,double pf)
+{
+    int i,j,n;
+    const double *tp=NULL;
+    double ffratio=0.0;
+
+    arc_log(ARC_INFO,"arc_FFRatio :\n");
+
+    if (pf<=ffailure) return 1; if (namb<=0) return 0;
+
+    if      (ffailure==0.01 ) n=41,tp=&ff_ratio_table1[0];
+    else if (ffailure==0.001) n=64,tp=&ff_ratio_table2[0];
+
+    namb=MIN(namb,n-1);
+
+    /* search ffratio in tables */
+    for (i=0;i<31;i++) if (tp[i*n+namb-1]>pf) break;
+
+    /* interpolation of pf value */
+    ffratio=(tp[i*n+namb]-tp[(i-1)*n+namb])
+            /(tp[i*n]-tp[(i-1)*n])*(pf-tp[(i-1)*n])+tp[(i-1)*n+namb];
+
+    /* check ffratio */
+    if (ffratio<=0.0) return 0;
+    if (ratio>=(1.0/ffratio)) return 1;
+    return 0; /* valid failed */
+}
 /* restore single-differenced ambiguity --------------------------------------*/
 static void arc_restamb(rtk_t *rtk, const double *bias, double *xa,int group)
 {
@@ -1847,7 +1907,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
     arc_log(ARC_INFO, "arc_resamb_LAMBDA : nx=%d\n", nx);
 
-    rtk->sol.ratio=0.0;
+    rtk->sol.ratio=0.0; rtk->sol.dop.dops[4]=-999.0; rtk->sol.p_ar=(float)-999.0;
 
     if (rtk->opt.mode<=PMODE_DGPS||rtk->opt.modear==ARMODE_OFF||
         rtk->opt.thresar[0]<1.0) {
@@ -1888,6 +1948,16 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 
     arc_log(ARC_INFO,"arc_resamb_LAMBDA : Qab=\n");
     arc_tracemat(ARC_MATPRINTF,Qab,na,nb,10,4);
+
+    /* updates adop */
+    rtk->sol.dop.dops[4]=arc_amb_adop(Qb,y+na,nb); /* todo:need to test */
+
+    arc_log(ARC_INFO,"ADOP=%8.4lf \n",rtk->sol.dop.dops[4]);
+
+    /* updates ar sucess probability value */
+    rtk->sol.p_ar=(float)arc_amb_success(rtk->sol.dop.dops[4],nb); /* todo:need to test */
+
+    arc_log(ARC_INFO,"AR sucess probability=%8.4f \n",rtk->sol.p_ar);
 
     arc_matcpy(yb,y,nb+na,1);
 

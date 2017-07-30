@@ -73,7 +73,7 @@ add_library(${PROJECT_NAME}_rtk STATIC
     arc/src/arc_ObservationModel.cpp
     arc/src/arc_StatesDistribution.cpp
     arc/src/arc_ukf.cc
-)
+    arc/src/arc_ffratio_table.cc)
 
 target_link_libraries(${PROJECT_NAME}_rtk glog PF ceres)
 

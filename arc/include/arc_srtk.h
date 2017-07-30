@@ -324,6 +324,12 @@ extern void arc_settspan(gtime_t ts, gtime_t te);
 extern void arc_settime(gtime_t time);
 extern void arc_exclude_bds_geo(prcopt_t *opt);
 extern int arc_is_bds_geo(int sat);
+extern double arc_chi2(int na,double x,double *f);
+extern double arc_re_chi2(int na,double p);
+extern double arc_norm_distri(const double u);
+extern double arc_re_norm(double p);
+extern int arc_mateigenvalue(const double* A,int n,double *u,double *v);
+extern int arc_matdet(const double*A,int n,double*det);
 
 #ifdef __cplusplus
 }

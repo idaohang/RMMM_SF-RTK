@@ -36,6 +36,8 @@
 #define GMS         1.327124E+20    /* sun gravitational constant */
 #define GMM         4.902801E+12    /* moon gravitational constant */
 #define SQR(x)      ((x)*(x))
+#define EPS           0.000001
+#define ITERS         60
 /* function prototypes -------------------------------------------------------*/
 #ifdef IERS_MODEL
 extern int dehanttideinel_(double *xsta, int *year, int *mon, int *day,
@@ -2975,8 +2977,8 @@ extern void arc_dops(int ns, const double *azel, double elmin, double *dop)
     }
     if (n<4) return;
 
-    arc_matmul("NT", 4, 4, n, 1.0, H, H, 0.0, Q);
-    if (!arc_matinv(Q, 4)) {
+    arc_matmul("NT",4,4,n,1.0,H,H,0.0,Q);
+    if (!arc_matinv(Q,4)) {
         dop[0]=SQRT(Q[0]+Q[5]+Q[10]+Q[15]); /* GDOP */
         dop[1]=SQRT(Q[0]+Q[5]+Q[10]);       /* PDOP */
         dop[2]=SQRT(Q[0]+Q[5]);             /* HDOP */
@@ -4251,6 +4253,233 @@ extern void arc_exclude_bds_geo(prcopt_t *opt)
 extern int arc_is_bds_geo(int sat)
 {
     char prn[8]; satno2id(sat,prn); return arc_search_sat_geo(prn);
+}
+/* chi-square distribution---------------------------------------------------- */
+extern double arc_chi2(int n,double x,double *f)
+{
+    double iai;
+    double p,Ux;
+    double pi=3.14159265358979312;
+
+    double y=x/2.0;
+    if(n%2) {
+        Ux=sqrt(y/pi)*exp(-y);
+        p=2.0*arc_norm_distri(sqrt(x))-1.0;
+        iai=0.5;
+    }
+    else {
+        Ux=y*exp(-y);
+        p=1.0-exp(-y);
+        iai=1.0;
+    }
+    while(iai!=0.5*n)  {
+        p=p-Ux/iai;
+        Ux=Ux*y/iai;
+        iai+=1.0;
+    }
+    *f=Ux/x; return p;
+}
+/* normal distribution functional -------------------------------------------*/
+extern double arc_norm_distri(const double u)
+{
+    if(u<-5.0) return 0.0;
+    if(u>5.0) return 1.0;
+
+    double y=fabs(u)/sqrt(2.0);
+
+    double p=1.0+y*(0.0705230784+y*(0.0422820123+y*(0.0092705272+
+             y*(0.0001520143+y*(0.0002765672+y*0.0000430638)))));
+    double er =1- pow( p, -16.0 );
+    p=(u<0.0)? 0.5-0.5*er: 0.5+0.5*er;
+    return p;
+}
+extern double arc_re_norm(double p)
+{
+    if(p==0.5) return 0.0;
+    if(p>0.9999997) return 5.0;
+    if(p<0.0000003) return -5.0;
+    if(p<0.5) return -arc_re_norm(1.0-p);
+
+    double y=-log(4.0*p*(1.0-p));
+    y=y*(1.570796288+y*(0.3706987906e-1
+      +y*(-0.8364353589e-3+y*(-0.2250947176e-3
+      +y*(0.6841218299e-5+y*(0.5824238515e-5
+      +y*(-0.1045274970e-5+y*(0.8360937017e-7
+      +y*(-0.3231081277e-8+y*(0.3657763036e-10
+      +y*0.6936233982e-12))))))))));
+    return sqrt(y);
+}
+extern double arc_re_chi2(int n,double p)
+{
+    if(p>0.9999999)p=0.9999999;
+    if(n==1)  {
+        double x=arc_re_norm((1.0-p)/2.0);
+        return x*x;
+    }
+    if(n==2) return -2.0*log(1.0-p);
+
+    double u = arc_re_norm(p);
+    double w = 2.0/(9.0*n);
+    double x0 = 1.0-w+u*sqrt(w);
+    x0 = n*x0*x0*x0;
+
+    while(1) {
+        double f;
+        double pp=arc_chi2(n,x0,&f);
+        if(f+1.0==1.0)return x0;
+        double xx=x0-(pp-p)/f;
+        if(fabs(x0-xx)<0.001) return xx;
+        x0=xx;
+    }
+}
+static void hhbg(int n,double *a)
+{
+    int i,j,k,u,v;
+    double d,t;
+    for (k=1;k<=n-2;k++) {
+        d=0.0;
+        for (j=k;j<=n-1;j++){
+            u=j*n+k-1; t=a[u];
+            if (fabs(t)>fabs(d)) { d=t; i=j;}
+        }
+        if (fabs(d)+1.0!=1.0) {
+            if (i!=k) {
+                for (j=k-1;j<=n-1;j++) {
+                    u=i*n+j; v=k*n+j;
+                    t=a[u]; a[u]=a[v]; a[v]=t;
+                }
+                for (j=0;j<=n-1;j++) {
+                    u=j*n+i; v=j*n+k;
+                    t=a[u]; a[u]=a[v]; a[v]=t;
+                }
+            }
+            for (i=k+1;i<=n-1;i++) {
+                u=i*n+k-1; t=a[u]/d; a[u]=0.0;
+                for (j=k; j<=n-1; j++) {
+                    v=i*n+j;
+                    a[v]=a[v]-t*a[k*n+j];
+                }
+                for (j=0;j<=n-1;j++) {
+                    v=j*n+k; a[v]=a[v]+t*a[j*n+i];
+                }
+            }
+        }
+    }
+    return;
+}
+static int qrtt(int n,double *a,double *u,double *v,double eps,int jt)
+{
+    int m,it,i,j,k,l,ii,jj,kk,ll;
+    double b,c,w,g,xy,p,q,r,x,s,e,f,z,y;
+    it=0; m=n;
+    while (m!=0) {
+        l=m-1;
+        while ((l>0)&&(fabs(a[l*n+l-1])
+                       >eps*(fabs(a[(l-1)*n+l-1])+fabs(a[l*n+l])))) l=l-1;
+        ii=(m-1)*n+m-1; jj=(m-1)*n+m-2;
+        kk=(m-2)*n+m-1; ll=(m-2)*n+m-2;
+        if (l==m-1) {
+            u[m-1]=a[(m-1)*n+m-1]; v[m-1]=0.0;
+            m=m-1; it=0;
+        }
+        else if (l==m-2) {
+            b=-(a[ii]+a[ll]);
+            c=a[ii]*a[ll]-a[jj]*a[kk];
+            w=b*b-4.0*c;
+            y=sqrt(fabs(w));
+            if (w>0.0) {
+                xy=1.0;
+                if (b<0.0) xy=-1.0;
+                u[m-1]=(-b-xy*y)/2.0;
+                u[m-2]=c/u[m-1];
+                v[m-1]=0.0; v[m-2]=0.0;
+            }
+            else {
+                u[m-1]=-b/2.0; u[m-2]= u[m-1];
+                v[m-1]= y/2.0;  v[m-2]=-v[m-1];
+            }
+            m=m-2; it=0;
+        }
+        else {
+            if (it>=jt)  return -1;
+            it=it+1;
+            for (j=l+2;j<=m-1;j++) a[j*n+j-2]=0.0;
+            for (j=l+3;j<=m-1;j++) a[j*n+j-3]=0.0;
+            for (k=l;k<=m-2;k++) {
+                if (k!=l) {
+                    p=a[k*n+k-1]; q=a[(k+1)*n+k-1]; r=0.0;
+                    if (k!=m-2) r=a[(k+2)*n+k-1];
+                }
+                else { x=a[ii]+a[ll];
+                    y=a[ll]*a[ii]-a[kk]*a[jj];
+                    ii=l*n+l; jj=l*n+l+1;
+                    kk=(l+1)*n+l; ll=(l+1)*n+l+1;
+                    p=a[ii]*(a[ii]-x)+a[jj]*a[kk]+y;
+                    q=a[kk]*(a[ii]+a[ll]-x);
+                    r=a[kk]*a[(l+2)*n+l+1];
+                }
+                if ((fabs(p)+fabs(q)+fabs(r))!=0.0) {
+                    xy=1.0;
+                    if (p<0.0) xy=-1.0;
+                    s=xy*sqrt(p*p+q*q+r*r);
+                    if (k!=l) a[k*n+k-1]=-s;
+                    e=-q/s; f=-r/s; x=-p/s;
+                    y=-x-f*r/(p+s);
+                    g=e*r/(p+s);
+                    z=-x-e*q/(p+s);
+                    for (j=k;j<=m-1;j++) {
+                        ii=k*n+j; jj=(k+1)*n+j; p=x*a[ii]+e*a[jj];
+                        q=e*a[ii]+y*a[jj]; r=f*a[ii]+g*a[jj];
+                        if (k!=m-2) {
+                            kk=(k+2)*n+j; p=p+f*a[kk];
+                            q=q+g*a[kk]; r=r+z*a[kk]; a[kk]=r;
+                        }
+                        a[jj]=q; a[ii]=p;
+                    }
+                    j=k+3;
+                    if (j>=m-1) j=m-1;
+                    for (i=l; i<=j; i++) {
+                        ii=i*n+k; jj=i*n+k+1;
+                        p=x*a[ii]+e*a[jj]; q=e*a[ii]+y*a[jj]; r=f*a[ii]+g*a[jj];
+                        if (k!=m-2) {
+                            kk=i*n+k+2; p=p+f*a[kk];
+                            q=q+g*a[kk];r=r+z*a[kk]; a[kk]=r;
+                        }
+                        a[jj]=q; a[ii]=p;
+                    }
+                }
+            }
+        }
+    }
+    return 1;
+}
+/* eigenvalue of matrix ----------------------------------------------------------*/
+extern int arc_mateigenvalue(const double* A,int n,double *u,double *v)
+{
+    int i=0;
+    double *_A_=arc_mat(n,n);
+
+    arc_matcpy(_A_,A,n,n);
+    hhbg(n,_A_);
+
+    i=qrtt(n,_A_,u,v,EPS,ITERS); if (i<=0) return 0;
+
+    free(_A_); return 1;
+}
+extern int arc_matdet(const double*A,int n,double*det)
+{
+    int i;
+    double* u=arc_mat(n,1),*v=arc_mat(n,1),p=1.0,q=0.0,tmp;
+
+    if (!arc_mateigenvalue(A,n,u,v)) return 0;
+
+    for (i=0;i<n;i++) {
+        tmp=p; p=u[i]*p-v[i]*q; q=v[i]*tmp+u[i]*q;
+    }
+    if (det) *det=p;
+
+    free(u);free(v);
+    return 1;
 }
 /* dummy functions for lex extentions ----------------------------------------*/
 #ifndef EXTLEX
