@@ -1016,7 +1016,7 @@ static void arc_ddcov(const int *nb,int n,const double *Ri,const double *Rj,
         }
     }
     arc_log(ARC_INFO,"R=\n");
-    arc_tracemat(5,R,nv,nv,8,6);
+    arc_tracemat(ARC_MATPRINTF,R,nv,nv,8,6);
 }
 /* precise tropspheric model -------------------------------------------------*/
 static double arc_prectrop(gtime_t time, const double *pos, int r,
@@ -1300,8 +1300,8 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
 {
     prcopt_t *opt=&rtk->opt;
     double bl,dr[3],posu[3],posr[3],didxi=0.0,didxj=0.0,*im;
-    double *tropr,*tropu,*dtdxr,*dtdxu,*Ri,*Rj,lami,lamj,fi,fj,*Hi=NULL;
-    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1;
+    double *tropr,*tropu,*dtdxr,*dtdxu,*Ri,*Rj,lami,lamj,fi,fj,*Hi=NULL,*Rd;
+    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1,detvf[MAXSAT]={1},nvf,ix[MAXSAT];
 
     arc_log(ARC_INFO, "arc_ddres   : dt=%.1f nx=%d ns=%d\n", dt,rtk->nx,ns);
 
@@ -1310,6 +1310,7 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
 
     Ri=arc_mat(ns*nf*2+2,1); Rj=arc_mat(ns*nf*2+2,1); im=arc_mat(ns,1);
     tropu=arc_mat(ns,1); tropr=arc_mat(ns,1); dtdxu=arc_mat(ns,3); dtdxr=arc_mat(ns,3);
+    Rd=arc_mat(ns*2+2,ns*2+2);
 
     /* initial satellite status informations */
     for (i=0;i<MAXSAT;i++) {
@@ -1471,16 +1472,37 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
     /* end of system loop */
 
     if (H&&nv) {
-        arc_log(ARC_INFO, "arc_ddres : H=\n"); arc_tracemat(ARC_MATPRINTF, H,rtk->nx,nv,7,4);
+        arc_log(ARC_INFO,"arc_ddres : H=\n"); arc_tracemat(ARC_MATPRINTF,H,rtk->nx,nv,7,4);
     }
     /* double-differenced measurement error covariance */
     if (R&&nv) {
         arc_ddcov(nb,b,Ri,Rj,nv,R);
     }
-    arc_log(ARC_INFO,"arc_ddres : active states index = \n");
+    /* double-difference residual detection */
+    if (rtk->opt.detection) { /* todo:need to test */
+        nvf=arc_ddres_detect(rtk,H,R,v,nv,detvf,rtk->opt.det_alpha);
+        if (nvf<nv) { /* have detect some outliers */
+            for (i=0,j=0;i<nv;i++) { /* delete outliers */
+                if (detvf[i]) { /* valid */
+                    v[j]=v[i]; ix[j]=i;
+                    for (k=0;k<rtk->nx;k++) H[j*rtk->nx+k]=H[i*rtk->nx+k];
+                    j++; /* numbers of valid dd-residuals */
+                }
+            }
+        }
+        for (i=0;i<j;i++) for (k=0;k<j;k++) Rd[i+k*j]=R[ix[i]+ix[k]*nv];
+        arc_matcpy(R,Rd,j,j); nv=j;
+    }
+    arc_log(ARC_INFO," atfer double-difference residual detection :\n");
+    arc_log(ARC_INFO,"H=\n");
+    arc_tracemat(ARC_MATPRINTF,H,rtk->nx,nv,10,4);
+    arc_log(ARC_INFO,"R=\n");
+    arc_tracemat(ARC_MATPRINTF,R,nv,nv,10,4);
+
+    arc_log(ARC_INFO,"arc_ddres : active states index= \n");
     arc_tracemati(ARC_MATPRINTF,rtk->ceres_active_x,1,rtk->nx,2,1);
 
-    free(Ri); free(Rj); free(im);
+    free(Ri); free(Rj); free(im); free(Rd);
     free(tropu); free(tropr); free(dtdxu); free(dtdxr);
     return nv;
 }

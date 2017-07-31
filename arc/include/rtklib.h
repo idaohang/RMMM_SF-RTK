@@ -804,6 +804,7 @@ typedef struct {        /* processing options type */
     int auto_ajust_opt;    /* adjust option,this step just for optimize positioning process */
 
     int detection;         /* double-difference residual detection */
+    double det_alpha;      /* double-difference residual detection parameters */
 } prcopt_t;
 
 typedef struct {        /* solution options type */

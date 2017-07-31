@@ -2,7 +2,6 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
-#include <arc.h>
 
 using namespace std;
 
