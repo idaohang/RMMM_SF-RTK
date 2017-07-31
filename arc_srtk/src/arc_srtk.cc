@@ -20,6 +20,7 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
+#include <arc.h>
 
 using namespace std;
 
@@ -101,9 +102,10 @@ static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
     return pi==0.0||pj==0.0?0.0:pi-pj;
 }
 /* snr measurement error variance model---------------------------------------*/
-static double arc_snr_varerr()
+static double arc_snr_varerr(const obsd_t *obs)
 {
-
+    static const double C=1.61E-2;
+    return C*pow(10.0,-(obs->SNR[0]*0.025));
 }
 /* single-differenced measurement error variance -----------------------------*/
 static double arc_varerr(int sat, int sys, double el, double bl, double dt, int f,
