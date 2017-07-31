@@ -38,7 +38,7 @@ using namespace std;
 #define VAR_POS_AMB SQR(2.0)        /* after ambiguity fix,the variance of position */
 
 #define GAP_RESION  120             /* gap to reset ionosphere parameters (epochs) */
-#define VAR_HOLDAMB 0.001           /* constraint to hold ambiguity (cycle^2) */
+#define VAR_HOLDAMB 0.05            /* constraint to hold ambiguity (cycle^2) */
 #define VAR_AMB_GROUP_EL SQR(0.1)   /* constraint to high elevation double-difference ambiguity */
 
 #define TTOL_MOVEB  (1.0+2*DTTOL)
@@ -1176,26 +1176,30 @@ static int arc_kalman_exct_xHP(const rtk_t *rtk,const double *Hi,double *Ho,
     return j; /* numbers of active states */
 }
 /* normalization of innovation series of kalman filter------------------------*/
-static int arc_kalman_norm_inno(const rtk_t *rtk,double *v,int nv,const double *H,
-                                const double *R)
+static int arc_kalman_norm_inno(const rtk_t *rtk,const double *v,int nv,const double *H,
+                                const double *R,double*ve)
 {
     int i,nx=rtk->nx,n,info=1;
-    double *He,*Pe,*HP,*Qe,*L=NULL,*ve;
+    double *He,*Pe,*HP,*Qe,*L=NULL;
 
     arc_log(ARC_INFO,"arc_kalman_norm_inno :\n");
 
-    He=arc_mat(nx,nv); Pe=arc_zeros(nx,nx);
+    arc_log(ARC_INFO,"v=\n"); arc_tracemat(ARC_MATPRINTF,v,nv,1,10,4);
+
+    He=arc_zeros(nx,nv); Pe=arc_zeros(nx,nx);
 
     n=arc_kalman_exct_xHP(rtk,H,He,nv,NULL,Pe);
 
     HP=arc_mat(nv,n); Qe=arc_mat(nv,nv); ve=arc_mat(nv,1);
     arc_matmul("TN",nv,n,n,1.0,He,Pe,0.0,HP);
     arc_matcpy(Qe,R,nv,nv);
-    arc_matmul("NN",nv,nv,n,1.0,HP,H,1.0,Qe);
+    arc_matmul("NN",nv,nv,n,1.0,HP,He,1.0,Qe);
 
     arc_log(ARC_INFO,"Qe=\n"); arc_tracemat(ARC_MATPRINTF,Qe,nv,nv,10,4);
 
     if (!(info=arc_matinv(Qe,nv))) {
+
+        arc_log(ARC_INFO,"Qe-inv=\n"); arc_tracemat(ARC_MATPRINTF,Qe,nv,nv,10,4);
 
         /* cholesky matrix decomposition */
         L=arc_cholesky(Qe,nv);
@@ -1203,11 +1207,11 @@ static int arc_kalman_norm_inno(const rtk_t *rtk,double *v,int nv,const double *
         arc_log(ARC_INFO,"L=\n"); arc_tracemat(ARC_MATPRINTF,L,nv,nv,10,4);
 
         /* normalization */
-        if (L) arc_matmul("NN",nv,1,nv,1.0,L,v,0.0,ve);
+        if (L&&ve) arc_matmul("NN",nv,1,nv,1.0,L,v,0.0,ve);
 
         arc_log(ARC_INFO,"ve=\n"); arc_tracemat(ARC_MATPRINTF,ve,1,nv,10,4);
     }
-    if (L) free(L); free(He); free(Pe); free(ve); free(Qe);
+    if (L) free(L); free(He); free(Pe); free(Qe);
     return info;
 }
 /* covariance matrix of normalization of innovation series of kalman filte----*/
@@ -1231,27 +1235,62 @@ static void arc_kalman_norm_Qino(const double *v,int nv,double *Qv)
 /* kalman robust check function-----------------------------------------------*/
 static double arc_robust_chk(int nv,double alpha,double rk)
 {
+    arc_log(ARC_INFO,"arc_robust_chk : \n");
+
     if (alpha<=0.0) {
-        if (rk>=chisqr[nv]) return SQRT(chisqr[nv]/rk); /* alpha=0.001 */
+        if (rk>chisqr[nv]) return SQRT(chisqr[nv]/rk); /* alpha=0.001 */
     }
     else {
-        if (rk>=arc_re_chi2(nv,alpha)) return SQRT(chisqr[nv]/rk);
+        if (rk>arc_re_chi2(nv,alpha)) return 0.95;/* robust */
     }
     return 1.0; /* todo:need to test */
 }
 /* kalman filter Phi matrix---------------------------------------------------*/
 static void arc_kalman_robust_phi(const rtk_t *rtk,const double *vn,int nv,
-                                  double *phi) /* todo:need to test */
+                                  int nx,double *phi,const double *Qv) /* todo:need to test */
 {
-    int i;
+    int i,n=nv;
     double alpha=rtk->opt.kalman_robust_alpha;
 
     arc_log(ARC_INFO,"arc_kalman_phi :\n");
 
-    for (i=0;i<nv;i++) phi[i+i*nv]=arc_robust_chk(nv,alpha,fabs(vn[i]));
+    for (i=0;i<nv;i++) phi[i+i*nv]=arc_robust_chk(n-1,alpha,fabs(Qv[i+i*nv]));
 
     arc_log(ARC_INFO,"Phi=\n");
     arc_tracemat(ARC_MATPRINTF,phi,nv,nv,10,4);
+}
+/* double-difference residual detection---------------------------------------*/
+static int arc_ddres_detect(const rtk_t *rtk,const double *H,const double *R,
+                            const double *v,int nv,int *vflag,double alpha) /* todo:need to test */
+{
+    arc_log(ARC_INFO,"arc_ddres_detect : \n");
+
+    int i,nx=rtk->nx,n,nvf=nv; /* numbers of valid of double-difference residuals */
+    double *He,*Pe,*Qv,*HP;
+
+    He=arc_mat(nx,nv); Pe=arc_mat(nx,nx);
+    Qv=arc_mat(nv,nv); HP=arc_mat(nv,n);
+
+    if (!(n=arc_kalman_exct_xHP(rtk,H,He,nv,NULL,Pe))) {
+        arc_log(ARC_WARNING,"arc_ddres_detect : double-difference residual detection failed\n");
+        free(He); free(Pe); free(Qv); free(HP);
+        return nvf;
+    }
+    arc_matcpy(Qv,R,nv,nv);
+    arc_matmul("TN",nv,n,n,1.0,He,Pe,0.0,HP);
+    arc_matmul("NN",nv,nv,n,-1.0,HP,He,1.0,Qv);
+
+    arc_log(ARC_INFO,"Qv=\n"); arc_tracemat(ARC_MATPRINTF,Qv,nv,nv,10,4);
+
+    /* detection */
+    for (i=0;i<nv;i++) vflag[i]=1;
+    for (i=0;i<nv;i++) if (fabs(v[i])/SQRT(Qv[i+i*nv])
+                           >arc_re_norm(alpha)) vflag[i]=0,nvf--; /* invalid */
+
+    arc_log(ARC_INFO,"vflag=\n");arc_tracemati(ARC_MATPRINTF,vflag,1,nv,2,0);
+
+    free(He); free(Pe); free(Qv); free(HP);
+    return nvf; /* numbers of valid of double-difference residuals */
 }
 /* double-differenced phase/code residuals -----------------------------------*/
 static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
@@ -1677,7 +1716,7 @@ static int arc_FFRatio(int namb,double ffailure,double ratio,double pf) /* todo:
     namb=MIN(namb,n-1);
 
     /* search ffratio in tables */
-    for (i=0;i<31;i++) if (tp[i*n+namb-1]>pf) break;
+    for (i=0;i<31;i++) if (tp[i*n]>pf) break;
 
     /* interpolation of pf value */
     ffratio=(tp[i*n+namb]-tp[(i-1)*n+namb])
@@ -1929,7 +1968,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     /* single to double-difference transformation matrix (D') */
     D=arc_zeros(nx,nx);
     if ((nb=arc_ddmat(rtk,D))<=0) {
-        arc_log(ARC_WARNING, "arc_resamb_LAMBDA : no valid double-difference\n");
+        arc_log(ARC_WARNING,"arc_resamb_LAMBDA : no valid double-difference\n");
         free(D);
         return 0;
     }
@@ -2057,7 +2096,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
         }
     }
     if (rtk->sol.ratio<opt->thresar[0]) {
-        arc_log(ARC_WARNING, "arc_resamb_LAMBDA : ambiguity validation "
+        arc_log(ARC_WARNING,"arc_resamb_LAMBDA : ambiguity validation "
                         "failed (nb=%d ratio=%.2f s=%.2f/%.2f)\n",nb,s[1]/s[0],s[0],s[1]);
     }
     free(D); free(y); free(Qy); free(DP); free(ix); free(DB);
@@ -2551,10 +2590,10 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 {
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
-    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*bias,dt,*D=NULL,*Qv=NULL;
+    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*bias,dt,*D=NULL,*Qv=NULL,*ve=NULL;
     int i,j,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter,nx=NP(&rtk->opt);
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
-    int nf=1;
+    int nf=1,nk=0;
 
     arc_log(ARC_INFO,"arc_diff_pr_relpos  : nx=%d nu=%d nr=%d\n",rtk->nx,nu,nr);
 
@@ -2634,9 +2673,9 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 
         /* robust kalman filter */
         if (opt->kalman_robust) {
-            D=arc_eye(nv); Qv=arc_mat(nv,nv);
-            arc_kalman_norm_inno(rtk,v,nv,H,R); arc_kalman_norm_Qino(v,nv,Qv);
-            arc_kalman_robust_phi(rtk,v,nv,D); /* todo:need to test */
+            D=arc_eye(nv); Qv=arc_mat(nv,nv); ve=arc_mat(nv,1);
+            nk=arc_kalman_norm_inno(rtk,v,nv,H,R,ve); arc_kalman_norm_Qino(ve,nv,Qv);
+            arc_kalman_robust_phi(rtk,ve,nv,nk,D,Qv); /* todo:need to test */
         }
         /* adaptive kaman filter */
         if (opt->adapt_filter) {
@@ -2670,7 +2709,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 
     /* todo:difference pseudorange positioning just for initialing for rtk-postioning */
 
-    if (D) free(D); if (Qv) free(Qv);
+    if (D) free(D); if (Qv) free(Qv); if (ve) free(ve);
     free(rs); free(dts); free(var); free(y); free(e); free(azel);
     free(xp); free(Pp);  free(v); free(H); free(R); free(bias);
     return 1;
@@ -2685,11 +2724,11 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 {
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
-    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*xa,*bias,dt,*D=NULL,*Qv=NULL;
+    double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*xa,*bias,dt,*D=NULL,*Qv=NULL,*ve=NULL;
     int i,j,f,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter;
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
     int stat=rtk->opt.mode<=PMODE_DGPS?SOLQ_DGPS:SOLQ_FLOAT;
-    int nf=1;
+    int nf=1,nk=0;
 
 #ifdef ARC_TEST
     I++;  /* just for debug */
@@ -2782,9 +2821,9 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 
             /* robust kalman filter */
             if (opt->kalman_robust) {
-                D=arc_eye(nv); Qv=arc_mat(nv,nv);
-                arc_kalman_norm_inno(rtk,v,nv,H,R); arc_kalman_norm_Qino(v,nv,Qv);
-                arc_kalman_robust_phi(rtk,v,nv,D); /* todo:need to test */
+                D=arc_eye(nv); Qv=arc_mat(nv,nv); ve=arc_mat(nv,1);
+                arc_kalman_norm_inno(rtk,v,nv,H,R,ve); arc_kalman_norm_Qino(ve,nv,Qv);
+                arc_kalman_robust_phi(rtk,ve,nv,nk,D,Qv); /* todo:need to test */
             }
             arc_matcpy(Pp,rtk->P,rtk->nx,rtk->nx);
 
@@ -2976,7 +3015,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         if (rtk->ssat[i].fix[j]==2&&stat==SOLQ_FIX) rtk->ssat[i].fix[j]=1;
         if (rtk->ssat[i].slip[j]&1) rtk->ssat[i].slipc[j]++;
     }
-    if (D) free(D); if (Qv) free(Qv);
+
+    if (D) free(D); if (Qv) free(Qv); if (ve) free(ve);
     free(rs); free(dts); free(var); free(y); free(e); free(azel);
     free(xp); free(Pp);  free(xa);  free(v); free(H); free(R); free(bias);
 
@@ -3076,7 +3116,7 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
 
     /* rover position by single point positioning */
     if (!arc_pntpos(obs,nu,nav,&rtk->opt,&rtk->sol,NULL,rtk->ssat,msg)) {
-        arc_log(ARC_WARNING, "arc_srtkpos : point pos error (%s)\n", msg);
+        arc_log(ARC_WARNING,"arc_srtkpos : point pos error (%s)\n",msg);
         if (!rtk->opt.dynamics) {
             return 0;
         }
@@ -3084,7 +3124,12 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     if (time.time!=0) rtk->tt=timediff(rtk->sol.time,time);
 
     /* single point positioning */
-    if (opt->mode==PMODE_SINGLE) {
+    if (opt->mode==PMODE_SINGLE) return 1;
+
+
+    /* difference pseudorange positioning mode */
+    if (opt->mode==PMODE_DGPS) {
+        arc_diff_pr_relpos(rtk,obs,nu,nr,nav); /* todo:may be have no effects,need to test */
         return 1;
     }
     /* suppress output of single solution */
@@ -3100,14 +3145,14 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
 
         /* estimate position/velocity of base station */
         if (!arc_pntpos(obs+nu,nr,nav,&rtk->opt,&solb,NULL,NULL,msg)) {
-            arc_log(ARC_WARNING, "arc_srtkpos : base station position error (%s)\n", msg);
+            arc_log(ARC_WARNING,"arc_srtkpos : base station position error (%s)\n",msg);
             return 0;
         }
         rtk->sol.age=(float)timediff(rtk->sol.time,solb.time);
 
         if (fabs(rtk->sol.age)>TTOL_MOVEB) {
-            arc_log(ARC_WARNING, "arc_srtkpos : time sync error "
-                    "for moving-base (age=%.1f)\n", rtk->sol.age);
+            arc_log(ARC_WARNING,"arc_srtkpos : time sync error for "
+                    "moving-base (age=%.1f)\n",rtk->sol.age);
             return 0;
         }
         for (i=0;i<6;i++) rtk->rb[i]=solb.rr[i];
@@ -3128,7 +3173,7 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     if (opt->auto_ajust_opt) arc_adjust_option(rtk); /* todo:just for debug */
 
     /* difference pseudorange positioning for initialing */
-    if (opt->init_dc) arc_diff_pr_relpos(rtk,obs,nu,nr,nav); /* todo:may be have no effects,need to test */
+    if (opt->init_dc&&!opt->dynamics) arc_diff_pr_relpos(rtk,obs,nu,nr,nav); /* todo:may be have no effects,need to test */
 
     /* relative potitioning */
     arc_relpos(rtk,obs,nu,nr,nav);

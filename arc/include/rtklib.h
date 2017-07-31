@@ -802,6 +802,8 @@ typedef struct {        /* processing options type */
     int init_pnt;          /* using standard positioning to initial rtk */
 
     int auto_ajust_opt;    /* adjust option,this step just for optimize positioning process */
+
+    int detection;         /* double-difference residual detection */
 } prcopt_t;
 
 typedef struct {        /* solution options type */

@@ -2,6 +2,7 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
+#include <arc.h>
 
 using namespace std;
 
@@ -19,7 +20,7 @@ int main()
     prcopt_t arc_opt = prcopt_default;
     solopt_t arc_solopt = solopt_default;
 
-    arc_opt.mode    = PMODE_STATIC;
+    arc_opt.mode    = PMODE_KINEMA;
     arc_opt.ionoopt = IONOOPT_OFF;
     arc_opt.tropopt = TROPOPT_SAAS;
     arc_opt.modear  = ARMODE_FIXHOLD;                   // AR mode(0:off, 1 : continuous, 2 : instantaneous, 3 : fix and hold, 4 : ppp - ar) * /
@@ -38,7 +39,7 @@ int main()
     arc_opt.nf=1;
     arc_opt.elmin=15.0*D2R;
     arc_opt.navsys=SYS_CMP;
-    arc_opt.dynamics=0;
+    arc_opt.dynamics=1;
     arc_opt.ceres=0;
     arc_opt.ceres_cholesky=0;
     arc_opt.ukf=0;
@@ -52,7 +53,11 @@ int main()
     arc_opt.exclude_bds_geo=0;
     arc_opt.amb_group=0;
     arc_opt.amb_el_group=45.0*D2R;
-    arc_opt.init_dc=1;
+    arc_opt.init_dc=0;
+    arc_opt.amb_ffailure=0.01;
+    arc_opt.amb_ffratio=0;
+    arc_opt.kalman_robust=1;
+    arc_opt.kalman_robust_alpha=0.001;
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */

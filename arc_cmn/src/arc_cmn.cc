@@ -816,11 +816,11 @@ static int arc_filter_(const double *x, const double *P, const double *H,
     arc_matcpy(xp,x,n,1);
     arc_matmul("NN",n,m,n,1.0,P,H,0.0,F);       /* Q=H'*P*H+R */
     arc_matmul("TN",m,m,n,1.0,H,F,1.0,Q);
-    if (!(info= arc_matinv(Q, m))) {
+    if (!(info=arc_matinv(Q,m))) {
         arc_matmul("NN",n,m,m,1.0,F,Q,0.0,K);   /* K=P*H*Q^-1 */
         arc_matmul("NN",n,m,m,1.0,K,D,0.0,KK);  /* robust */
         arc_matmul("NN",n,1,m,1.0,KK,v,1.0,xp); /* xp=x+K*v */
-        arc_matmul("NT",n,n,m,-1.0,KK,H,1.0,I); /* Pp=(I-K*H')*P */
+        arc_matmul("NT",n,n,m,-1.0,K,H,1.0,I);  /* Pp=(I-K*H')*P */
         arc_matmul("NN",n,n,n,1.0,I,P,0.0,Pp);
     }
     free(F); free(Q); free(K); free(I); free(KK);
@@ -4322,10 +4322,10 @@ extern double arc_re_chi2(int n,double p)
     }
     if(n==2) return -2.0*log(1.0-p);
 
-    double u = arc_re_norm(p);
-    double w = 2.0/(9.0*n);
-    double x0 = 1.0-w+u*sqrt(w);
-    x0 = n*x0*x0*x0;
+    double u=arc_re_norm(p);
+    double w=2.0/(9.0*n);
+    double x0=1.0-w+u*sqrt(w);
+    x0=n*x0*x0*x0;
 
     while(1) {
         double f;
