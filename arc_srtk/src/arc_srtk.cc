@@ -20,7 +20,6 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
-#include <arc.h>
 
 using namespace std;
 
@@ -47,6 +46,7 @@ using namespace std;
 #define EPS0_GPS    (13.5*D2R)      /* max shadow crossing angle GPS (rad) */
 #define T_POSTSHADOW 1800.0         /* post-shadow recovery time (s) */
 #define AMB_THRES   0.5             /* cycles */
+#define FACTOR_RIRJ 5.5             /* thres of ratio of reference ambiguity variance and others */
 
 /* number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated) */
 #define NF(opt)     ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf)
@@ -99,6 +99,11 @@ static double arc_sdobs(const obsd_t *obs, int i, int j, int f)
     double pi=f<NFREQ?obs[i].L[f]:obs[i].P[f-NFREQ];
     double pj=f<NFREQ?obs[j].L[f]:obs[j].P[f-NFREQ];
     return pi==0.0||pj==0.0?0.0:pi-pj;
+}
+/* snr measurement error variance model---------------------------------------*/
+static double arc_snr_varerr()
+{
+
 }
 /* single-differenced measurement error variance -----------------------------*/
 static double arc_varerr(int sat, int sys, double el, double bl, double dt, int f,
@@ -948,6 +953,9 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
         /* excluded satellite? */
         if (satexclude(obs[i].sat,svh[i],opt)) continue;
 
+        /* slip */
+        if (rtk->ssat[obs[i].sat-1].slip[0]) continue;
+
         /* satellite clock-bias */
         r+=-CLIGHT*dts[i*2];
 
@@ -1190,7 +1198,7 @@ static int arc_kalman_norm_inno(const rtk_t *rtk,const double *v,int nv,const do
 
     n=arc_kalman_exct_xHP(rtk,H,He,nv,NULL,Pe);
 
-    HP=arc_mat(nv,n); Qe=arc_mat(nv,nv); ve=arc_mat(nv,1);
+    HP=arc_mat(nv,n); Qe=arc_mat(nv,nv);
     arc_matmul("TN",nv,n,n,1.0,He,Pe,0.0,HP);
     arc_matcpy(Qe,R,nv,nv);
     arc_matmul("NN",nv,nv,n,1.0,HP,He,1.0,Qe);
@@ -1304,7 +1312,7 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
 {
     prcopt_t *opt=&rtk->opt;
     double bl,dr[3],posu[3],posr[3],didxi=0.0,didxj=0.0,*im;
-    double *tropr,*tropu,*dtdxr,*dtdxu,*Ri,*Rj,lami,lamj,fi,fj,*Hi=NULL,*Rd;
+    double *tropr,*tropu,*dtdxr,*dtdxu,*Ri,*Rj,lami,lamj,fi,fj,*Hi=NULL,*Rd,R1,R2;
     int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1,detvf[MAXSAT]={1},nvf,ix[MAXSAT];
 
     arc_log(ARC_INFO, "arc_ddres   : dt=%.1f nx=%d ns=%d\n", dt,rtk->nx,ns);
@@ -1342,6 +1350,9 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
             sysi=rtk->ssat[sat[j]-1].sys;
             if (!arc_test_sys(sysi,m)) continue;
 
+            /* slip */
+            if (rtk->ssat[sat[j]-1].slip[0]) continue;
+
             /* y[i] may be zero,so must check out,this step is importance */
             if (y) if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
 
@@ -1363,6 +1374,16 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
             /* if detect slip,no use this observations */
             if (rtk->ssat[sat[i]-1].slip[0]||rtk->ssat[sat[j]-1].slip[0]) continue;
 
+            /* check factor of ratio of reference ambiguity variance and others */
+            R1=arc_varerr(sat[j],sysj,azel[1+iu[j]*2],bl,dt,f,opt);
+            R2=arc_varerr(sat[i],sysi,azel[1+iu[i]*2],bl,dt,f,opt);
+            if ((R1/R2)>=FACTOR_RIRJ) {
+                arc_log(ARC_WARNING,"check factor of ratio of reference "
+                        "ambiguity variance and others is failed,sat=%3d-%3d,factor=%8.4lf \n",
+                        sat[i],sat[j],R1/R2);
+                continue;
+            }
+            /* check carrier wave lengths */
             ff=f%nf;
             lami=nav->lam[sat[i]-1][ff];
             lamj=nav->lam[sat[j]-1][ff];
@@ -1425,7 +1446,7 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
                     rtk->ssat[sat[i]-1].rejc[f]++;
                     rtk->ssat[sat[j]-1].rejc[f]++;
                 }
-                arc_log(ARC_WARNING, "arc_ddres : outlier rejected (sat=%3d-%3d %s%d v=%.3f)\n",
+                arc_log(ARC_WARNING,"arc_ddres : outlier rejected (sat=%3d-%3d %s%d v=%.3f)\n",
                         sat[i],sat[j],f<nf?"L":"P",f%nf+1,v[nv]);
                 continue;
             }
@@ -1509,7 +1530,6 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
             arc_tracemat(ARC_MATPRINTF,R,nv,nv,10,4);
         }
     }
-
     arc_log(ARC_INFO,"arc_ddres : active states index= \n");
     arc_tracemati(ARC_MATPRINTF,rtk->ceres_active_x,1,rtk->nx,2,1);
 

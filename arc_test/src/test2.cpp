@@ -56,7 +56,7 @@ int main()
     arc_opt.init_dc=0;
     arc_opt.amb_ffailure=0.01;
     arc_opt.amb_ffratio=0;
-    arc_opt.kalman_robust=0;
+    arc_opt.kalman_robust=1;
     arc_opt.kalman_robust_alpha=0.001;
 
     arc_opt.detection=1;

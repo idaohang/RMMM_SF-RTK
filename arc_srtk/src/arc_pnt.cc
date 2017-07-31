@@ -17,6 +17,7 @@
  *  Created on: July 07, 2017
  *********************************************************************************/
 
+#include <arc.h>
 #include "arc.h"
 
 /* constants -----------------------------------------------------------------*/
@@ -33,12 +34,15 @@
 #define REL_HUMI    0.7         /* relative humidity for saastamoinen model */
 
 /* pseudorange measurement error variance ------------------------------------*/
-static double arc_varerr(const prcopt_t *opt, double el, int sys)
+static double arc_varerr(const prcopt_t *opt, double el, int sys,int sat)
 {
-    double fact,varr;
+    double fact,varr,geo_factor;
+
+    if (sys==SYS_CMP&&arc_is_bds_geo(sat)) geo_factor=EFACT_GEO;
+
     fact=sys==SYS_GLO?EFACT_GLO:(sys==SYS_SBS?EFACT_SBS:EFACT_GPS);
     varr=SQR(opt->err[0])*(SQR(opt->err[1])+SQR(opt->err[2])/sin(el));
-    return SQR(fact)*varr;
+    return SQR(fact)*geo_factor*varr;
 }
 /* get tgd parameter (m) -----------------------------------------------------*/
 static double arc_gettgd(int sat, const nav_t *nav)
@@ -63,8 +67,8 @@ static double arc_prange(const obsd_t *obs, const nav_t *nav, const double *azel
     /* test snr mask */
     if (iter>0) {
         if (testsnr(0,i,azel[1],obs->SNR[i]*0.25,&opt->snrmask)) {
-            arc_log(ARC_WARNING, "snr mask: %s sat=%2d el=%.1f snr=%.1f\n",
-                    time_str(obs->time, 0), obs->sat, azel[1] * R2D, obs->SNR[i] * 0.25);
+            arc_log(ARC_WARNING,"snr mask: %s sat=%2d el=%.1f snr=%.1f\n",
+                    time_str(obs->time,0),obs->sat,azel[1]*R2D,obs->SNR[i]*0.25);
             return 0.0;
         }
     }
@@ -102,8 +106,6 @@ extern int arc_ionocorr(gtime_t time, const nav_t *nav, int sat, const double *p
     int sys,i;
     double ion_paras[8]={0.0};
     sys=satsys(sat,NULL);
-
-    /* todo:here need to test and fix some debugs*/
 
     if      (sys==SYS_GPS) {
         for (i=0;i<8;i++) ion_paras[i]=nav->ion_gps[i];
@@ -217,7 +219,7 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
     double r,dion,dtrp,vmeas,vion,vtrp,rr[3],pos[3],dtr,e[3],P,lam_L1;
     int i,j,nv=0,sys,mask[4]={0};
 
-    arc_log(ARC_INFO, "resprng : n=%d\n", n);
+    arc_log(ARC_INFO,"resprng : n=%d\n",n);
     
     for (i=0;i<3;i++) rr[i]=x[i]; dtr=x[3];
     
@@ -231,13 +233,13 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
         /* reject duplicated observation data */
         if (i<n-1&&i<MAXOBS-1&&obs[i].sat==obs[i+1].sat) {
             arc_log(ARC_WARNING, "duplicated observation data %s sat=%2d\n",
-                    time_str(obs[i].time, 3), obs[i].sat);
+                    time_str(obs[i].time, 3),obs[i].sat);
             i++;
             continue;
         }
         /* geometric distance/azimuth/elevation angle */
-        if ((r= arc_geodist(rs + i * 6, rr, e))<=0.0||
-                arc_satazel(pos, e, azel + i * 2)<opt->elmin) continue;
+        if ((r=arc_geodist(rs+i*6,rr,e))<=0.0||
+                arc_satazel(pos,e,azel+i*2)<opt->elmin) continue;
         
         /* psudorange with code bias correction */
         if ((P=arc_prange(obs+i,nav,azel+i*2,iter,opt,&vmeas))==0.0) continue;
@@ -246,16 +248,16 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
         if (satexclude(obs[i].sat,svh[i],opt)) continue;
         
         /* ionospheric corrections */
-        if (!arc_ionocorr(obs[i].time, nav, obs[i].sat, pos, azel + i * 2,
-                          iter > 0 ? opt->ionoopt : IONOOPT_BRDC, &dion, &vion)) continue;
+        if (!arc_ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
+                          iter>0?opt->ionoopt:IONOOPT_BRDC,&dion,&vion)) continue;
         
         /* GPS-L1 -> L1/B1 */
         if ((lam_L1=nav->lam[obs[i].sat-1][0])>0.0) {
             dion*=SQR(lam_L1/lam_carr[0]);
         }
         /* tropospheric corrections */
-        if (!arc_tropcorr(obs[i].time, nav, pos, azel + i * 2,
-                          iter > 0 ? opt->tropopt : TROPOPT_SAAS, &dtrp, &vtrp)) {
+        if (!arc_tropcorr(obs[i].time,nav,pos,azel+i*2,
+                          iter>0?opt->tropopt:TROPOPT_SAAS,&dtrp,&vtrp)) {
             continue;
         }
         /* pseudorange residual */
@@ -273,10 +275,10 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
         vsat[i]=1; resp[i]=v[nv]; (*ns)++;
         
         /* error variance */
-        var[nv++]=arc_varerr(opt,azel[1+i*2],sys)+vare[i]+vmeas+vion+vtrp;
+        var[nv++]=arc_varerr(opt,azel[1+i*2],sys,obs[i].sat)+vare[i]+vmeas+vion+vtrp;
 
-        arc_log(ARC_INFO, "sat=%2d azel=%5.1f %4.1f res=%7.3f sig=%5.3f\n", obs[i].sat,
-                azel[i * 2] * R2D, azel[1 + i * 2] * R2D, resp[i], sqrt(var[nv - 1]));
+        arc_log(ARC_INFO,"sat=%2d azel=%5.1f %4.1f res=%7.3f sig=%5.3f\n",obs[i].sat,
+                azel[i*2]*R2D,azel[1+i*2]*R2D,resp[i],sqrt(var[nv-1]));
     }
     /* constraint to avoid rank-deficient */
     for (i=0;i<4;i++) {
