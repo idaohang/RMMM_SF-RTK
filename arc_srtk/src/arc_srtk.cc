@@ -1266,10 +1266,13 @@ static int arc_ddres_detect(const rtk_t *rtk,const double *H,const double *R,
     arc_log(ARC_INFO,"arc_ddres_detect : \n");
 
     int i,nx=rtk->nx,n,nvf=nv; /* numbers of valid of double-difference residuals */
-    double *He,*Pe,*Qv,*HP;
+    double *He,*Pe,*Qv,*HP,r1;
+    static double const r2=arc_re_norm(1.0-alpha/2.0);
+
+    if (H==NULL||R==NULL||v==NULL) return nvf;
 
     He=arc_mat(nx,nv); Pe=arc_mat(nx,nx);
-    Qv=arc_mat(nv,nv); HP=arc_mat(nv,n);
+    Qv=arc_mat(nv,nv); HP=arc_mat(nv,nx);
 
     if (!(n=arc_kalman_exct_xHP(rtk,H,He,nv,NULL,Pe))) {
         arc_log(ARC_WARNING,"arc_ddres_detect : double-difference residual detection failed\n");
@@ -1278,16 +1281,17 @@ static int arc_ddres_detect(const rtk_t *rtk,const double *H,const double *R,
     }
     arc_matcpy(Qv,R,nv,nv);
     arc_matmul("TN",nv,n,n,1.0,He,Pe,0.0,HP);
-    arc_matmul("NN",nv,nv,n,-1.0,HP,He,1.0,Qv);
+    arc_matmul("NN",nv,nv,n,1.0,HP,He,1.0,Qv);
 
     arc_log(ARC_INFO,"Qv=\n"); arc_tracemat(ARC_MATPRINTF,Qv,nv,nv,10,4);
 
     /* detection */
     for (i=0;i<nv;i++) vflag[i]=1;
-    for (i=0;i<nv;i++) if (fabs(v[i])/SQRT(Qv[i+i*nv])
-                           >arc_re_norm(alpha)) vflag[i]=0,nvf--; /* invalid */
-
-    arc_log(ARC_INFO,"vflag=\n");arc_tracemati(ARC_MATPRINTF,vflag,1,nv,2,0);
+    for (i=0;i<nv;i++) {
+        r1=fabs(v[i])/SQRT(Qv[i+i*nv]);
+        if (r1>=r2) vflag[i]=0,nvf--; /* invalid */
+    }
+    arc_log(ARC_INFO,"vflag=\n"); arc_tracemati(ARC_MATPRINTF,vflag,1,nv,2,1);
 
     free(He); free(Pe); free(Qv); free(HP);
     return nvf; /* numbers of valid of double-difference residuals */
@@ -1355,6 +1359,9 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
 
             /* todo:may be have bugs on running,need to fix in future */
             if (y) if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
+
+            /* if detect slip,no use this observations */
+            if (rtk->ssat[sat[i]-1].slip[0]||rtk->ssat[sat[j]-1].slip[0]) continue;
 
             ff=f%nf;
             lami=nav->lam[sat[i]-1][ff];
@@ -1480,7 +1487,9 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
     }
     /* double-difference residual detection */
     if (rtk->opt.detection) { /* todo:need to test */
+
         nvf=arc_ddres_detect(rtk,H,R,v,nv,detvf,rtk->opt.det_alpha);
+
         if (nvf<nv) { /* have detect some outliers */
             for (i=0,j=0;i<nv;i++) { /* delete outliers */
                 if (detvf[i]) { /* valid */
@@ -1489,15 +1498,17 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
                     j++; /* numbers of valid dd-residuals */
                 }
             }
+            for (i=0;i<j;i++) for (k=0;k<j;k++) Rd[i+k*j]=R[ix[i]+ix[k]*nv];
+            arc_matcpy(R,Rd,j,j); nv=j;
+
+            arc_log(ARC_INFO," atfer double-difference residual detection :\n");
+            arc_log(ARC_INFO,"H=\n");
+            arc_tracemat(ARC_MATPRINTF,H,rtk->nx,nv,10,4);
+
+            arc_log(ARC_INFO,"R=\n");
+            arc_tracemat(ARC_MATPRINTF,R,nv,nv,10,4);
         }
-        for (i=0;i<j;i++) for (k=0;k<j;k++) Rd[i+k*j]=R[ix[i]+ix[k]*nv];
-        arc_matcpy(R,Rd,j,j); nv=j;
     }
-    arc_log(ARC_INFO," atfer double-difference residual detection :\n");
-    arc_log(ARC_INFO,"H=\n");
-    arc_tracemat(ARC_MATPRINTF,H,rtk->nx,nv,10,4);
-    arc_log(ARC_INFO,"R=\n");
-    arc_tracemat(ARC_MATPRINTF,R,nv,nv,10,4);
 
     arc_log(ARC_INFO,"arc_ddres : active states index= \n");
     arc_tracemati(ARC_MATPRINTF,rtk->ceres_active_x,1,rtk->nx,2,1);

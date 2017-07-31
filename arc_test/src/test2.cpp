@@ -2,6 +2,7 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
+#include <arc.h>
 
 using namespace std;
 
@@ -55,8 +56,12 @@ int main()
     arc_opt.init_dc=0;
     arc_opt.amb_ffailure=0.01;
     arc_opt.amb_ffratio=0;
-    arc_opt.kalman_robust=1;
+    arc_opt.kalman_robust=0;
     arc_opt.kalman_robust_alpha=0.001;
+
+    arc_opt.detection=1;
+    arc_opt.det_alpha=0.01;
+
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
