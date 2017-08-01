@@ -100,7 +100,7 @@ const prcopt_t prcopt_default={ /* defaults processing options */
     {30.0,0.03,0.3},            /* std[] */
     {1E-1,1E-2,1E-2,1E-1,1E-2,0.5}, /* prn[] */
     5E-12,                      /* sclkstab */
-    {1.2,0.9999,0.25,0.1,0.05}, /* thresar */
+    {1.4,0.9999,0.25,0.1,0.05}, /* thresar */
     0.0,0.0,0.05,               /* elmaskar,almaskhold,thresslip */
     30.0,15.0,30.0,             /* maxtdif,maxinno,maxgdop */
     {0},{0},{0},                /* baseline,ru,rb */

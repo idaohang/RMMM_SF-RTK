@@ -177,12 +177,6 @@ extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
     /* LD factorization */
     if (!(info=LD(n,Q,L,D))) {
 
-        arc_log(ARC_INFO,"L=\n");
-        arc_tracemat(ARC_MATPRINTF,L,n,n,10,4);
-
-        arc_log(ARC_INFO,"D=\n");
-        arc_tracemat(ARC_MATPRINTF,D,1,n,10,4);
-        
         /* lambda reduction */
         reduction(n,L,D,Z);
         arc_matmul("TN",n,1,n,1.0,Z,a,0.0,z); /* z=Z'*a */
@@ -195,6 +189,12 @@ extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
     }
     if (Do) arc_matcpy(Do,D,n,1);
     if (Lo) arc_matcpy(Lo,L,n,n);
+
+    arc_log(ARC_INFO,"L=\n");
+    arc_tracemat(ARC_MATPRINTF,Lo,n,n,10,4);
+
+    arc_log(ARC_INFO,"D=\n");
+    arc_tracemat(ARC_MATPRINTF,Do,1,n,10,4);
 
     free(L); free(D); free(Z); free(z); free(E);
     return info;

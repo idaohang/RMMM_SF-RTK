@@ -39,7 +39,7 @@ int main()
     arc_opt.nf=1;
     arc_opt.elmin=15.0*D2R;
     arc_opt.navsys=SYS_CMP;
-    arc_opt.dynamics=1;
+    arc_opt.dynamics=0;
     arc_opt.ceres=0;
     arc_opt.ceres_cholesky=0;
     arc_opt.ukf=0;
@@ -47,24 +47,22 @@ int main()
     arc_opt.ukf_beta=4;
     arc_opt.ukf_ZCount=0;
     arc_opt.reset_amb_all=0;
-    arc_opt.amb_part=0;
+    arc_opt.amb_part_var=0;
     arc_opt.amb_iter=3;
     arc_opt.amb_ref_thres=0.99;
     arc_opt.exclude_bds_geo=0;
     arc_opt.amb_group=0;
     arc_opt.amb_el_group=45.0*D2R;
-    arc_opt.init_dc=0;
+    arc_opt.init_dc=1;
     arc_opt.amb_ffailure=0.01;
     arc_opt.amb_ffratio=0;
-    arc_opt.kalman_robust=1;
+    arc_opt.kalman_robust=0;
     arc_opt.kalman_robust_alpha=0.001;
-
-    arc_opt.detection=1;
-    arc_opt.det_alpha=0.001;
 
     arc_opt.snr_det=0;
     arc_opt.snr_alpha=0.01;
 
+    arc_opt.amb_part_D=0;
 
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
@@ -90,10 +88,11 @@ int main()
     strcpy(infile[2], navf);  
     strcpy(infile[3],navf1);
     strcpy(infile[4],navf2);
-    //strcpy(infile[5],navf3);;
+    //strcpy(infile[5],navf3);
 
     arc_tracelevel(ARC_INFO);
     arc_tracebuf(0);
+    arc_set_glog_tofile(0);
 
     arc_postpos(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,5,outfile,rover,base);
 

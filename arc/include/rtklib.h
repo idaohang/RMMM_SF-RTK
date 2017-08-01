@@ -786,7 +786,8 @@ typedef struct {        /* processing options type */
                            /* kalman robust filter alpha */
 
     int reset_amb_all;     /* every epoch all ambiguity reset */
-    int amb_part;          /* resolve part ambiguity */
+    int amb_part_var;      /* resolve part ambiguity */
+    int amb_part_D;        /* resolve part ambiguity */
     int amb_iter;          /* number of lambda  iteration */
     double amb_ref_thres;  /* confidence function threshold of round reference ambiguity */
     int amb_group;         /* single-difference ambiguity grouping for fix */
@@ -794,6 +795,8 @@ typedef struct {        /* processing options type */
     double amb_ffailure;   /* ambiguity fix failure rate */
     int amb_ffratio;       /* FF-ratio test for fixing ambiguity */
     int amb_adop;          /* ADOP */
+    int amb_delay;
+    int amb_ref_delayc;    /* counts of reset single-difference reference ambiguity */
 
     int exclude_bds_geo;   /* exclude bds geo satellite (1:exclude,0:included) */
 
@@ -802,9 +805,6 @@ typedef struct {        /* processing options type */
     int init_pnt;          /* using standard positioning to initial rtk */
 
     int auto_ajust_opt;    /* adjust option,this step just for optimize positioning process */
-
-    int detection;         /* double-difference residual detection */
-    double det_alpha;      /* double-difference residual detection parameters */
 
     int snr_det;           /* dectect snr */
     double snr_alpha;      /* dectect paramertes */
@@ -961,6 +961,7 @@ typedef struct {         /* RTK control/result type */
     int nx,na;           /* number of float states/fixed states */
     double tt;           /* time difference between current and previous (s) */
     double *x, *P;       /* float states and their covariance */
+    double *xd,*Pd;      /* double-difference pseudorange relative positioning */
     double *xa,*Pa;      /* fixed states and their covariance */
     double *x_pf;        /* particle filter states */
     int nfix;            /* number of continuous fixes of ambiguity */
@@ -982,6 +983,11 @@ typedef struct {         /* RTK control/result type */
     int amb_nb;             /* numbers of being fixed double-differnce ambiguity */
     int amb_group_refsat[NUMOFSYS][2];
                             /* two group double-diffrence ambiguity reference satellite */
+    int ref_delay[NUMOFSYS];/* change reference satellite delay epochs */
+    int fixc;               /* fix counter */
+
+    int refsat[NUMOFSYS];   /* reference satellite of double-difference residuals */
+    int prefsat[NUMOFSYS];  /* precious reference satellite of double-difference residuals */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */
