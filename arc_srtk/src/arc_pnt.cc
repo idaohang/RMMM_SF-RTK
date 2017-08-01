@@ -17,7 +17,6 @@
  *  Created on: July 07, 2017
  *********************************************************************************/
 
-#include <arc.h>
 #include "arc.h"
 
 /* constants -----------------------------------------------------------------*/
@@ -561,7 +560,7 @@ extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
     
     if (n<=0) {strcpy(msg,"no observation data"); return 0;}
 
-    arc_log(ARC_INFO, "pntpos  : tobs=%s n=%d\n", time_str(obs[0].time, 3), n);
+    arc_log(ARC_INFO,"pntpos  : tobs=%s n=%d\n",time_str(obs[0].time, 3), n);
     
     sol->time=obs[0].time; if (msg) msg[0]='\0';
     

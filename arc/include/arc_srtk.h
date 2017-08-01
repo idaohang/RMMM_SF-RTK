@@ -144,6 +144,7 @@ extern int  getcodepri(int sys, unsigned char code, const char *opt);
 extern unsigned int getbitu(const unsigned char *buff, int pos, int len);
 extern int execcmd(const char *cmd);
 extern void setbitu(unsigned char *buff, int pos, int len, unsigned int data);
+extern double arc_snr_varerr(const double dbhz,int f,int nf,const prcopt_t* opt);
 
 /* matrix and vector functions -----------------------------------------------*/
 extern double *arc_mat(int n, int m);

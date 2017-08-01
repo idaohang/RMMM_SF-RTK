@@ -701,15 +701,15 @@ extern void arc_satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav
         
         /* satellite clock bias by broadcast ephemeris */
         if (!ephclk(time[i],teph,obs[i].sat,nav,&dt)) {
-            arc_log(ARC_WARNING, "no broadcast clock %s sat=%2d\n", time_str(time[i], 3), obs[i].sat);
+            arc_log(ARC_WARNING,"no broadcast clock %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
             continue;
         }
         time[i]=timeadd(time[i],-dt);
         
         /* satellite position and clock at transmission time */
-        if (!arc_satpos(time[i], teph, obs[i].sat, ephopt, nav, rs + i * 6, dts + i * 2, var + i,
-                        svh + i)) {
-            arc_log(ARC_INFO, "no ephemeris %s sat=%2d\n", time_str(time[i], 3), obs[i].sat);
+        if (!arc_satpos(time[i],teph,obs[i].sat,ephopt,nav,rs+i*6,dts+i*2,var+i,
+                        svh+i)) {
+            arc_log(ARC_INFO,"no ephemeris %s sat=%2d\n",time_str(time[i],3),obs[i].sat);
             continue;
         }
         /* if no precise clock available, use broadcast clock instead */
@@ -721,8 +721,8 @@ extern void arc_satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav
     }
     for (i=0;i<n&&i<2*MAXOBS;i++) {
         arc_log(ARC_INFO, "%s sat=%2d rs=%13.3f %13.3f %13.3f dts=%12.3f var=%7.3f svh=%02X\n",
-                time_str(time[i], 6), obs[i].sat, rs[i * 6], rs[1 + i * 6], rs[2 + i * 6],
-                dts[i * 2] * 1E9, var[i], svh[i]);
+                time_str(time[i],6),obs[i].sat,rs[i*6],rs[1+i*6],rs[2+i*6],
+                dts[i*2]*1E9,var[i],svh[i]);
     }
 }
 /* satellite antenna phase center offset ---------------------------------------

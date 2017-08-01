@@ -755,7 +755,7 @@ static int arc_execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
     /* read obs and nav data */
     arc_log(ARC_INFO, "read obs and nav data \n");
     if (!arc_readobsnav(ts,te,ti,infile,index,n,&popt_,&obss,&navs,stas)) return 0;
-    
+
     /* read dcb parameters */
     arc_log(ARC_INFO, "read dcb parameters : %s \n", fopt->dcb);
     if (*fopt->dcb) {

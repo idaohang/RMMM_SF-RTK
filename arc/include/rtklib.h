@@ -805,6 +805,9 @@ typedef struct {        /* processing options type */
 
     int detection;         /* double-difference residual detection */
     double det_alpha;      /* double-difference residual detection parameters */
+
+    int snr_det;           /* dectect snr */
+    double snr_alpha;      /* dectect paramertes */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -895,6 +898,7 @@ typedef struct {        /* satellite status type */
     unsigned int outc [NFREQ]; /* obs outage counter of phase */
     unsigned int slipc[NFREQ]; /* cycle-slip counter */
     unsigned int rejc [NFREQ]; /* reject counter */
+    unsigned int snrc [NFREQ];
     double  gf;         /* geometry-free phase L1-L2 (m) */
     double  gf2;        /* geometry-free phase L1-L5 (m) */
     double  mw;         /* MW-LC (m) */
@@ -902,7 +906,8 @@ typedef struct {        /* satellite status type */
     gtime_t pt[2][NFREQ]; /* previous carrier-phase time */
     double  ph[2][NFREQ]; /* previous carrier-phase observable (cycle) */
     double  r0[2];
-    unsigned group;       /* id of its double-difference ambiguity group(1:first group,2:second group) */
+    unsigned group;        /* id of its double-difference ambiguity group(1:first group,2:second group) */
+    unsigned char snrf[NFREQ];
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */

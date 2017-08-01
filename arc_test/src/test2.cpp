@@ -60,7 +60,10 @@ int main()
     arc_opt.kalman_robust_alpha=0.001;
 
     arc_opt.detection=1;
-    arc_opt.det_alpha=0.01;
+    arc_opt.det_alpha=0.001;
+
+    arc_opt.snr_det=0;
+    arc_opt.snr_alpha=0.01;
 
 
     arc_solopt.posf = SOLF_XYZ;
