@@ -30,7 +30,6 @@
 #include "arc_MovementModel.h"
 #include <iomanip>
 #include <fstream>
-#include <arc.h>
 
 using namespace std;
 /* constants/global variables ------------------------------------------------*/

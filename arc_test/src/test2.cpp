@@ -64,6 +64,9 @@ int main()
 
     arc_opt.amb_part_D=0;
 
+    arc_opt.amb_delay=1;
+    arc_opt.amb_ref_delayc=5;
+
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
     arc_solopt.sstat = 0;                               // solution statistics level (0:off,1:states,2:residuals) */

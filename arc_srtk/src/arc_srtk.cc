@@ -462,7 +462,7 @@ static int arc_selsat(const obsd_t *obs,double *azel,int nu,int nr,
     return k;
 }
 /* change reference satellites------------------------------------------------*/
-static int arc_chg_refsat(rtk_t *rtk,const nav_t *nav,int nv)
+static int arc_chg_refsat(rtk_t *rtk,const nav_t *nav,int nv) /* todo:need to test */
 {
     arc_log(ARC_INFO,"arc_chg_refsat :\n");
 
@@ -481,7 +481,7 @@ static int arc_chg_refsat(rtk_t *rtk,const nav_t *nav,int nv)
     return chg;
 }
 /*----------------------------------------------------------------------------*/
-static void arc_chk_prefsat(rtk_t *rtk,const nav_t *nav,int nv,int *vf)
+static void arc_chk_prefsat(rtk_t *rtk,const nav_t *nav,int nv,int *vf) /* todo:need to test */
 {
     int i,j,sat,sys;
 
@@ -490,10 +490,11 @@ static void arc_chk_prefsat(rtk_t *rtk,const nav_t *nav,int nv,int *vf)
     for (i=0;i<NUMOFSYS;i++) vf[i]=-1;
 
     for (i=0;i<NUMOFSYS;i++) { /* i=0:gps/qzs/sbs,1:glo,2:gal,3:bds */
-        for (j=0;j<nv;j++)
+        for (j=0;j<nv;j++) {
             sat=rtk->sat[2*j+1]; sys=rtk->ssat[sat-1].sys;
             if (!arc_test_sys(sys,i)) continue; vf[i]=0;
-            if (sat==rtk->prefsat[i]) vf[i]=1;
+            if (sat==rtk->prefsat[i]) {vf[i]=1;break;}
+        }
     }
 }
 /* temporal update of position/velocity/acceleration -------------------------*/
@@ -1576,6 +1577,8 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
     if (arc_chg_refsat(rtk,nav,nv)) { /* todo:need to test */
 
         int vf[NUMOFSYS]; arc_chk_prefsat(rtk,nav,nv,vf);
+
+        arc_log(ARC_INFO,"vf=\n"); arc_tracemati(ARC_MATPRINTF,vf,1,NUMOFSYS,2,1);
 
         for (i=0;i<NUMOFSYS;i++) {
             if (vf[i]==-1) continue;
