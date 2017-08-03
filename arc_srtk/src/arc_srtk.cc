@@ -1827,33 +1827,6 @@ extern double arc_amb_bs_success(const double *D,int n)
     int i; for (i=0;i<n;i++) s*=(2.0*arc_norm_distri(0.5/SQRT(D[i]))-1.0);
     return s;
 }
-/* FF-ratio------------------------------------------------------------------*/
-extern double arc_invRatio(int namb,double ffailure,double pf) /* todo:need to test */
-{
-    int i,j,n;
-    const double *tp=NULL;
-    double ffratio=0.0;
-
-    arc_log(ARC_INFO,"arc_invRatio :\n");
-
-    if (pf<=ffailure) return 1.0; if (namb<=0) return 0;
-
-    if      (ffailure==0.01 ) n=41,tp=&ff_ratio_table1[0];
-    else if (ffailure==0.001) n=64,tp=&ff_ratio_table2[0];
-
-    namb=MIN(namb,n-1);
-
-    /* search ffratio in tables */
-    for (i=0;i<31;i++) if (tp[i*n]>pf) break;
-
-    /* interpolation of pf value */
-    ffratio=(tp[i*n+namb]-tp[(i-1)*n+namb])
-            /(tp[i*n]-tp[(i-1)*n])*(pf-tp[(i-1)*n])+tp[(i-1)*n+namb];
-
-    arc_log(ARC_INFO,"FF-ratio=%8.4lf \n",ffratio);
-
-    return ffratio;
-}
 /* restore single-differenced ambiguity --------------------------------------*/
 static void arc_restamb(rtk_t *rtk, const double *bias, double *xa,int group)
 {
@@ -2088,109 +2061,9 @@ static int arc_amb_fix_sol(rtk_t *rtk,int nb,int na,double *Qb,const double *y,
         /* covariance of fixed solution (Qa=Qa-Qab*Qb^-1*Qab') */
         arc_matmul("NN",na,nb,nb,1.0,Qab,Qb,0.0,QQ);
         arc_matmul("NT",na,na,nb,-1.0,QQ,Qab,1.0,rtk->Pa);
-
-        arc_log(ARC_INFO,"arc_amb_fix_sol : xa=\n");
-        arc_tracemat(ARC_MATPRINTF,rtk->xa,na,1,13,4);
-        arc_log(ARC_INFO,"arc_amb_fix_sol : Pa=\n");
-        arc_tracemat(ARC_MATPRINTF,rtk->Pa,na,na,13,4);
     }
     free(db); free(QQ);
     return info;
-}
-/* partial resolve integer ambiguity------------------------------------------*/
-static int arc_resamb_PART(rtk_t *rtk,double *bias,double *xa)
-{
-    prcopt_t *opt=&rtk->opt;
-    int i,j,ny,nb,nx=rtk->nx,na=rtk->na;
-    double *D,*y,*Qy,*b,*Qb,*Qab,s[2];
-
-    arc_log(ARC_INFO,"arc_resamb_PART: nx=%d\n",nx);
-
-    rtk->sol.ratio=0.0;
-    rtk->sol.dop.dops[4]=-999.0;
-    rtk->sol.p_ar=(float)-999.0;
-
-    if (rtk->opt.mode<=PMODE_DGPS||rtk->opt.modear==ARMODE_OFF||
-        rtk->opt.thresar[0]<1.0) {
-        return 0;
-    }
-    /* single to double-difference transformation matrix (D') */
-    D=arc_zeros(nx,nx);
-    if ((nb=arc_ddmat(rtk,D))<=0) {
-        arc_log(ARC_WARNING,"arc_resamb_PART: no valid double-difference\n");
-        free(D);
-        return 0;
-    }
-    ny=na+nb;
-    y=arc_mat(ny,1); Qy=arc_mat(ny,ny);
-    b=arc_mat(nb,2); Qb=arc_mat(nb,nb);Qab=arc_mat(na,nb);
-
-    /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
-    arc_amb_s2d(rtk,D,y,Qy,ny,nx);
-
-    arc_log(ARC_INFO,"arc_resamb_PART : Qy=\n");
-    arc_tracemat(ARC_MATPRINTF,Qy,na+nb,na+nb,10,4);
-
-    /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
-    arc_amb_Qb(nb,na,ny,Qb,Qab,Qy);
-
-    arc_log(ARC_INFO, "arc_resamb_PART : N(0)=");
-    arc_tracemat(ARC_MATPRINTF,y+na,1,nb,10,3);
-
-    arc_log(ARC_INFO,"arc_resamb_PART : Qb=\n");
-    arc_tracemat(ARC_MATPRINTF,Qb,nb,nb,10,3);
-
-    arc_log(ARC_INFO,"arc_resamb_PART : Qab=\n");
-    arc_tracemat(ARC_MATPRINTF,Qab,na,nb,10,4);
-
-    /* updates adop */
-    if (rtk->opt.amb_adop) {
-        rtk->sol.dop.dops[4]=arc_amb_adop(Qb,y+na,nb);
-        arc_log(ARC_INFO,"ADOP=%8.4lf \n",rtk->sol.dop.dops[4]); /* todo:need to test */
-    }
-    /* partail resolve integer ambiguity */
-    if (!arc_par_lambda(y+na,Qb,nb,2,b,s,opt->amb_partps)) {
-
-        arc_log(ARC_INFO,"N(1)=");
-        arc_tracemat(ARC_MATPRINTF,b,1,nb,10,3);
-        arc_log(ARC_INFO,"N(2)=");
-        arc_tracemat(ARC_MATPRINTF,b+nb,1,nb,10,3);
-
-        rtk->sol.ratio=s[0]>0?(float)(s[1]/s[0]):0.0f;
-        if (rtk->sol.ratio>999.9) rtk->sol.ratio=999.9f;
-
-        if (s[0]<=0.0||s[1]/s[0]>=(opt->thresar[0])) {
-            /* transform float to fixed solution (xa=xa-Qab*Qb\(b0-b)) */
-            for (i=0;i<na;i++) {
-                rtk->xa[i]=rtk->x[i];
-                for (j=0;j<na;j++) rtk->Pa[i+j*na]=rtk->P[i+j*nx];
-            }
-            for (i=0;i<nb;i++) {
-                bias[i]=b[i];   /* fixed solutions */
-                y[na+i]-=b[i]; /* b0-b */
-            }
-            if (!arc_amb_fix_sol(rtk,nb,na,Qb,y,Qab)) {
-                arc_log(ARC_INFO,"arc_resamb_PART: validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
-                        nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
-                /* restore single-differenced ambiguity */
-                arc_restamb(rtk,bias,xa,0);
-            }
-            else nb=0;
-        }
-        else {
-            nb=0;
-            arc_log(ARC_INFO,"arc_resamb_PART: validation failed (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
-                    nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
-        }
-    }
-    else nb=0;
-
-    if (nb==0) {
-        arc_log(ARC_WARNING,"arc_resamb_PART: partial resolve integer ambiguity failed\n");
-    }
-    free(D); free(y); free(Qy);
-    free(b); free(Qb); free(Qab);
-    return nb; /* number of ambiguities */
 }
 /* boostraping resolve integer ambiguity--------------------------------------*/
 static int arc_resamb_BOOST(rtk_t *rtk,double *bias,double *xa)
@@ -2213,8 +2086,7 @@ static int arc_resamb_BOOST(rtk_t *rtk,double *bias,double *xa)
     D=arc_zeros(nx,nx);
     if ((nb=arc_ddmat(rtk,D))<=0) {
         arc_log(ARC_WARNING,"arc_resamb_BOOST: no valid double-difference\n");
-        free(D);
-        return 0;
+        free(D); return 0;
     }
     ny=na+nb;
     y=arc_mat(ny,1); Qy=arc_mat(ny,ny);
@@ -2249,8 +2121,7 @@ static int arc_resamb_BOOST(rtk_t *rtk,double *bias,double *xa)
                 for (j=0;j<na;j++) rtk->Pa[i+j*na]=rtk->P[i+j*nx];
             }
             for (i=0;i<nb;i++) {
-                bias[i]=b[i];
-                y[na+i]-=b[i];
+                bias[i]=b[i]; y[na+i]-=b[i];
             }
             /* fix solutions */
             if (!arc_amb_fix_sol(rtk,nb,na,Qb,y,Qab)) {
@@ -2268,94 +2139,6 @@ static int arc_resamb_BOOST(rtk_t *rtk,double *bias,double *xa)
 
     if (nb==0) {
         arc_log(ARC_INFO,"arc_resamb_BOOST: fix ambiguity failed,Ps=%.3lf\n",Ps);
-    }
-    free(D); free(y); free(Qy);
-    free(b); free(Qb); free(Qab);
-    return nb; /* number of ambiguities */
-}
-/* ff-ratio resolve integer ambiguity-----------------------------------------*/
-static int arc_resamb_FFRATIO(rtk_t *rtk,double *bias,double *xa)
-{
-    prcopt_t *opt=&rtk->opt;
-    int i,j,ny,nb,nx=rtk->nx,na=rtk->na;
-    double *D,*y,*Qy,*b,*Qb,*Qab,s[2]={999.0};
-
-    arc_log(ARC_INFO,"arc_resamb_FFRATIO : nx=%d\n",nx);
-
-    rtk->sol.ratio=0.0;
-    rtk->sol.dop.dops[4]=-999.0;
-    rtk->sol.p_ar=(float)-999.0;
-
-    if (rtk->opt.mode<=PMODE_DGPS||rtk->opt.modear==ARMODE_OFF||
-        rtk->opt.thresar[0]<1.0) {
-        return 0;
-    }
-    /* single to double-difference transformation matrix (D') */
-    D=arc_zeros(nx,nx);
-    if ((nb=arc_ddmat(rtk,D))<=0) {
-        arc_log(ARC_WARNING,"arc_resamb_FFRATIO : no valid double-difference\n");
-        free(D);
-        return 0;
-    }
-    ny=na+nb;
-    y=arc_mat(ny,1); Qy=arc_mat(ny,ny);
-    b=arc_mat(nb,2); Qb=arc_mat(nb,nb);Qab=arc_mat(na,nb);
-
-    /* transform single to double-differenced phase-bias (y=D'*x, Qy=D'*P*D) */
-    arc_amb_s2d(rtk,D,y,Qy,ny,nx);
-
-    arc_log(ARC_INFO,"arc_resamb_FFRATIO : Qy=\n");
-    arc_tracemat(ARC_MATPRINTF,Qy,na+nb,na+nb,10,4);
-
-    /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
-    arc_amb_Qb(nb,na,ny,Qb,Qab,Qy);
-
-    arc_log(ARC_INFO, "arc_resamb_FFRATIO : N(0)=");
-    arc_tracemat(ARC_MATPRINTF,y+na,1,nb,10,3);
-
-    arc_log(ARC_INFO,"arc_resamb_FFRATIO : Qb= \n");
-    arc_tracemat(ARC_MATPRINTF,Qb,nb,nb,10,3);
-
-    arc_log(ARC_INFO,"arc_resamb_FFRATIO : Qab=\n");
-    arc_tracemat(ARC_MATPRINTF,Qab,na,nb,10,4);
-
-    /* updates adop */
-    if (rtk->opt.amb_adop) {
-        rtk->sol.dop.dops[4]=arc_amb_adop(Qb,y+na,nb);
-        arc_log(ARC_INFO,"ADOP=%8.4lf \n",rtk->sol.dop.dops[4]); /* todo:need to test */
-    }
-    /* FF-ratio test */
-    if (!arc_FFratio(y+na,Qb,nb,2,b,opt->amb_ffailure,s)) { /* todo:need to test */
-
-        arc_log(ARC_INFO, "N(1)=");
-        arc_tracemat(ARC_MATPRINTF,b,1,nb,10,3);
-        arc_log(ARC_INFO, "N(2)=");
-        arc_tracemat(ARC_MATPRINTF,b+nb,1,nb,10,3);
-
-        rtk->sol.ratio=s[0]>0?(float)(s[1]/s[0]):0.0f;
-        if (rtk->sol.ratio>999.9) rtk->sol.ratio=999.9f;
-
-        /* transform float to fixed solution (xa=xa-Qab*Qb\(b0-b)) */
-        for (i=0;i<na;i++) {
-            rtk->xa[i]=rtk->x[i];
-            for (j=0;j<na;j++) rtk->Pa[i+j*na]=rtk->P[i+j*nx];
-        }
-        for (i=0;i<nb;i++) {
-            bias[i]=b[i];
-            y[na+i]-=b[i];
-        }
-        if (!arc_amb_fix_sol(rtk,nb,na,Qb,y,Qab)) {
-            arc_log(ARC_INFO,"arc_resamb_FFRATIO : validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
-                    nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
-            /* restore single-differenced ambiguity */
-            arc_restamb(rtk,bias,xa,0);
-        }
-        else nb=0;
-    }
-    else {
-        nb=0;
-        arc_log(ARC_INFO,"arc_resamb_FFRATIO : validation failed (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
-                nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
     }
     free(D); free(y); free(Qy);
     free(b); free(Qb); free(Qab);
@@ -2379,7 +2162,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     /* single to double-difference transformation matrix (D') */
     D=arc_zeros(nx,nx);
     if ((nb=arc_ddmat(rtk,D))<=0) {
-        arc_log(ARC_WARNING,"arc_resamb_LAMBDA : no valid double-difference\n");
+        arc_log(ARC_WARNING,"arc_resamb_LAMBDA: no valid double-difference\n");
         free(D);
         return 0;
     }
@@ -2396,7 +2179,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     arc_matmul("TN",ny,nx,nx,1.0,D,rtk->P,0.0,DP);
     arc_matmul("NN",ny,ny,nx,1.0,DP,D,0.0,Qy);
 
-    arc_log(ARC_INFO,"arc_resamb_LAMBDA : Qy=\n");
+    arc_log(ARC_INFO,"arc_resamb_LAMBDA: Qy=\n");
     arc_tracemat(ARC_MATPRINTF,Qy,na+nb,na+nb,10,4);
 
     /* phase-bias covariance (Qb) and real-parameters to bias covariance (Qab) */
@@ -2404,14 +2187,8 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
     for (i=0;i<na;i++) for (j=0;j<nb;j++) Qab[i+j*na]=Qy[   i+(na+j)*ny];
     for (i=0;i<na+nb;i++) ix[i]=1;
 
-    arc_log(ARC_INFO,"arc_resamb_LAMBDA : N(0)=\n");
+    arc_log(ARC_INFO,"arc_resamb_LAMBDA: N(0)=\n");
     arc_tracemat(ARC_MATPRINTF,y+na,1,nb,10,3);
-
-    arc_log(ARC_INFO,"arc_resamb_LAMBDA : Qb=\n");
-    arc_tracemat(ARC_MATPRINTF,Qb,nb,nb,10,3);
-
-    arc_log(ARC_INFO,"arc_resamb_LAMBDA : Qab=\n");
-    arc_tracemat(ARC_MATPRINTF,Qab,na,nb,10,4);
 
     /* updates adop */
     if (rtk->opt.amb_adop) {
@@ -2466,7 +2243,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                     arc_matmul("NN",na,nb,nb,1.0,Qab,Qb,0.0,QQ);
                     arc_matmul("NT",na,na,nb,-1.0,QQ,Qab,1.0,rtk->Pa);
 
-                    arc_log(ARC_INFO,"arc_resamb_LAMBDA : validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
+                    arc_log(ARC_INFO,"arc_resamb_LAMBDA: validation ok (nb=%d ratio=%.2f s=%.2f/%.2f)\n",
                             nb,s[0]==0.0?0.0:s[1]/s[0],s[0],s[1]);
 
                     /* restore single-differenced ambiguity */
@@ -2484,20 +2261,10 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                     /* find max ambiguity variance position */
                     k=arc_resamb_reduceQ(_na_,_nb_,na,nb,Qy,Qb,Qab,ix);
 
-                    arc_log(ARC_INFO,"arc_resamb_LAMBDA : reduce Qb=\n");
-                    arc_tracemat(ARC_MATPRINTF,Qb,nb-1,nb-1,10,4);
-                    arc_log(ARC_INFO,"arc_resamb_LAMBDA : reduce Qab=\n");
-                    arc_tracemat(ARC_MATPRINTF,Qab,na,nb-1,10,4);
-
-                    arc_tracemati(ARC_MATPRINTF,ix,1,ny,2,1);
-
                     /* reset the value of ambiguity list */
                     for (i=0,j=0;i<_nb_;i++) {
                         if (!ix[i+na]) continue; yb[na+(j++)]=y[na+i];
                     }
-                    arc_log(ARC_INFO,"arc_resamb_LAMBDA : reduce y=\n");
-                    arc_tracemat(ARC_MATPRINTF,yb+na,1,j,10,4);
-
                     /* reset the numbers of ambiguitys */
                     nb=j;
                     /* reset fix flag */
@@ -2513,15 +2280,10 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                     /* find max ambiguity variance position */
                     k=arc_reduceD(ix,_nb_,_na_,DD,Qy,Qb,Qab);
 
-                    arc_tracemati(ARC_MATPRINTF,ix,1,ny,2,1);
-
                     /* reset the value of ambiguity list */
                     for (i=0,j=0;i<_nb_;i++) {
                         if (!ix[i+na]) continue; yb[na+(j++)]=y[na+i];
                     }
-                    arc_log(ARC_INFO,"arc_resamb_LAMBDA : reduce y=\n");
-                    arc_tracemat(ARC_MATPRINTF,yb+na,1,j,10,4);
-
                     /* reset the numbers of ambiguitys */
                     nb=j;
                     /* reset fix flag */
@@ -2536,16 +2298,24 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
                         "failed (nb=%d ratio=%.2f s=%.2f/%.2f)\n",nb,s[1]/s[0],s[0],s[1]);
     }
     if (DD) free(DD);
-
     free(D); free(y); free(Qy); free(DP); free(ix); free(DB);
     free(b); free(db); free(Qb); free(Qab); free(QQ); free(yb);
-
     return nb; /* number of ambiguities */
 }
 /* resolve integer ambiguity by group-LAMBDA ---------------------------------*/
 static int arc_resamb_group_LAMBDA(rtk_t *rtk,double *bias,double *xa)
 {
     return arc_resamb_LAMBDA(rtk,bias,xa);
+}
+/* partial resolve integer ambiguity------------------------------------------*/
+static int arc_resamb_PART(rtk_t *rtk,double *bias,double *xa)
+{
+    return arc_resamb_LAMBDA(rtk,bias,xa);
+}
+/* ff-ratio resolve integer ambiguity-----------------------------------------*/
+static int arc_resamb_FFRATIO(rtk_t *rtk,double *bias,double *xa)
+{
+    return arc_resamb_LAMBDA(rtk,bias,xa);;
 }
 /* validation of solution ----------------------------------------------------*/
 static int arc_valpos(rtk_t *rtk,const double *v,const double *R,const int *vflg,
@@ -3144,10 +2914,6 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     return 1;
 }
 /* relative positioning ------------------------------------------------------*/
-#ifdef ARC_TEST
-ofstream fp_ukf_ceres("/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/arc_ukf_pos");
-static int I=0;
-#endif
 static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                       const nav_t *nav)
 {
@@ -3158,10 +2924,6 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
     int stat=rtk->opt.mode<=PMODE_DGPS?SOLQ_DGPS:SOLQ_FLOAT;
     int nf=1,nk=0;
-
-#ifdef ARC_TEST
-    I++;  /* just for debug */
-#endif
 
     arc_log(ARC_INFO,"arc_relpos  : nx=%d nu=%d nr=%d\n",rtk->nx,nu,nr);
 
@@ -3344,10 +3106,6 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                     arc_log(ARC_WARNING, "arc_relpos : ukf updates failed \n");
                     stat=SOLQ_NONE;
                 }
-#ifdef ARC_TEST
-                fp_ukf_ceres<<setiosflags(ios::fixed)<<setprecision(10)
-                            <<xp[0]<<"   "<<xp[1]<<"   "<<xp[2]<<"   "<<std::endl;
-#endif
                 /* free ukf problem */
                 arc_ukf_filter_delete(ukf);  /* todo:why always free?may be have some better way to do */
             }
@@ -3386,7 +3144,6 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     if (stat!=SOLQ_NONE&&(opt->amb_group?arc_resamb_group_LAMBDA(rtk,bias,xa)
                                         :opt->amb_fix_mode==AMBFIX_LAMBDA?arc_resamb_LAMBDA(rtk,bias,xa)
                                         :opt->amb_fix_mode==AMBFIX_BOOTS?arc_resamb_BOOST(rtk,bias,xa)
-                                        :opt->amb_fix_mode==AMBFIX_FFRATIO?arc_resamb_FFRATIO(rtk,bias,xa)
                                         :opt->amb_fix_mode==AMBFIX_PART?arc_resamb_PART(rtk,bias,xa)
                                         :arc_resamb_LAMBDA(rtk,bias,xa))) {
 
@@ -3401,8 +3158,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
 
                 /* hold integer ambiguity */
                 if (++rtk->nfix>=rtk->opt.minfix&&
-                        (rtk->opt.modear==ARMODE_FIXHOLD||
-                        rtk->opt.modear==ARMODE_INST)) {
+                        (rtk->opt.modear==ARMODE_FIXHOLD
+                         ||rtk->opt.modear==ARMODE_INST)) {
                     arc_holdamb(rtk,xa,opt->amb_group);
                 }
                 stat=SOLQ_FIX;

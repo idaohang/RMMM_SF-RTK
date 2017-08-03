@@ -803,7 +803,6 @@ typedef struct {        /* processing options type */
     int amb_group;         /* single-difference ambiguity grouping for fix */
     double amb_el_group;   /* single-difference ambiguity divided into two groups */
 
-    double amb_ffailure;   /* ambiguity fix failure rate */
     double amb_boostps;    /* boostraping success rate */
     double amb_partps;     /* partial fix success rate */
 

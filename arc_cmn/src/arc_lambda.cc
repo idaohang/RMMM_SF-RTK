@@ -306,62 +306,6 @@ extern int arc_bootstrap(int n,const double *a, const double *Q, double *F,doubl
 
     return info;
 }
-extern int arc_FFratio(const double *a,const double *Qa,int n,int m,double *F,
-                       double p0,double *s)
-{
-    double *L,*D,*Z,*an,*zhat,*ZT,*af,*asq,mu,ps=1.0;
-    int i,j,info=1;
-
-    if (n<=0) return -1;
-
-    L=arc_zeros(n,n); D=arc_mat(n,1); Z=arc_eye(n);
-    an=arc_mat(n,1); zhat=arc_mat(n,1); ZT=arc_mat(n,n);
-
-    /* LD factorization */
-    if ((info=LD(n,Qa,L,D))) {
-        free(L); free(D); free(Z);
-        return info;
-    }
-    /* lambda reduction */
-    reduction(n,L,D,Z);
-
-    ps=arc_amb_bs_success(D,n);
-
-    for (i=0;i<n;i++) an[i]=a[i]-int(a[i]);
-    arc_matmul("TN",n,1,n,1.0,Z,an,0.0,zhat); /* z=Z'*a */
-
-    af=arc_mat(n,m); asq=arc_mat(m,1);
-    search(n,m,L,D,zhat,af,asq);
-
-    if (s) arc_matcpy(s,asq,2,1);
-
-    if ((1.0-ps)>p0) {
-        mu=arc_invRatio(n,p0,1.0-ps);
-    }
-    else {
-        mu=1.0;
-    }
-    if (asq[0]/asq[1]>mu) info=1;
-    else {
-        for (i=0;i<n;i++) {
-            for (j=0;j<n;j++) ZT[i+j*n]=Z[j+i*n];
-        }
-        if (!(info=arc_matinv(ZT,n))) {
-            for (i=0;i<m;i++) {
-                arc_matmul("NN",n,1,n,1.0,ZT,af+i*m,0.0,F+i*m);
-                for (j=0;j<n;j++) F[i*m+j]+=int(a[i]);
-            }
-        }
-        info=0;
-    }
-
-    arc_tracemat(ARC_MATPRINTF,F,n,m,10,4);
-
-    free(L); free(D); free(Z);
-    free(an); free(zhat); free(ZT);
-    free(af); free(asq);
-    return info;
-}
 static int arc_exctract_vec(const double *D,int n,int k,double *Do)
 {
     int i,j; for (i=k-1,j=0;i<n;i++) Do[j++]=D[i]; return j;
@@ -384,7 +328,7 @@ static int arc_parsearch(const double *zhat,const double *Qzhat,const double *Z,
                          double *F,double*s)
 {
     int i,j,k=1,info,l;
-    double ps,*DD,*zz,*LL,*Qzpar,*QP,*zpar,*ss;
+    double ps,*DD,*zz,*LL,*Qzpar,*QP,*zpar;
 
     ps=arc_amb_bs_success(D,n);
 
@@ -396,11 +340,8 @@ static int arc_parsearch(const double *zhat,const double *Qzhat,const double *Z,
         j=arc_exctract_vec(D,n,k,DD);
         ps=arc_amb_bs_success(DD,j);
     }
-
     Qzpar=arc_mat(n,n);
-    QP=arc_mat(n,n);
-
-    zpar=arc_mat(m,n); ss=arc_mat(1,m);
+    QP=arc_mat(n,n); zpar=arc_mat(m,n);
 
     if (ps>P0) {
 
@@ -412,7 +353,7 @@ static int arc_parsearch(const double *zhat,const double *Qzhat,const double *Z,
             arc_exctract_vec(D,n,k,DD);
             arc_exctract_mat(L,n,n,k,k,n,n,LL);
 
-            search(n-k+1,m,LL,DD,zz,zpar,ss);
+            search(n-k+1,m,LL,DD,zz,zpar,s);
 
             arc_exctract_mat(Qzhat,n,n,k,k,n,n,Qzpar);
             arc_exctract_mat(Qzhat,n,n,k-1,k,1,n,LL);
@@ -427,12 +368,11 @@ static int arc_parsearch(const double *zhat,const double *Qzhat,const double *Z,
                     }
                     arc_matmul("NN",k-1,1,n-k+1,1.0,QP,DD,0.0,LL);
                     for (j=0;j<k-1;j++) {
-                        F[i*n+j]=zhat[j]-LL[j];
+                        F[i*n+j]=ROUND(zhat[j]-LL[j]);
                     }
                     for (j=k-1,l=0;j<n;j++) {
                         F[i*n+j]=zpar[i*(n-k+1)+l++];
                     }
-                    arc_matcpy(s,ss,m,1);
                 }
             }
         }
@@ -440,19 +380,20 @@ static int arc_parsearch(const double *zhat,const double *Qzhat,const double *Z,
 
     free(DD); free(LL); free(zz);
     free(Qzpar); free(QP);
-    free(zpar); free(ss);
+    free(zpar);
 
     return info;
 }
 extern int arc_par_lambda(const double *a,const double *Qa,int n,int m,double *F,
                           double *s,double p0)
 {
-    double *L,*D,*Z,*an,*zhat,*Qz,*Q;
-    int i,j,info;
+    double *L,*D,*Z,*zhat,*Qz,*Q,*E;
+    int info;
 
     if (n<=0) return -1;
 
     L=arc_zeros(n,n); D=arc_mat(n,1); Z=arc_eye(n);
+    E=arc_mat(m,n);
 
     /* LD factorization */
     if ((info=LD(n,Qa,L,D))) {
@@ -462,19 +403,19 @@ extern int arc_par_lambda(const double *a,const double *Qa,int n,int m,double *F
     /* lambda reduction */
     reduction(n,L,D,Z);
 
-    an=arc_mat(n,1); zhat=arc_mat(n,1);
+    zhat=arc_mat(n,1);
     Qz=arc_mat(n,n); Q=arc_mat(n,n);
 
-    for (i=0;i<n;i++) an[i]=a[i]-int(a[i]);
-
-    arc_matmul("TN",n,1,n,1.0,Z,an,0.0,zhat); /* z=Z'*a */
+    arc_matmul("TN",n,1,n,1.0,Z,a,0.0,zhat); /* z=Z'*a */
     arc_matmul("TN",n,n,n,1.0,Z,Qa,0.0,Q);
     arc_matmul("NN",n,n,n,1.0,Q,Z,0.0,Qz); /* Qz=Z'*Qa*Z */
 
-    arc_parsearch(zhat,Qz,Z,L,D,p0,n,m,F,s);
+    arc_parsearch(zhat,Qz,Z,L,D,p0,n,m,E,s);
+
+    info=arc_solve("T",Z,E,n,m,F); /* F=Z'\E */
 
     free(L); free(D); free(Z);
-    free(an); free(zhat); free(Qz); free(Q);
+    free(zhat); free(Qz); free(Q); free(E);
 
     return info;
 }

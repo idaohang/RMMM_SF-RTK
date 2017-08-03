@@ -1,8 +1,5 @@
 
 #include "arc.h"
-#include <iomanip>
-#include <fstream>
-#include <arc.h>
 
 using namespace std;
 
@@ -20,15 +17,16 @@ int main()
     prcopt_t arc_opt = prcopt_default;
     solopt_t arc_solopt = solopt_default;
 
-    arc_opt.mode    = PMODE_KINEMA;
-    arc_opt.ionoopt = IONOOPT_OFF;
-    arc_opt.tropopt = TROPOPT_SAAS;
-    arc_opt.modear  = ARMODE_FIXHOLD;                   // AR mode(0:off, 1 : continuous, 2 : instantaneous, 3 : fix and hold, 4 : ppp - ar) * /
+    arc_opt.mode    = PMODE_KINEMA;                       // -静态模式或者动态模式
+    arc_opt.ionoopt = IONOOPT_OFF;                        // -电离层延迟改正
+    arc_opt.tropopt = TROPOPT_SAAS;                       // -对流层延迟改正
+    arc_opt.modear  = ARMODE_FIXHOLD;                     // -模糊度固定后的处理策略：
+                                                          //  ARMODE_FIXHOLD表示继承上一个历元的权值信息，ARMODE_INST表示每一个历元都初始化模糊度
     arc_opt.bdsmodear = 1;
-    arc_opt.elmaskar = 10.0* D2R;                       // elevation mask of AR for rising satellite (deg)
-    arc_opt.elmaskhold = 20.0* D2R;                     // elevation mask to hold ambiguity (deg)
+    arc_opt.elmaskar = 10.0* D2R;
+    arc_opt.elmaskhold = 20.0* D2R;
     arc_opt.niter = 1;
-    arc_opt.refpos = 0;                                 // 0:pos in prcopt
+    arc_opt.refpos = 0;
     // (0:pos in prcopt,  1:average of single pos,
     //  2:read from file, 3:rinex header, 4:rtcm pos)
     arc_opt.rb[0] = -2405143.8990;
@@ -39,41 +37,40 @@ int main()
     arc_opt.nf=1;
     arc_opt.elmin=15.0*D2R;
     arc_opt.navsys=SYS_CMP;
-    arc_opt.dynamics=0;
-    arc_opt.ceres=0;
+    arc_opt.dynamics=0;                                   // 1表示用动力学方程，0表示不使用动力学方程
+    arc_opt.ceres=0;                                      // 线性优化开关
     arc_opt.ceres_cholesky=0;
-    arc_opt.ukf=0;
+    arc_opt.ukf=0;                                        // ukf非线性滤波开关
     arc_opt.ukf_alpha=1E-4;
     arc_opt.ukf_beta=4;
     arc_opt.ukf_ZCount=0;
-    arc_opt.reset_amb_all=0;
-    arc_opt.amb_part_var=0;
-    arc_opt.amb_iter=3;
-    arc_opt.amb_ref_thres=0.99;
-    arc_opt.exclude_bds_geo=0;
-    arc_opt.amb_group=0;
+    arc_opt.reset_amb_all=0;                              // 1表示每一个历元重置所有模糊度
+    arc_opt.amb_part_var=0;                               // 根据模糊度的误差值，进行部分模糊度固定
+    arc_opt.amb_iter=3;                                   // 部分模糊度的迭代次数
+    arc_opt.amb_ref_thres=0.99;                           // 参考模糊度取整的判断条件
+    arc_opt.exclude_bds_geo=0;                            // 是否去除GEO卫星
+    arc_opt.amb_group=0;                                  // 分组模糊度固定开关，效果不好，已经删除该函数
     arc_opt.amb_el_group=45.0*D2R;
-    arc_opt.init_dc=1;
+    arc_opt.init_dc=1;                                    // 用伪距差分定位对每一个历元初始化
 
-    arc_opt.amb_ffailure=0.01;
-    arc_opt.amb_fix_mode=AMBFIX_PART;
-    arc_opt.amb_boostps=0.99;
-    arc_opt.amb_partps=0.95;
+    arc_opt.amb_fix_mode=AMBFIX_LAMBDA;                   // 模糊度固定策略
+    arc_opt.amb_boostps=0.99;                             // boostrap模糊度固定时的成功率限值
+    arc_opt.amb_partps=0.95;                              // 基于成功率的部分模糊度固定的参数
 
-    arc_opt.kalman_robust=0;
+    arc_opt.kalman_robust=0;                              // 抗野值卡儿曼滤波开关
     arc_opt.kalman_robust_alpha=0.001;
 
-    arc_opt.snr_det=0;
+    arc_opt.snr_det=0;                                    // 信噪比异常值探测
     arc_opt.snr_alpha=0.01;
 
-    arc_opt.amb_part_D=0;
+    arc_opt.amb_part_D=0;                                 // 基于LDL分解的部分模糊度固定
 
-    arc_opt.amb_delay=1;
+    arc_opt.amb_delay=1;                                  // 变换参考卫星时的延迟历元
     arc_opt.amb_ref_delayc=5;
 
     arc_solopt.posf = SOLF_XYZ;
-    arc_solopt.outopt = 1;                              // output processing options (0:no,1:yes) */
-    arc_solopt.sstat = 0;                               // solution statistics level (0:off,1:states,2:residuals) */
+    arc_solopt.outopt = 1;
+    arc_solopt.sstat = 0;
     arc_solopt.trace = 1;
 
     filopt_t arc_fopt = fileopt_default;
@@ -95,7 +92,6 @@ int main()
     strcpy(infile[2], navf);  
     strcpy(infile[3],navf1);
     strcpy(infile[4],navf2);
-    //strcpy(infile[5],navf3);
 
     arc_tracelevel(ARC_INFO);
     arc_tracebuf(0);

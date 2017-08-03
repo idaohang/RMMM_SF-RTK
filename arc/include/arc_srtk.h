@@ -309,10 +309,10 @@ extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
 extern int lambda_reduction(int n, const double *Q, double *Z);
 extern int lambda_search(int n, int m, const double *a, const double *Q,
                          double *F, double *s);
-extern int arc_FFratio(const double *a,const double *Qa,int n,int m,double *F,
-                       double p0,double *s);
+
 extern int arc_par_lambda(const double *a,const double *Qa,int n,int m,double *F,
                           double *s,double p0);
+
 extern int arc_bootstrap(int n,const double *a, const double *Q, double *F,double *Ps);
 extern double arc_invRatio(int namb,double ffailure,double pf);
 extern double arc_amb_bs_success(const double *D,int n);
