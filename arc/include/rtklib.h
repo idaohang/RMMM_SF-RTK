@@ -347,6 +347,11 @@ extern "C" {
 #define PMODE_PPP_STATIC 7              /* positioning mode: PPP-static */
 #define PMODE_PPP_FIXED 8               /* positioning mode: PPP-fixed */
 
+#define AMBFIX_LAMBDA  1                /* ambiguity fix: lambda */
+#define AMBFIX_BOOTS   2                /* ambiguity fix: boostraping */
+#define AMBFIX_FFRATIO 3                /* ambiguity fix: FF-ratio test */
+#define AMBFIX_PART    4                /* ambiguity fix: partial fixing */
+
 #define SOLF_LLH    0                   /* solution format: lat/lon/height */
 #define SOLF_XYZ    1                   /* solution format: x/y/z-ecef */
 #define SOLF_ENU    2                   /* solution format: e/n/u-baseline */
@@ -786,14 +791,22 @@ typedef struct {        /* processing options type */
                            /* kalman robust filter alpha */
 
     int reset_amb_all;     /* every epoch all ambiguity reset */
+
+    int amb_fix_mode;      /* ambiguity fix mode */
+
+    /* lambda */
     int amb_part_var;      /* resolve part ambiguity */
     int amb_part_D;        /* resolve part ambiguity */
     int amb_iter;          /* number of lambda  iteration */
+
     double amb_ref_thres;  /* confidence function threshold of round reference ambiguity */
     int amb_group;         /* single-difference ambiguity grouping for fix */
     double amb_el_group;   /* single-difference ambiguity divided into two groups */
+
     double amb_ffailure;   /* ambiguity fix failure rate */
-    int amb_ffratio;       /* FF-ratio test for fixing ambiguity */
+    double amb_boostps;    /* boostraping success rate */
+    double amb_partps;     /* partial fix success rate */
+
     int amb_adop;          /* ADOP */
     int amb_delay;
     int amb_ref_delayc;    /* counts of reset single-difference reference ambiguity */

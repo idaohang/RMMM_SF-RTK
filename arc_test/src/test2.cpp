@@ -54,8 +54,12 @@ int main()
     arc_opt.amb_group=0;
     arc_opt.amb_el_group=45.0*D2R;
     arc_opt.init_dc=1;
+
     arc_opt.amb_ffailure=0.01;
-    arc_opt.amb_ffratio=0;
+    arc_opt.amb_fix_mode=AMBFIX_PART;
+    arc_opt.amb_boostps=0.99;
+    arc_opt.amb_partps=0.95;
+
     arc_opt.kalman_robust=0;
     arc_opt.kalman_robust_alpha=0.001;
 
