@@ -911,15 +911,13 @@ typedef struct {        /* satellite status type */
     unsigned int slipc[NFREQ]; /* cycle-slip counter */
     unsigned int rejc [NFREQ]; /* reject counter */
     unsigned int snrc [NFREQ];
-    double  gf;         /* geometry-free phase L1-L2 (m) */
-    double  gf2;        /* geometry-free phase L1-L5 (m) */
-    double  mw;         /* MW-LC (m) */
-    double  phw;        /* phase windup (cycle) */
-    gtime_t pt[2][NFREQ]; /* previous carrier-phase time */
-    double  ph[2][NFREQ]; /* previous carrier-phase observable (cycle) */
+    double  phw;               /* phase windup (cycle) */
+    gtime_t pt[2][NFREQ];      /* previous carrier-phase time */
+    double  ph[2][NFREQ];      /* previous carrier-phase observable (cycle) */
     double  r0[2];
-    unsigned group;        /* id of its double-difference ambiguity group(1:first group,2:second group) */
+    unsigned group;            /* id of its double-difference ambiguity group(1:first group,2:second group) */
     unsigned char snrf[NFREQ];
+    int large_resc[NFREQ];     /* larger double-difference residuals counter */
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */

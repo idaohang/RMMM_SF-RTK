@@ -1,4 +1,5 @@
 
+#include <arc.h>
 #include "arc.h"
 
 using namespace std;
@@ -29,15 +30,20 @@ int main()
     arc_opt.refpos = 0;
     // (0:pos in prcopt,  1:average of single pos,
     //  2:read from file, 3:rinex header, 4:rtcm pos)
-    arc_opt.rb[0] = -2405143.8990;
-    arc_opt.rb[1] = 5385195.2549;
-    arc_opt.rb[2] = 2420032.5440;
+    //arc_opt.rb[0] = -2405143.8990;
+    //arc_opt.rb[1] = 5385195.2549;
+    //arc_opt.rb[2] = 2420032.5440;
+
+    arc_opt.rb[0] = -2392060.4126;
+    arc_opt.rb[1] = 5383990.1051;
+    arc_opt.rb[2] = 2435512.0331;
+
     arc_opt.refpos=0;
 
     arc_opt.nf=1;
     arc_opt.elmin=15.0*D2R;
-    arc_opt.navsys=SYS_CMP;
-    arc_opt.dynamics=0;                                   // 1表示用动力学方程，0表示不使用动力学方程
+    arc_opt.navsys=SYS_GPS;
+    arc_opt.dynamics=1;                                   // 1表示用动力学方程，0表示不使用动力学方程
     arc_opt.ceres=0;                                      // 线性优化开关
     arc_opt.ceres_cholesky=0;
     arc_opt.ukf=0;                                        // ukf非线性滤波开关
@@ -68,6 +74,7 @@ int main()
     arc_opt.amb_delay=1;                                  // 变换参考卫星时的延迟历元
     arc_opt.amb_ref_delayc=5;
 
+
     arc_solopt.posf = SOLF_XYZ;
     arc_solopt.outopt = 1;
     arc_solopt.sstat = 0;
@@ -75,11 +82,15 @@ int main()
 
     filopt_t arc_fopt = fileopt_default;
 
-    const char *roverobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hklt/hklt1910.17o";
-    const char *baseobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17o";
-    const char *navf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hklt/hklt1910.17n";
-    const char *navf1 = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17n";
-    const char *navf2="/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17f";
+    //const char *roverobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hklt/hklt1910.17o";
+    //const char *baseobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17o";
+    //const char *navf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hklt/hklt1910.17n";
+    //const char *navf1 = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17n";
+    //const char *navf2="/home/sujinglan/arc_rtk/arc_test/data/gps_bds/hkcors/hkkt/hkkt1910.17f";
+
+    const char *roverobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/CLP10160.16o";
+    const char *baseobsf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/JZD10160.16o";
+    const char *navf = "/home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/brdm0160.16p";
 
     for (int i = 0; i < NUMINFILE; i++) {
         if (!(infile[i] = (char *)malloc(1024))) {
@@ -90,14 +101,14 @@ int main()
     strcpy(infile[0], roverobsf);
     strcpy(infile[1], baseobsf);
     strcpy(infile[2], navf);  
-    strcpy(infile[3],navf1);
-    strcpy(infile[4],navf2);
+    //strcpy(infile[3],navf1);
+    //strcpy(infile[4],navf2);
 
     arc_tracelevel(ARC_INFO);
     arc_tracebuf(0);
     arc_set_glog_tofile(0);
 
-    arc_postpos(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,5,outfile,rover,base);
+    arc_postpos(ts,te,ti,tu,&arc_opt,&arc_solopt,&arc_fopt,infile,3,outfile,rover,base);
 
     return 0;
 }

@@ -44,7 +44,6 @@ int main()
     arc_opt.ukf_beta=4;
     arc_opt.ukf_ZCount=0;
     arc_opt.reset_amb_all=0;
-    arc_opt.amb_part=0;
     arc_opt.amb_iter=3;
     arc_opt.amb_ref_thres=0.99;
     arc_opt.exclude_bds_geo=0;

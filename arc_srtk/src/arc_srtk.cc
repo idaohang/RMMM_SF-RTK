@@ -49,6 +49,9 @@ using namespace std;
 #define AMB_THRES   0.5             /* cycles */
 #define FACTOR_RIRJ 5.0             /* thres of ratio of reference ambiguity variance and others */
 #define MINSNR      30.0            /* min snr of satellite */
+#define MAXLARGERESC 10             /* max of large double-differecen residuals */
+#define REVARFACTOR  1.1            /* reset the large double-difference residuals variance */
+#define MAXLOCKC     200            /* max count of can set it is reference satellite */
 
 /* number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated) */
 #define NF(opt)     ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf)
@@ -900,15 +903,15 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
     for (i=0;i<ns;i++) {
 
         /* detect cycle slip by LLI */
-        rtk->ssat[sat[i]-1].slip[f]&=0xFC;
+        rtk->ssat[sat[i]-1].slip[f]&=0xFC; /* reset */
         arc_detslp_ll(rtk,obs,iu[i],1);
-        arc_detslp_ll(rtk,obs,ir[i],2);
+        arc_detslp_ll(rtk,obs,ir[i],2); /* todo:JZD10160.16o-CLP10160.16o,bugs */
 
         /* update half-cycle valid flag */
         rtk->ssat[sat[i]-1].half[f]=
                 !((obs[iu[i]].LLI[f]&2)||(obs[ir[i]].LLI[f]&2));
     }
-    arc_detsl_new(rtk,obs,iu,ir,ns,nav,rs);  /* detect cycle slip by new ways */
+    arc_detsl_new(rtk,obs,iu,ir,ns,nav,rs); /* detect cycle slip by new ways */
 
     /* reset phase-bias if instantaneous AR or expire obs outage counter */
     for (i=1;i<=MAXSAT;i++) {
@@ -1057,9 +1060,6 @@ static int arc_zdres(int base, const obsd_t *obs, int n, const double *rs,
 
         /* excluded satellite? */
         if (satexclude(obs[i].sat,svh[i],opt)) continue;
-
-        /* slip */
-        if (rtk->ssat[obs[i].sat-1].slip[0]) continue;
 
         /* satellite clock-bias */
         r+=-CLIGHT*dts[i*2];
@@ -1372,7 +1372,7 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
     prcopt_t *opt=&rtk->opt;
     double bl,dr[3],posu[3],posr[3],didxi=0.0,didxj=0.0,*im;
     double *tropr,*tropu,*dtdxr,*dtdxu,*Ri,*Rj,lami,lamj,fi,fj,*Hi=NULL,R1,R2;
-    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1,detvf[MAXSAT]={1},nvf,ix[MAXSAT];
+    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1,p=999;
 
     arc_log(ARC_INFO,"arc_ddres   : dt=%.1f nx=%d ns=%d\n",dt,rtk->nx,ns);
 
@@ -1405,10 +1405,12 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
 
         /* search reference satellite with highest elevation */
         for (i=-1,j=0;j<ns;j++) {
+
             sysi=rtk->ssat[sat[j]-1].sys;
+
             if (!arc_test_sys(sysi,m)) continue;
 
-            /* slip */
+            /* slip detect */
             if (rtk->ssat[sat[j]-1].slip[0]) continue;
 
             /* snr outlier */
@@ -1433,9 +1435,6 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
             /* todo:may be have bugs on running,need to fix in future */
             if (y) if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
 
-            /* if detect slip,no use this observations */
-            if (rtk->ssat[sat[i]-1].slip[0]||rtk->ssat[sat[j]-1].slip[0]) continue;
-
             /* if detect snr outlier */
             if (rtk->ssat[sat[i]-1].snrf[0]||rtk->ssat[sat[j]-1].snrf[0]) continue;
 
@@ -1444,7 +1443,7 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
             R2=arc_varerr(sat[i],sysi,azel[1+iu[i]*2],bl,dt,f,opt);
             if ((R1/R2)>=FACTOR_RIRJ) {
                 arc_log(ARC_WARNING,"check factor of ratio of reference "
-                        "ambiguity variance and others is failed,sat=%3d-%3d,factor=%8.4lf \n",
+                        "ambiguity variance and others is failed,sat=%3d-%3d,factor=%8.4lf\n",
                         sat[i],sat[j],R1/R2);
                 continue;
             }
@@ -1550,6 +1549,9 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
                 Ri[nv]=arc_varerr(sat[i],sysi,azel[1+iu[i]*2],bl,dt,f,opt)+
                        arc_snr_varerr(rtk->ssat[sat[i]-1].snr[0]*0.25,f,nf,opt);
             }
+            /* adjust for larger double-differecen resiudal's satellite */
+            if (rtk->ssat[sat[j]-1].large_resc[0]) Rj[nv]*=REVARFACTOR; /* todo:need to test */
+
             /* set valid data flags */
             if (opt->mode>PMODE_DGPS) {
                 if (f<nf) rtk->ssat[sat[i]-1].vsat[f]=rtk->ssat[sat[j]-1].vsat[f]=1;
@@ -1595,7 +1597,7 @@ static int arc_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double *x,
         arc_log(ARC_INFO,"check whther change reference satellite is done \n");
     }
 
-    arc_log(ARC_INFO,"arc_ddres : active states index= \n");
+    arc_log(ARC_INFO,"arc_ddres : active states index=\n");
     arc_tracemati(ARC_MATPRINTF,rtk->ceres_active_x,1,rtk->nx,2,1);
 
     free(Ri); free(Rj); free(im);
@@ -1685,7 +1687,6 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
                     Ri[nv]=arc_varerr(sat[i],sysi,azel[1+iu[i]*2],bl,dt,f,opt)+
                            arc_snr_varerr(rtk->ssat[sat[i]-1].snr[0]*0.25,f,nf,opt);
                 }
-
                 arc_log(ARC_INFO,"arc_init_dc_res : sat=%3d-%3d %s%d v=%13.3f R=%8.6f %8.6f\n",
                         sat[i],sat[j],f<nf?"L":"P",f%nf+1,v[nv],
                         R==NULL?-999.0:Ri[nv],R==NULL?-999.0:Rj[nv]);
@@ -2254,7 +2255,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
             }
             else {
                 if (rtk->opt.amb_part_var) { /* todo:this option is not good for ARMODE_FIXHOLD */
-                    
+
                     if (n==((rtk->opt.amb_part_var?rtk->opt.amb_iter:1)-1)) {
                         nb=0; break;
                     }
@@ -2329,12 +2330,20 @@ static int arc_valpos(rtk_t *rtk,const double *v,const double *R,const int *vflg
 
     /* post-fit residual test */
     for (i=0;i<nv;i++) {
-        if (v[i]*v[i]<=fact*R[i+i*nv]) continue;
+        if (v[i]*v[i]<=fact*R[i+i*nv]) {
+            rtk->ssat[sat2-1].large_resc[0]=
+                    rtk->ssat[sat2-1].large_resc[0]<=0?0:
+                    rtk->ssat[sat2-1].large_resc[0]--;
+            continue; /* todo:may be need more test */
+        }
         sat1=(vflg[i]>>16)&0xFF;
         sat2=(vflg[i]>> 8)&0xFF;
         type=(vflg[i]>> 4)&0xF;
         freq=vflg[i]&0xF;
         strcpy(stype,type==0?"L":(type==1?"L":"C"));
+        rtk->ssat[sat2-1].large_resc[0]=
+                rtk->ssat[sat2-1].large_resc[0]>=MAXLARGERESC?MAXLARGERESC:
+                rtk->ssat[sat2-1].large_resc[0]++; /* larger double-difference counter */
         arc_log(ARC_WARNING,"arc_valpos : "
                         "large residual (sat=%2d-%2d %s%d v=%6.3f sig=%.3f)\n",
                 sat1,sat2,stype,freq+1,v[i],SQRT(R[i+i*nv]));
@@ -2676,7 +2685,7 @@ static void arc_ukf_get_updatax(ukf_t *ukf,double *xp,double *Pp)
 /* make double-differnce measurements-----------------------------------------*/
 static int arc_ukf_dd_meas()
 {
-    arc_log(ARC_INFO,"arc_ukf_dd_meas : \n"); 
+    arc_log(ARC_INFO,"arc_ukf_dd_meas : \n");
 
     int i,k,iu[2]={0},ir[2]={0};
 
@@ -2801,7 +2810,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*bias,dt;
     int i,j,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter,nx=NP(&rtk->opt);
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
-    int nf=1,nk=0;
+    int nf=1;
 
     arc_log(ARC_INFO,"arc_diff_pr_relpos  : nx=%d nu=%d nr=%d\n",rtk->nx,nu,nr);
 
@@ -2838,11 +2847,9 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* select common satellites between rover and base-station */
     if ((ns=arc_selsat(obs,azel,nu,nr,opt,sat,iu,ir))<=0) {
         arc_log(ARC_WARNING,"arc_diff_pr_relpos : no common satellite\n");
-
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
         return 0;
     }
-
     /* initial states for kalman filter */
     xp=arc_mat(nx,1); Pp=arc_zeros(nx,nx);
     arc_matcpy(xp,rtk->xd,nx,1);
@@ -2909,6 +2916,9 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     rtk->sol.prsol.qr[4]=(float)Pp[2+nx]; /* cov yz */
     rtk->sol.prsol.qr[5]=(float)Pp[2];    /* cov zx */
 
+    arc_matcpy(rtk->xd,xp,nx,1);
+    arc_matcpy(rtk->Pd,Pp,nx,nx); /* todo:may be can be modified */
+
     free(rs); free(dts); free(var); free(y); free(e); free(azel);
     free(xp); free(Pp);  free(v); free(H); free(R); free(bias);
     return 1;
@@ -2955,7 +2965,7 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* undifferenced residuals for base station */
     if (!arc_zdres(1,obs+nu,nr,rs+nu*6,dts+nu*2,svh+nu,nav,rtk->rb,opt,1,
                    y+nu*nf*2,e+nu*3,azel+nu*2,rtk,_UKF_Y_==NULL?NULL:_UKF_Y_+nu*nf*2)) {
-        arc_log(ARC_WARNING, "arc_relpos : initial base station position error\n");
+        arc_log(ARC_WARNING,"arc_relpos : initial base station position error\n");
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
         return 0;
     }
@@ -2972,7 +2982,6 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     /* select common satellites between rover and base-station */
     if ((ns=arc_selsat(obs,azel,nu,nr,opt,sat,iu,ir))<=0) {
         arc_log(ARC_WARNING, "arc_relpos : no common satellite\n");
-
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
         return 0;
     }
@@ -3208,8 +3217,10 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     }
 
     if (D) free(D); if (Qv) free(Qv); if (ve) free(ve);
-    free(rs); free(dts); free(var); free(y); free(e); free(azel);
-    free(xp); free(Pp);  free(xa);  free(v); free(H); free(R); free(bias);
+    free(rs); free(dts); free(var);
+    free(y); free(e); free(azel);
+    free(xp); free(Pp);  free(xa);
+    free(v); free(H); free(R); free(bias);
 
     if (stat!=SOLQ_NONE) rtk->sol.stat=stat;
     return stat!=SOLQ_NONE;
@@ -3276,6 +3287,8 @@ extern void arc_rtkfree(rtk_t *rtk)
     if (rtk->P)  free(rtk->P ); rtk->P =NULL;
     if (rtk->xa) free(rtk->xa); rtk->xa=NULL;
     if (rtk->Pa) free(rtk->Pa); rtk->Pa=NULL;
+    if (rtk->Pd) free(rtk->Pd); rtk->Pd=NULL;
+    if (rtk->xd) free(rtk->xd); rtk->xd=NULL;
     if (rtk->ceres_active_x) {
         free(rtk->ceres_active_x); rtk->ceres_active_x=NULL;
     }
@@ -3301,7 +3314,7 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
 #endif
 
     arc_log(ARC_INFO,"arc_srtkpos  : time=%s n=%d\n",time_str(obs[0].time,3),n);
-    arc_log(ARC_WARNING, "arc_srtkpos : obs=\n"); arc_traceobs(4,obs,n);
+    arc_log(ARC_WARNING,"arc_srtkpos : obs=\n"); arc_traceobs(4,obs,n);
 
     /* set base staion position */
     if (opt->refpos<=POSOPT_RINEX&&opt->mode!=PMODE_SINGLE&&
@@ -3337,7 +3350,7 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     }
     /* check number of data of base station and age of differential */
     if (nr==0) {
-        arc_log(ARC_ERROR, "arc_srtkpos : no base station observation data for rtk\n");
+        arc_log(ARC_ERROR,"arc_srtkpos : no base station observation data for rtk\n");
         return 1;
     }
     if (opt->mode==PMODE_MOVEB) { /* moving baseline */
