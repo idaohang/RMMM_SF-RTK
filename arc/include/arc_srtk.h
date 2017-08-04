@@ -51,6 +51,7 @@ extern "C" {
 #define ARC_AMB_NOPART  0
 #define ARC_UKF         1
 #define ARC_NOUKF       0
+#define ARC_RINEX_SKIP_LOG
 /* single frequency rtk position post-processing ------------------------------*/
 extern int  arc_postpos(gtime_t ts, gtime_t te, double ti, double tu,
                         prcopt_t *popt, const solopt_t *sopt,
@@ -302,6 +303,7 @@ extern int  arc_readdcb(const char *file, nav_t *nav, const sta_t *sta);
 extern int  arc_readfcb(const char *file, nav_t *nav);
 extern void arc_alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts);
 extern int arc_pppnx(const prcopt_t *opt);
+extern int addobsdata(obs_t *obs, const obsd_t *data);
 
 /* integer ambiguity resolution ----------------------------------------------*/
 extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,

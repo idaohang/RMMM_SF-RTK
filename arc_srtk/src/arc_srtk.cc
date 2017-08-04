@@ -20,7 +20,6 @@
 #include "arc.h"
 #include <iomanip>
 #include <fstream>
-#include <arc.h>
 
 using namespace std;
 
@@ -52,10 +51,12 @@ using namespace std;
 #define MAXLARGERESC 10             /* max of large double-differecen residuals */
 #define REVARFACTOR  1.1            /* reset the large double-difference residuals variance */
 #define MAXLOCKC     200            /* max count of can set it is reference satellite */
+#define MAXAMBSQ     100
 
 /* number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated) */
 #define NF(opt)     ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf)
 #define NP(opt)     ((opt)->dynamics==0?3:6)
+#define NPDC(opt)   ((opt)->dynamics_dc==0?3:6)
 #define NI(opt)     ((opt)->ionoopt!=IONOOPT_EST?0:MAXSAT)
 #define NT(opt)     ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt<TROPOPT_ESTG?2:6))
 #define NL(opt)     ((opt)->glomodear!=2?0:NFREQGLO)
@@ -177,7 +178,7 @@ static void arc_testeclipse(const obsd_t *obs,int n,const nav_t *nav,double *rs)
     arc_log(3,"testeclipse:\n");
 
     /* unit vector of sun direction (ecef) */
-    arc_sunmoonpos(gpst2utc(obs[0].time), erpv, rsun, NULL, NULL);
+    arc_sunmoonpos(gpst2utc(obs[0].time),erpv,rsun,NULL,NULL);
     arc_normv3(rsun,esun);
 
     for (i=0;i<n;i++) {
@@ -519,9 +520,17 @@ static void arc_udpos(rtk_t *rtk,double tt)
     if (arc_norm(rtk->x,3)<=0.0) {
         for (i=0;i<3;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_POS,i);
         /* initial rover station velecity */
-        if (rtk->opt.dynamics) for (i=3;i<6;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_VEL,i);
+        if (rtk->opt.dynamics) {
+            if (rtk->sol.doppler) {
+                arc_log(ARC_INFO,"arc_udpos: use doppler velecity to initial\n");
+                for (i=3;i<6;i++) arc_initx(rtk,rtk->sol.rr[i],VAR_VEL,i);
+            }
+            else {
+                for (i=3;i<6;i++) arc_initx(rtk,1E-3,VAR_VEL,i);
+                arc_log(ARC_INFO,"arc_udpos: use prior velecity to initial\n");
+            }
+        }
     }
-
     /* update ceres solver problem active states index list,included velecity */
     if (rtk->opt.dynamics) for (i=0;i<6;i++) rtk->ceres_active_x[i]=1;  /* todo:set active states index in here may be not best */
     else for (i=0;i<3;i++) rtk->ceres_active_x[i]=1;
@@ -545,6 +554,9 @@ static void arc_udpos(rtk_t *rtk,double tt)
             rtk->P[1+rtk->nx*0]=rtk->P[0+rtk->nx*1]=rtk->sol.prsol.qr[3];
             rtk->P[2+rtk->nx*0]=rtk->P[0+rtk->nx*2]=rtk->sol.prsol.qr[5];
             rtk->P[1+rtk->nx*2]=rtk->P[2+rtk->nx*1]=rtk->sol.prsol.qr[4]; /* todo:may be have more better way to do this */
+
+            arc_log(ARC_INFO,"arc_udpos: dd-pseudorange to initial rtk P=\n");
+            arc_tracemat(ARC_MATPRINTF,rtk->P,rtk->nx,rtk->nx,10,4);
             return;
         }
         else { /* use prior information to initial rtk */
@@ -557,6 +569,9 @@ static void arc_udpos(rtk_t *rtk,double tt)
             rtk->P[1+rtk->nx*0]=rtk->P[0+rtk->nx*1]=rtk->sol.qr[3];
             rtk->P[2+rtk->nx*0]=rtk->P[0+rtk->nx*2]=rtk->sol.qr[5];
             rtk->P[1+rtk->nx*2]=rtk->P[2+rtk->nx*1]=rtk->sol.qr[4]; /* todo:may be have more better way to do this */
+
+            arc_log(ARC_INFO,"arc_udpos: dd-pseudorange to initial rtk P=\n");
+            arc_tracemat(ARC_MATPRINTF,rtk->P,rtk->nx,rtk->nx,10,4);
             return;
         }
     }
@@ -607,7 +622,7 @@ static void arc_udion(rtk_t *rtk,double tt,double bl,const int *sat,int ns)
     double el,fact;
     int i,j;
 
-    arc_log(ARC_INFO, "arc_udion   : tt=%.1f bl=%.0f ns=%d\n",tt,bl,ns);
+    arc_log(ARC_INFO,"arc_udion   : tt=%.1f bl=%.0f ns=%d\n",tt,bl,ns);
 
     for (i=1;i<=MAXSAT;i++) {
         j=II(i,&rtk->opt);
@@ -889,8 +904,8 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
                        const int *iu, const int *ir, int ns, const nav_t *nav,
                        const double *rs)
 {
-    double cp,pr,*bias,offset,lami;
-    int i,j,f=0,slip,reset;
+    double cp,pr,*bias,offset[2]={0},lami;
+    int i,j,f=0,slip,reset,j1,j2;
 
     arc_log(ARC_INFO,"arc_udbias  : tt=%.1f ns=%d\n",tt,ns);
 
@@ -942,7 +957,7 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
     bias=arc_zeros(ns,1);
 
     /* estimate approximate phase-bias by phase - code */
-    for (i=j=0,offset=0.0;i<ns;i++) {
+    for (i=j=0,j1=j2=0,offset[0]=offset[1]=0.0;i<ns;i++) {
 
         cp=arc_sdobs(obs,iu[i],ir[i],0); /* cycle */
         pr=arc_sdobs(obs,iu[i],ir[i],0+NFREQ);
@@ -954,15 +969,28 @@ static void arc_udbias(rtk_t *rtk, double tt, const obsd_t *obs, const int *sat,
 
         /* if is ARMODE_INST,then here it no process */
         if (rtk->x[IB(sat[i],0,&rtk->opt)]!=0.0) {
-            offset+=bias[i]-rtk->x[IB(sat[i],0,&rtk->opt)];
-            j++;
+            if (satsys(sat[i],NULL)==SYS_GPS) {
+                offset[0]+=bias[i]-rtk->x[IB(sat[i],0,&rtk->opt)];
+                j1++;
+            }
+            else if (satsys(sat[i],NULL)==SYS_CMP) {
+                offset[1]+=bias[i]-rtk->x[IB(sat[i],0,&rtk->opt)];
+                j2++;
+            }
         }
     }
     /* correct phase-bias offset to enssure phase-code coherency */
     /* todo:this step may have problems,need to think */
-    if (j>0) {
+    if (j1>0||j2>0) {
         for (i=1;i<=MAXSAT;i++) {
-            if (rtk->x[IB(i,0,&rtk->opt)]!=0.0) rtk->x[IB(i,0,&rtk->opt)]+=offset/j;
+            if (rtk->x[IB(i,0,&rtk->opt)]!=0.0) {
+                if (j1&&satsys(i,NULL)==SYS_GPS) {
+                    rtk->x[IB(i,0,&rtk->opt)]+=offset[0]/j1;
+                }
+                else if (j2&&satsys(i,NULL)==SYS_CMP) {
+                    rtk->x[IB(i,0,&rtk->opt)]+=offset[1]/j2;
+                }
+            }
         }
     }
     /* set initial states of phase-bias (ARMODE_INST) */
@@ -1613,7 +1641,7 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
     prcopt_t *opt=&rtk->opt;
     double bl,dr[3],posu[3],posr[3];
     double *Ri,*Rj,lami,lamj,*Hi=NULL;
-    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1,nx=NP(&rtk->opt);
+    int i,j,k,m,f,ff=0,nv=0,nb[NFREQ*4*2+2]={0},b=0,sysi,sysj,nf=1,nx=NPDC(&rtk->opt);
 
     arc_log(ARC_INFO,"arc_init_dc_res   : dt=%.1f nx=%d ns=%d\n",dt,nx,ns);
 
@@ -1633,6 +1661,8 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
 
                 /* snr outlier */
                 if (rtk->ssat[sat[j]-1].snrf[0]) continue;
+
+                if (rtk->ssat[sat[j]-1].dcvl[0]) continue;
 
                 /* y[i] may be zero,so must check out,this step is importance */
                 if (y) if (!arc_validobs(iu[j],ir[j],f,nf,y)) continue;
@@ -1654,6 +1684,8 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
 
                 /* if detect snr outlier */
                 if (rtk->ssat[sat[i]-1].snrf[0]||rtk->ssat[sat[j]-1].snrf[0]) continue;
+
+                if (rtk->ssat[sat[j]-1].dcvl[0]) continue; /* todo:need to test */
 
                 ff=f%nf;
                 lami=nav->lam[sat[i]-1][ff];
@@ -1690,9 +1722,7 @@ static int arc_diff_pr_ddres(rtk_t *rtk,const nav_t *nav,double dt,const double 
                 arc_log(ARC_INFO,"arc_init_dc_res : sat=%3d-%3d %s%d v=%13.3f R=%8.6f %8.6f\n",
                         sat[i],sat[j],f<nf?"L":"P",f%nf+1,v[nv],
                         R==NULL?-999.0:Ri[nv],R==NULL?-999.0:Rj[nv]);
-
                 if (vflg) vflg[nv]=(sat[i]<<16)|(sat[j]<<8)|((f<nf?0:1)<<4)|(f%nf);
-
                 nb[b]++;
                 nv++;  /* increase double-residual index */
             }
@@ -1767,7 +1797,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
         nofix=(m==3&&rtk->opt.bdsmodear==0); /* this flag is importance */
         for (f=0,k=na;f<nf;f++,k+=MAXSAT) {  /* loop for frequency */
 
-            for (i=k;i<k+MAXSAT;i++) { /* loop for ambiguity list */
+            for (i=k,el=-999.0,ref=-1;i<k+MAXSAT;i++) { /* loop for ambiguity list */
                 /* select the reference single-difference ambiguity */
                 if (rtk->x[i]==0.0||!rtk->ceres_active_x[i]||!arc_test_sys(rtk->ssat[i-k].sys,m)||
                     !rtk->ssat[i-k].vsat[f]||!rtk->ssat[i-k].half[f]) {
@@ -1780,6 +1810,7 @@ static int arc_ddmat(rtk_t *rtk, double *D)
                 }
             }
             /* set the reference ambiguity index */
+            if (ref<0) continue;
             rtk->ssat[ref-k].fix[f]=2;  /* fix */
             rtk->ssat[ref-k].group=1;   /* first group */
             rtk->amb_refsat[m]=ref-k+1; /* sat no.todo:this step need to modified */
@@ -2223,7 +2254,7 @@ static int arc_resamb_LAMBDA(rtk_t *rtk,double *bias,double *xa)
             if (rtk->sol.ratio>999.9) rtk->sol.ratio=999.9f;
 
             /* validation by popular ratio-test */
-            ok=(s[0]<=0.0||s[1]/s[0]>=(opt->thresar[0])); /* todo:need to test */
+            ok=(s[0]<=0.0||s[1]/s[0]>=(opt->thresar[0]))&&(s[0]<MAXAMBSQ);
 
             if (ok) {
 
@@ -2344,6 +2375,9 @@ static int arc_valpos(rtk_t *rtk,const double *v,const double *R,const int *vflg
         rtk->ssat[sat2-1].large_resc[0]=
                 rtk->ssat[sat2-1].large_resc[0]>=MAXLARGERESC?MAXLARGERESC:
                 rtk->ssat[sat2-1].large_resc[0]++; /* larger double-difference counter */
+
+        if (strcmp(stype,"C")==0) rtk->ssat[sat2-1].dcvl[0]=1;
+
         arc_log(ARC_WARNING,"arc_valpos : "
                         "large residual (sat=%2d-%2d %s%d v=%6.3f sig=%.3f)\n",
                 sat1,sat2,stype,freq+1,v[i],SQRT(R[i+i*nv]));
@@ -2714,7 +2748,7 @@ static int arc_ukf_dd_meas()
 /* states updates of difference pseudorange positioning-----------------------*/
 static void arc_diff_pr_update(const rtk_t* rtk,double *xp,double *Pp,double tt)
 {
-    int i,j,nx=NP(&rtk->opt);
+    int i,j,nx=NPDC(&rtk->opt);
     double var;
 
     arc_log(ARC_INFO,"arc_diff_pr_update   : tt=%.3f\n",tt);
@@ -2727,12 +2761,12 @@ static void arc_diff_pr_update(const rtk_t* rtk,double *xp,double *Pp,double tt)
         return;
     }
     /* initialize position for first epoch */
-    if (arc_norm(rtk->x,3)<=0.0) {
+    if (arc_norm(rtk->xd,3)<=0.0) {
         for (i=0;i<3;i++) {
             arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],VAR_POS,i,nx);
         }
         /* initial rover station velecity */
-        if (rtk->opt.dynamics) for (i=3;i<nx;i++) {
+        if (rtk->opt.dynamics_dc) for (i=3;i<nx;i++) {
                 arc_diff_pr_initx(xp,Pp,rtk->sol.rr[i],VAR_VEL,i,nx);
             }
     }
@@ -2743,7 +2777,7 @@ static void arc_diff_pr_update(const rtk_t* rtk,double *xp,double *Pp,double tt)
      * todo:and may have more better methids to do this */
 
     /* kinmatic mode without dynamics */
-    if (!rtk->opt.dynamics) {
+    if (!rtk->opt.dynamics_dc) {
         if (rtk->opt.init_pnt) {
             for (i=0;i<3;i++) Pp[i+i*nx]=rtk->sol.prsol.qr[i];
             Pp[1+nx*0]=Pp[0+nx*1]=rtk->sol.prsol.qr[3];
@@ -2761,7 +2795,7 @@ static void arc_diff_pr_update(const rtk_t* rtk,double *xp,double *Pp,double tt)
         }
     }
     /* check variance of estimated postion */
-    for (i=0;i<3;i++) var+=rtk->P[i+i*rtk->nx]; var/=3.0;
+    for (i=0;i<3;i++) var+=rtk->Pd[i+i*rtk->nx]; var/=3.0;
 
     if (var>VAR_POS||var<0.0) {
         /* reset position with large variance */
@@ -2808,9 +2842,9 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     prcopt_t *opt=&rtk->opt;
     gtime_t time=obs[0].time;
     double *rs,*dts,*var,*y,*e,*azel,*v,*H,*R,*xp,*Pp,*bias,dt;
-    int i,j,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter,nx=NP(&rtk->opt);
+    int i,j,n=nu+nr,ns,ny,nv,sat[MAXSAT],iu[MAXSAT],ir[MAXSAT],niter,nx=NPDC(&rtk->opt);
     int info,vflg[MAXOBS*NFREQ*2+1],svh[MAXOBS*2];
-    int nf=1;
+    int nf=1,stat=PMODE_DGPS;
 
     arc_log(ARC_INFO,"arc_diff_pr_relpos  : nx=%d nu=%d nr=%d\n",rtk->nx,nu,nr);
 
@@ -2825,6 +2859,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         rtk->ssat[i].sys=satsys(i+1,NULL);
         rtk->ssat[i].vsat[0]=0;
         rtk->ssat[i].snrf[0]=0;
+        rtk->ssat[i].dcvl[0]=0; /* valid flag of dc-solution */
     }
     /* satellite positions/clocks */
     arc_satposs(time,obs,n,nav,opt->sateph,rs,dts,var,svh);
@@ -2838,6 +2873,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
                    y+nu*nf*2,e+nu*3,azel+nu*2,rtk,NULL)) {
         arc_log(ARC_WARNING,"arc_diff_pr_relpos : initial base station position error\n");
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
+        stat=SOLQ_NONE;
         return 0;
     }
     /* time-interpolation of residuals (for post-processing) */
@@ -2848,6 +2884,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     if ((ns=arc_selsat(obs,azel,nu,nr,opt,sat,iu,ir))<=0) {
         arc_log(ARC_WARNING,"arc_diff_pr_relpos : no common satellite\n");
         free(rs); free(dts); free(var); free(y); free(e); free(azel);
+        stat=SOLQ_NONE;
         return 0;
     }
     /* initial states for kalman filter */
@@ -2856,7 +2893,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
     for (i=0;i<nx;i++) for (j=0;j<nx;j++) Pp[i+j*nx]=rtk->Pd[i+nx*j];
 
     /* updates states */
-    arc_diff_pr_update(rtk,xp,Pp,fabs(rtk->tt));
+    arc_diff_pr_update(rtk,xp,Pp,rtk->tt);
 
     arc_log(ARC_INFO,"arc_diff_pr_relpos: xp=\n");
     arc_tracemat(ARC_MATPRINTF,xp,1,nx,13,4);
@@ -2876,11 +2913,13 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         /* undifferenced residuals for rover */
         if (!arc_zdres(0,obs,nu,rs,dts,svh,nav,xp,opt,0,y,e,azel,rtk,NULL)) {
             arc_log(ARC_WARNING,"arc_diff_pr_relpos : rover initial position error\n");
+            stat=SOLQ_NONE;
             break;
         }
         /* double-differenced residuals and partial derivatives */
         if ((nv=arc_diff_pr_ddres(rtk,nav,dt,xp,Pp,sat,y,e,azel,iu,ir,ns,v,H,R,vflg))<1) {
             arc_log(ARC_WARNING,"arc_diff_pr_relpos : no double-differenced residual\n");
+            stat=SOLQ_NONE;
             break;
         }
         arc_log(ARC_INFO,"arc_diff_pr_relpos ：double-differenced residual vector : \n");
@@ -2890,6 +2929,7 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         if (opt->adapt_filter) {
             if (!adap_kaman_filter(rtk,xp,Pp,H,v,R,nx,nv)) {
                 arc_log(ARC_WARNING,"arc_diff_pr_relpos : adaptive filter error (info=%d)\n",info);
+                stat=SOLQ_NONE;
                 break;
             }
         }
@@ -2897,31 +2937,43 @@ static int arc_diff_pr_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         else {
             if ((info=arc_filter(xp,Pp,H,v,R,nx,nv,NULL))) {
                 arc_log(ARC_WARNING,"arc_diff_pr_relpos : filter error (info=%d)\n",info);
+                stat=SOLQ_NONE;
                 break;
             }
             arc_log(ARC_INFO,"arc_diff_pr_relpos : x(%d)=",i+1);
-            if (opt->mode==PMODE_STATIC)                arc_tracemat(ARC_MATPRINTF,xp,3,1,10,4);
-            if (opt->mode==PMODE_KINEMA&&opt->dynamics) arc_tracemat(ARC_MATPRINTF,xp,6,1,10,4);
+            if (opt->mode==PMODE_STATIC)                   arc_tracemat(ARC_MATPRINTF,xp,3,1,10,4);
+            if (opt->mode==PMODE_KINEMA&&opt->dynamics_dc) arc_tracemat(ARC_MATPRINTF,xp,6,1,10,4);
 
             arc_log(ARC_INFO,"arc_diff_pr_relpos : P(%d)=",i+1);
             arc_tracemat(ARC_MATPRINTF,Pp,nx,nx,10,4);
         }
     }
-    /* save solution status */
-    arc_matcpy(rtk->sol.prsol.rr,xp,nx,1); /* position/velecity */
+    /* post-fit residuals for float solution */
+    if (stat!=SOLQ_NONE&&arc_zdres(0,obs,nu,rs,dts,svh,
+                                   nav,xp,opt,0,y,e,azel,rtk,NULL)) {
 
-    for (j=0;j<nx;j++) rtk->sol.prsol.qr[j]=(float)Pp[j+j*nx];
+        /* double-differecen residuals */
+        nv=arc_diff_pr_ddres(rtk,nav,dt,xp,Pp,sat,
+                             y,e,azel,iu,ir,ns,v,NULL,R,vflg);
 
-    rtk->sol.prsol.qr[3]=(float)Pp[1];    /* cov xy */
-    rtk->sol.prsol.qr[4]=(float)Pp[2+nx]; /* cov yz */
-    rtk->sol.prsol.qr[5]=(float)Pp[2];    /* cov zx */
+        /* validation of float solution */
+        if (arc_valpos(rtk,v,R,vflg,nv,ARC_SOLVALTHRES)) {
+            /* save solution status */
+            arc_matcpy(rtk->sol.prsol.rr,xp,nx,1); /* position/velecity */
 
-    arc_matcpy(rtk->xd,xp,nx,1);
-    arc_matcpy(rtk->Pd,Pp,nx,nx); /* todo:may be can be modified */
+            for (j=0;j<nx;j++) rtk->sol.prsol.qr[j]=(float)Pp[j+j*nx];
 
+            rtk->sol.prsol.qr[3]=(float)Pp[1];    /* cov xy */
+            rtk->sol.prsol.qr[4]=(float)Pp[2+nx]; /* cov yz */
+            rtk->sol.prsol.qr[5]=(float)Pp[2];    /* cov zx */
+
+            arc_matcpy(rtk->xd,xp,nx,1);
+            arc_matcpy(rtk->Pd,Pp,nx,nx); /* todo:may be can be modified */
+        }
+    }
     free(rs); free(dts); free(var); free(y); free(e); free(azel);
     free(xp); free(Pp);  free(v); free(H); free(R); free(bias);
-    return 1;
+    return stat;
 }
 /* relative positioning ------------------------------------------------------*/
 static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
@@ -3037,7 +3089,8 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
             }
             /* kalman filter measurement update */
             else {
-                if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv,opt->kalman_robust?D:NULL))) {
+                if ((info=arc_filter(xp,Pp,H,v,R,rtk->nx,nv,
+                                     opt->kalman_robust?D:NULL))) {
                     arc_log(ARC_WARNING, "arc_relpos : filter error (info=%d)\n",info);
                     stat=SOLQ_NONE;
                     break;
@@ -3215,11 +3268,10 @@ static int arc_relpos(rtk_t *rtk, const obsd_t *obs, int nu, int nr,
         if (rtk->ssat[i].fix[j]==2&&stat==SOLQ_FIX) rtk->ssat[i].fix[j]=1;
         if (rtk->ssat[i].slip[j]&1) rtk->ssat[i].slipc[j]++;
     }
-
     if (D) free(D); if (Qv) free(Qv); if (ve) free(ve);
     free(rs); free(dts); free(var);
     free(y); free(e); free(azel);
-    free(xp); free(Pp);  free(xa);
+    free(xp); free(Pp); free(xa);
     free(v); free(H); free(R); free(bias);
 
     if (stat!=SOLQ_NONE) rtk->sol.stat=stat;
@@ -3254,8 +3306,8 @@ extern void arc_rtkinit(rtk_t *rtk, const prcopt_t *opt)
     rtk->P=arc_zeros(rtk->nx,rtk->nx);
     rtk->xa=arc_zeros(rtk->na,1);
     rtk->Pa=arc_zeros(rtk->na,rtk->na);
-    rtk->xd=arc_zeros(NP(&rtk->opt),1);
-    rtk->Pd=arc_zeros(NP(&rtk->opt),NP(&rtk->opt));
+    rtk->xd=arc_zeros(NPDC(&rtk->opt),1);
+    rtk->Pd=arc_zeros(NPDC(&rtk->opt),NPDC(&rtk->opt));
     rtk->nfix=rtk->neb=rtk->fixc=0;
     for (i=0;i<MAXSAT;i++) {
         rtk->ambc[i]=ambc0;
@@ -3305,8 +3357,9 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
 {
     prcopt_t *opt=&rtk->opt;
     sol_t solb={{0}};
+    obs_t cobs={0};
     gtime_t time;
-    int i,nu,nr;
+    int i,nu,nr,stat=SOLQ_NONE;
     char msg[128]="";
 
 #ifdef ARC_TEST
@@ -3328,10 +3381,21 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     time=rtk->sol.time; /* previous epoch */
 
     /* rover position by single point positioning */
-    if (!arc_pntpos(obs,nu,nav,&rtk->opt,&rtk->sol,NULL,rtk->ssat,msg)) {
+    if (!arc_pntpos(obs,nu,nav,&rtk->opt,
+                    &rtk->sol,NULL,rtk->ssat,msg)) {
         arc_log(ARC_WARNING,"arc_srtkpos : point pos error (%s)\n",msg);
-        if (!rtk->opt.dynamics) {
+        if (opt->mode==PMODE_STATIC) {
             return 0;
+        }
+        /* use velecity to estimate current epoch rover station,only use doppler */
+        else if (opt->mode==PMODE_KINEMA&&rtk->sol.doppler){
+
+            for (i=0;i<3;i++) rtk->sol.rr[i]+=(rtk->sol.rr[i+3]
+                                               *timediff(rtk->sol.time,time));
+            arc_log(ARC_INFO,"arc_srtkpos: rover station dr\n");
+            arc_tracemat(ARC_MATPRINTF,rtk->sol.rr,NP(opt),1,10,4);
+            rtk->sol.stat=SOLQ_DR;
+            return 1; /* todo:here may be more test for kinematic position mode */
         }
     }
     if (time.time!=0) rtk->tt=timediff(rtk->sol.time,time);
@@ -3376,17 +3440,35 @@ extern int arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
         rtk->sol.age=(float)timediff(obs[0].time,obs[nu].time);
 
         if (fabs(rtk->sol.age)>opt->maxtdiff) {
-            arc_log(ARC_WARNING, "arc_srtkpos : age of differential "
+            arc_log(ARC_WARNING,"arc_srtkpos : age of differential "
                     "error (age=%.1f)\n", rtk->sol.age);
             return 1;
         }
     }
     /* adjust option,this step just for optimize positioning process */
-    if (opt->auto_ajust_opt) arc_adjust_option(rtk); /* todo:just for debug */
+    if (opt->auto_ajust_opt) arc_adjust_option(rtk);
 
     /* difference pseudorange positioning for initialing */
-    if (opt->init_dc) arc_diff_pr_relpos(rtk,obs,nu,nr,nav); /* todo:may be have no effects,need to test */
+    if (opt->init_dc&&!opt->dynamics) {
 
+        stat=arc_diff_pr_relpos(rtk,obs,nu,nr,nav);
+        if (stat==SOLQ_NONE) { /* todo:need to more test */
+
+            arc_log(ARC_WARNING,"arc_srtkpos: "
+                    "difference pseudorange positioning for initialing is failed\n");
+
+            if (opt->mode==PMODE_KINEMA&&rtk->sol.doppler) {
+                /* use velecity to estimate current epoch rover station,only use doppler */
+                for (i=0;i<3;i++) {
+                    rtk->sol.prsol.rr[i]+=(rtk->sol.prsol.rr[i+3]*rtk->tt);
+                }
+                arc_log(ARC_INFO,"arc_srtkpos: rover station dr\n");
+                arc_tracemat(ARC_MATPRINTF,rtk->sol.rr,NP(opt),1,10,4);
+                rtk->sol.stat=SOLQ_DR;
+            }
+            return 0;
+        }
+    }
     /* relative potitioning */
     arc_relpos(rtk,obs,nu,nr,nav);
     return 1;

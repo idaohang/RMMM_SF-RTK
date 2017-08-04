@@ -98,9 +98,9 @@ const prcopt_t prcopt_default={ /* defaults processing options */
     {100.0,100.0},              /* eratio[] */
     {100.0,0.003,0.003,0.0,1.0}, /* err[] */
     {30.0,0.03,0.3},            /* std[] */
-    {1E-1,1E-2,1E-2,1E-1,1E-2,0.5}, /* prn[] */
+    {1E-1,1E-2,1E-2,1E-1,1E-1,0.5}, /* prn[] */
     5E-12,                      /* sclkstab */
-    {1.4,0.9999,0.25,0.1,0.05}, /* thresar */
+    {1.5,0.9999,0.25,0.1,0.05}, /* thresar */
     0.0,0.0,0.05,               /* elmaskar,almaskhold,thresslip */
     30.0,15.0,30.0,             /* maxtdif,maxinno,maxgdop */
     {0},{0},{0},                /* baseline,ru,rb */
@@ -3353,7 +3353,7 @@ extern void arc_csmooth(obs_t *obs, int ns)
     int i,j,s,r,n[2][MAXSAT][NFREQ]={{{0}}};
     obsd_t *p;
 
-    arc_log(ARC_INFO, "csmooth: nobs=%d,ns=%d\n", obs->n, ns);
+    arc_log(ARC_INFO,"csmooth: nobs=%d,ns=%d\n",obs->n,ns);
     
     for (i=0;i<obs->n;i++) {
         p=&obs->data[i]; s=p->sat; r=p->rcv;

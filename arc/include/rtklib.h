@@ -674,6 +674,7 @@ typedef struct {        /* solution type */
     diff_pr_sol_t prsol;/* double-difference pseudorange positioning solution */
     dop_t dop;          /* positioning dops */
     double p_ar;        /* AR sucess probability */
+    int doppler;        /* doppler to velecity flag */
 } sol_t;
 
 typedef struct {        /* solution status type */
@@ -814,6 +815,7 @@ typedef struct {        /* processing options type */
 
     int init_dc;           /* using difference-pseudorange to initial if it sets to 1,
                             * ohterwise using standard positioning */
+    int dynamics_dc;
     int init_pnt;          /* using standard positioning to initial rtk */
 
     int auto_ajust_opt;    /* adjust option,this step just for optimize positioning process */
@@ -918,6 +920,7 @@ typedef struct {        /* satellite status type */
     unsigned group;            /* id of its double-difference ambiguity group(1:first group,2:second group) */
     unsigned char snrf[NFREQ];
     int large_resc[NFREQ];     /* larger double-difference residuals counter */
+    unsigned int dcvl[NFREQ];  /* valid flag of double-difference pseudorange position */
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */

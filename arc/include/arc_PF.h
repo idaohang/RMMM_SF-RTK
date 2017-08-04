@@ -62,7 +62,8 @@
 
                                                            /// number of parameters (pos,ionos,tropos,hw-bias,phase-bias,real,estimated)
 #define NF(opt)     ((opt)->ionoopt==IONOOPT_IFLC?1:(opt)->nf)
-#define NP(opt)     ((opt)->dynamics==0?3:9)
+#define NP(opt)     ((opt)->dynamics==0?3:6)
+#define NPDC(opt)   ((opt)->dynamics_dc==0?3:6)
 #define NI(opt)     ((opt)->ionoopt!=IONOOPT_EST?0:MAXSAT)
 #define NT(opt)     ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt<TROPOPT_ESTG?2:6))
 #define NL(opt)     ((opt)->glomodear!=2?0:NFREQGLO)

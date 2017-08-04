@@ -17,6 +17,7 @@
  *  Created on: July 07, 2017
  *********************************************************************************/
 
+#include <arc.h>
 #include "arc.h"
 
 /* constants -----------------------------------------------------------------*/
@@ -330,10 +331,10 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
     double x[NX]={0},dx[NX],Q[NX*NX],*v,*H,*var,sig;
     int i,j,k,info,stat,nv,ns;
 
-    arc_log(ARC_INFO, "estpos  : n=%d\n", n);
+    arc_log(ARC_INFO,"estpos  : n=%d\n",n);
     
-    v= arc_mat(n + 4, 1); H= arc_mat(NX, n + 4); var= arc_mat(n + 4, 1);
-    
+    v=arc_mat(n+4,1); H=arc_mat(NX,n+4); var=arc_mat(n+4,1);
+
     for (i=0;i<3;i++) x[i]=sol->rr[i];
     
     for (i=0;i<MAXITR;i++) {
@@ -358,9 +359,18 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
         }
         for (j=0;j<NX;j++) x[j]+=dx[j];
         
-        if (arc_norm(dx, NX)<1E-4) {
+        if (arc_norm(dx,NX)<1E-4) {
             sol->type=0;
             sol->time=timeadd(obs[0].time,-x[3]/CLIGHT);
+            sol->ns=(unsigned char)ns;
+            sol->age=0.0;
+            
+            /* validate solution */
+            if (!(stat=arc_valsol(azel,vsat,n,opt,v,nv,NX,msg,sol))) {
+                sol->stat=SOLQ_NONE;
+                free(v); free(H); free(var);
+                return stat;
+            }
             sol->dtr[0]=x[3]/CLIGHT; /* receiver clock bias (s) */
             sol->dtr[1]=x[4]/CLIGHT; /* glo-gps time offset (s) */
             sol->dtr[2]=x[5]/CLIGHT; /* gal-gps time offset (s) */
@@ -370,13 +380,7 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
             sol->qr[3]=(float)Q[1];    /* cov xy */
             sol->qr[4]=(float)Q[2+NX]; /* cov yz */
             sol->qr[5]=(float)Q[2];    /* cov zx */
-            sol->ns=(unsigned char)ns;
-            sol->age=0.0;
-            
-            /* validate solution */
-            if ((stat=arc_valsol(azel,vsat,n,opt,v,nv,NX,msg,sol))) {
-                sol->stat=SOLQ_SINGLE;
-            }
+            sol->stat=SOLQ_SINGLE;
             free(v); free(H); free(var);
             return stat;
         }
@@ -476,7 +480,7 @@ static int arc_resdop(const obsd_t *obs, int n, const double *rs, const double *
         lam=nav->lam[obs[i].sat-1][0];
         
         if (obs[i].D[0]==0.0||lam==0.0
-            ||!vsat[i]|| arc_norm(rs + 3 + i * 6, 3)<=0.0) {
+            ||!vsat[i]|| arc_norm(rs+3+i*6,3)<=0.0) {
             continue;
         }
         /* line-of-sight vector in ecef */
@@ -509,7 +513,7 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
     double x[4]={0},dx[4],Q[16],*v,*H;
     int i,j,nv;
 
-    arc_log(ARC_INFO, "estvel  : n=%d\n", n);
+    arc_log(ARC_INFO,"estvel  : n=%d\n",n);
     
     v=arc_mat(n,1); H=arc_mat(4,n);
     
@@ -527,6 +531,7 @@ static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double 
         for (j=0;j<4;j++) x[j]+=dx[j];
         if (arc_norm(dx,4)<1E-6) {
             for (i=0;i<3;i++) sol->rr[i+3]=x[i];
+            sol->doppler=1; /* set flag */
             break;
         }
     }
@@ -556,11 +561,11 @@ extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
     double *rs,*dts,*var,*azel_,*resp;
     int i,stat,vsat[MAXOBS]={0},svh[MAXOBS];
     
-    sol->stat=SOLQ_NONE;
+    sol->stat=SOLQ_NONE; sol->doppler=0;
     
     if (n<=0) {strcpy(msg,"no observation data"); return 0;}
 
-    arc_log(ARC_INFO,"pntpos  : tobs=%s n=%d\n",time_str(obs[0].time, 3), n);
+    arc_log(ARC_INFO,"pntpos  : tobs=%s n=%d\n",time_str(obs[0].time,3),n);
     
     sol->time=obs[0].time; if (msg) msg[0]='\0';
     
@@ -585,7 +590,7 @@ extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
         stat=arc_raim_fde(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);
     }
     /* estimate receiver velocity with doppler */
-    if (stat) arc_estvel(obs,n,rs,dts,nav,&opt_,sol,azel_,vsat);
+    arc_estvel(obs,n,rs,dts,nav,&opt_,sol,azel_,vsat);
     
     if (azel) {
         for (i=0;i<n*2;i++) azel[i]=azel_[i];
