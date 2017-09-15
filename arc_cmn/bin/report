@@ -1,0 +1,91 @@
+version: teqc  2017Jul3
+
+ SV+-|-------------------------|------------------------|-------------------+ SV
+ 20|----c-.-------.c-.c--.----------------------------^^^^^^^___^___________| 20
+ 21|..cccc.c.c-----c--c-----.------..--------------------c--^^^^^^^^^_^^^^^^| 21
+ 24|-ccccccccccccccccccccccccccccccccccc-cccc-cc--c-----cccccccccccccccccccc| 24
+ 15|.--cc----c---.-c.-...-.-...-...--------------------.-ccccc.-ccc--c-^^^^^| 15
+ 10|.cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.| 10
+ 18|-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.| 18
+ 12|ccc-cc-c-c..c--c--cccc..c.-cc-cccc.----c--cc-c.cc.-ccccccccccccccccccccc| 12
+ 32|--------.----.---c-.--cc-----.----.c-cc-.c-cc-ccccccccccccccccccccccccc.| 32
+ 25|-..------.-.--.c.-c--c........-...c--c....c.-cc-cc.ccccccccccccccccccccc| 25
+ 31|       _______^^^^^^^^^^^^^^^^^---....-..-..........cccccccccccccccc-cc.| 31
+ 14|_^^_^^^^^__^^^^^^^-------------------------------------------.-.c-------| 14
+C 6|-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ccccc-c.-|C 6
+C 9|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|C 9
+C 7|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|C 7
+C10|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|C10
+C 3|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|C 3
+C 1|.ccccc-c-c--.-cc-.c-.c..c..cc-.---c-.c-c--cc-c--c--c-c-ccccccc..---c-c--|C 1
+C 2|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|C 2
+C 4|-.c----.-c--------------.----------------------------c-cccccc-.---.--c--|C 4
+C13|....................... c. .. ........ .   .                            |C13
+C 5|.......................................................ccc.c............|C 5
+C 8|       .                                                                |C 8
+-dn|++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++|-dn
++dn|++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  ++1+  |+dn
++10|ccccccccccccccccccddddddddddddeeeeeeeeeeeeeeeeeeeedddddddccccccccccbbbbb|+10
+Pos|oo  ooooo  ooooooo    ooooo ooooooooooooo oo oooooooo o     o           |Pos
+Clk|                                                                        |Clk
+   +-|-------------------------|------------------------|-------------------+   
+06:57:53.000                                                        08:22:24.000
+2016 Dec 21                                                          2016 Dec 21
+
+*********************
+QC of RINEX  file(s) : /home/sujinglan/arc_rtk/arc_test/data/gps_bds/SRTK/20161221/rover.16O
+input RnxNAV file(s) : /home/sujinglan/arc_rtk/arc_test/data/gps_bds/SRTK/20161221/rover.16N
+                       /home/sujinglan/arc_rtk/arc_test/data/gps_bds/SRTK/20161221/rover.16C
+*********************
+
+4-character ID          :  (name = serialport1482303434797) (# = serialport1482303434)
+Receiver type           :  (# = CHCRER)
+Antenna type            : Unknown
+
+Time of start of window : 2016 Dec 21  06:57:53.000
+Time of  end  of window : 2016 Dec 21  08:22:24.000
+Time line window length : 84.52 minute(s), ticked every 30.0 minute(s)
+  antenna WGS 84 (xyz)  : -2836997.9317 4668060.1316 3281691.3512 (m)
+  antenna WGS 84 (geo)  : N  31 deg 09' 57.74"  E 121 deg 17' 20.41"
+  antenna WGS 84 (geo)  :   31.166040 deg   121.289002 deg
+          WGS 84 height : 61.8893 m
+|qc - header| position  :  53.9749 m
+Observation interval    : 1.0000 seconds
+Total satellites w/ obs : 22
+NAVSTAR GPS SVs w/o OBS :  1   2   3   4   5   6   7   8   9  11  13  16 
+                          17  19  22  23  26  27  28  29  30 
+NAVSTAR GPS SVs w/o NAV :
+     Beidou SVs w/o OBS : 11  12  14  15  16  17  18  19  20  21  22  23 
+                          24  25  26  27  28  29  30  31  32  33  34  35  36 
+                          37 
+     Beidou SVs w/o NAV : 13   5   8 
+Rx tracking capability  : unknown
+Poss. # of obs epochs   :   5072
+Epochs w/ observations  :   5072
+Epochs repeated         :      0  (0.00%)
+Possible obs >   0.0 deg:  74819
+Possible obs >  10.0 deg:  64491
+Complete obs >  10.0 deg:      0
+ Deleted obs >  10.0 deg:  60471
+  Masked obs <  10.0 deg:      1
+Obs w/ SV duplication   :      0  (within non-repeated epochs)
+Points in MP moving avg : 50
+Mean S1                 : 43.56 (sd=6.59 n=66564)
+No. of Rx clock offsets : 0
+Total Rx clock drift    :  0.000000 ms
+Rate of Rx clock drift  :  0.000 ms/hr
+Avg time between resets : Inf minute(s)
+Freq no. and timecode   : 1 13499 0001c0
+Report gap > than       : 10.00 minute(s)
+epochs w/ msec clk slip : 0
+other msec mp events    : 0 (: 0)   {expect ~= 1:50}
+IOD signifying a slip   : >400.0 cm/minute
+IOD slips <  10.0 deg*  :      0
+IOD slips >  10.0 deg   :      0
+IOD or MP slips <  10.0*:      0
+IOD or MP slips >  10.0 :      0
+ * or unknown elevation
+      first epoch    last epoch    hrs   dt  #expt  #have   %   mp1   mp2 o/slps
+SUM 16 12 21 06:57 16 12 21 08:22 1.409   1  64491      0   0    -     -       0
+
+! Warning ! no P-code data; may have GPS L1-only or P-codeless rx (retry w/ -P[codes] option)
