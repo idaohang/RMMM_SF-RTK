@@ -20,6 +20,13 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
 MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
+set(QT_USE_QTOPENGL TRUE)
+
+find_package(Qt4 REQUIRED)
+
+include(${QT_USE_FILE})
+add_definitions(${QT_DEFINITIONS})
+
 # Check C++11 or C++0x support
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
@@ -54,11 +61,18 @@ include_directories(
     ${GFLAGS_INCLUDE_DIR}
     ${PROJECT_SOURCE_DIR}/arc_pf/lib/include
     /usr/include/eigen3
+    /usr/include/qt4/Qt
+    /usr/include/qt4
+    /usr/include/qt4/QtGui
+    /usr/include/qt4/QtCore
+    ${PROJECT_SOURCE_DIR}/arc_plot/include
+    ${PROJECT_SOURCE_DIR}/arc_cmn/src/newmat
 )
 
 add_subdirectory(arc_log)
 add_subdirectory(arc_pf)
-#add_subdirectory(arc_ceres)
+add_subdirectory(arc_plot)
+add_subdirectory(arc_cmn/src/newmat)
 
 add_library(${PROJECT_NAME}_rtk STATIC
     arc_cmn/src/arc_cmn.cc
@@ -73,44 +87,28 @@ add_library(${PROJECT_NAME}_rtk STATIC
     arc/src/arc_ObservationModel.cpp
     arc/src/arc_StatesDistribution.cpp
     arc/src/arc_ukf.cc
-    arc/src/arc_ffratio_table.cc)
+    arc/src/arc_ffratio_table.cc
+    arc_cmn/src/arc_opt.cc
+    arc_cmn/src/arc_solution.cc
+    arc_srtk/src/arc_srtk_dd.cc
+    arc_srtk/src/arc_srtkpos.cc)
 
 target_link_libraries(${PROJECT_NAME}_rtk glog PF ceres)
 
 add_executable(arc_test1
-               arc_test/src/test1.cpp)
+               arc_test/src/test1.cpp arc_test/src/huace_test.cpp)
 add_executable(arc_test2
                arc_test/src/test2.cpp)
 
-target_link_libraries(arc_test1 ${PROJECT_NAME}_rtk)
-target_link_libraries(arc_test2 ${PROJECT_NAME}_rtk)
+add_executable(ARC-SRTK
+               arc/src/arc_app.cc)
 
+add_executable(huace_test
+              arc_test/src/huace_test.cpp)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+target_link_libraries(arc_test1 ${PROJECT_NAME}_rtk )
+target_link_libraries(arc_test2 ${PROJECT_NAME}_rtk )
+target_link_libraries(ARC-SRTK  ${PROJECT_NAME}_rtk QtGui QtCore)
+target_link_libraries(huace_test ${PROJECT_NAME}_rtk)
 
 

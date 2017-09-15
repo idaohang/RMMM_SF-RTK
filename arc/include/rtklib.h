@@ -352,6 +352,12 @@ extern "C" {
 #define AMBFIX_FFRATIO 3                /* ambiguity fix: FF-ratio test */
 #define AMBFIX_PART    4                /* ambiguity fix: partial fixing */
 
+#define AMB_FLOAT      1                /* ambiguity float */
+#define AMB_FIX        2                /* ambiguity fix */
+
+#define AMB_INHERIT_FLOAT 0             /* inherit double-difference float */
+#define AMB_INHERIT_FIX   1             /* inherit double-difference fix */
+
 #define SOLF_LLH    0                   /* solution format: lat/lon/height */
 #define SOLF_XYZ    1                   /* solution format: x/y/z-ecef */
 #define SOLF_ENU    2                   /* solution format: e/n/u-baseline */
@@ -367,7 +373,9 @@ extern "C" {
 #define SOLQ_SINGLE 5                   /* solution status: single */
 #define SOLQ_PPP    6                   /* solution status: PPP */
 #define SOLQ_DR     7                   /* solution status: dead reconing */
-#define MAXSOLQ     7                   /* max number of solution status */
+#define SOLQ_HALFFIX 8                  /* solution status: half-fix */
+#define SOLQ_INHERITFIX 9               /* solution status: ambiguity inherit fix */
+#define MAXSOLQ     9                   /* max number of solution status */
 
 #define TIMES_GPST  0                   /* time system: gps time */
 #define TIMES_UTC   1                   /* time system: utc */
@@ -651,11 +659,33 @@ typedef struct {        /* station parameter type */
 typedef struct {        /* double-difference pseudorange positioning solution type */
     double rr[6];       /* position/velocity (m|m/s) */
     double qr[6];       /* position variance/covariance (m^2) */
+    double clk_dri;
 } diff_pr_sol_t;
 
 typedef struct {        /* dop parameters type */
     double dops[5];     /* GDOP,PDOP,HDOP,VDOP,ADOP */
 } dop_t;
+
+typedef struct {        /* double-difference ambiguity type */
+    gtime_t t;          /* observation time */
+    gtime_t pt;         /* precious epoch time */
+    int sat1,sat2;      /* double-difference ambiguity satellite */
+    int c;              /* count of fix */
+    int id;             /* id of updates,0,1,2,... */
+    int update;         /* flag of updates */
+    int flag;           /* flag of ambiguity fix: 1-fix,2-float */
+    double b;           /* ambiguity value */
+    double pb;          /* precious epoch ambiguity value */
+    double ratio;       /* lambda ratio */
+    double pratio;      /* precious epoch lambda ratio */
+    double dv;          /* current epoch fix value - precious epoch fix value */
+} ddamb_t;
+
+typedef struct {
+    int nb;             /* numbers of double-difference ambiguity */
+    int nmax;           /* max numbers of double-difference ambiguity */
+    ddamb_t *amb;       /* double difference ambiguity list */
+} amb_t;
 
 typedef struct {        /* solution type */
     gtime_t time;       /* time (GPST) */
@@ -675,6 +705,9 @@ typedef struct {        /* solution type */
     dop_t dop;          /* positioning dops */
     double p_ar;        /* AR sucess probability */
     int doppler;        /* doppler to velecity flag */
+    double clk_dri;     /* rover station clock drift */
+    amb_t bias;         /* double-difference ambiguity,different from rtk's */
+    int clk_jmp;        /* reciver clock jump detect flag */
 } sol_t;
 
 typedef struct {        /* solution status type */
@@ -810,6 +843,11 @@ typedef struct {        /* processing options type */
     int amb_adop;          /* ADOP */
     int amb_delay;
     int amb_ref_delayc;    /* counts of reset single-difference reference ambiguity */
+    int amb_inherit;       /* double-difference inherit when lambda failed */
+    double inherit_thres;  /* thres of inherixing double-difference ambiguity */
+    double reset_hold;     /* thres of reset double-difference ambiguity in hold ambiguity */
+
+    int half_fix;          /* fix half of all ambiguity by elvations */
 
     int exclude_bds_geo;   /* exclude bds geo satellite (1:exclude,0:included) */
 
@@ -822,6 +860,31 @@ typedef struct {        /* processing options type */
 
     int snr_det;           /* dectect snr */
     double snr_alpha;      /* dectect paramertes */
+
+    double vel_prn[3];     /* velecity process noice (ECEF/m/s) */
+    double clk_dri_prn;    /* clock drift process noice */
+    int est_doppler;       /* add doppler measurements to filter */
+
+    int inst_amb;          /* after fix double-difference ambiguity,
+                            * then hold single-difference ambiguity,and this method is different from ARCMODE_INST,
+                            * it hold all states to next epoch*/
+    int hold_fixed_states; /* hold fixed states */
+
+    double snrmin;         /* min snr */
+    gtime_t ts,te;         /* rover station observation time */
+    int no_amb_sol;        /* resolve rover station position by no-ambiguity-double-difference when lambda is fialed */
+    double maxinnoc;       /* reject threshold of innovation (m) for carrier-phase */
+
+    int use_dd_sol;        /* estimate double-difference ambiguity and no estimate single-difference anbiguity */
+    int inherit_fixc;      /* double-difference ambiguity inherit fix counts */
+    double fixn;           /* process noice of transform single-difference-ambiguity to double-difference-ambiguity */
+    double maxage;         /* max of rover and base station observation time differencce */
+    int gpsmodear;         /* GPS AR mode (0:off,1:on) */
+    int inherit_age;       /* inherit double-difference ambiguity age (times of epoch) */
+    double inherit_IF;     /* inherit double-difference ambiguity impact factor */
+    double lambda_diff;    /* thres of lambda difference test */
+    double lambda_project_thres; /* lambda project test thres */
+
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -858,6 +921,12 @@ typedef struct {              /* file options type */
     char geexe  [MAXSTRPATH]; /* google earth exec file */
     char solstat[MAXSTRPATH]; /* solution statistics file */
     char trace  [MAXSTRPATH]; /* debug trace file */
+    char roverobs[MAXSTRPATH];/* rover station observation file */
+    char baseobs[MAXSTRPATH]; /* base station observation file */
+    char navfile[MAXSTRPATH]; /* navigation file */
+    char bdsnav[MAXSTRPATH];  /* bds navigation file */
+    char gpsnav[MAXSTRPATH];  /* gps navigation file */
+    char output[MAXSTRPATH];  /* solution statics output file */
 } filopt_t;
 
 typedef struct {        /* RINEX options type */
@@ -921,6 +990,13 @@ typedef struct {        /* satellite status type */
     unsigned char snrf[NFREQ];
     int large_resc[NFREQ];     /* larger double-difference residuals counter */
     unsigned int dcvl[NFREQ];  /* valid flag of double-difference pseudorange position */
+
+    double doppler[NFREQ];     /* doppler measurements */
+    double rs[6];              /* satellite position and velecity*/
+    double dts[2];             /* satellite clock rate*/
+    double rate;               /* rover station-satellite position range rate */
+    double doppler_res;        /* residuals of doppler measurements */
+    double e[3];
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */
@@ -1001,6 +1077,16 @@ typedef struct {         /* RTK control/result type */
 
     int refsat[NUMOFSYS];   /* reference satellite of double-difference residuals */
     int prefsat[NUMOFSYS];  /* precious reference satellite of double-difference residuals */
+
+    amb_t bias;             /* double-difference ambiguity list */
+    int halffix;            /* half fix count */
+
+    int exclu_sat[MAXSAT];  /* exclued satellite list */
+    int exclu_nsat;         /* numbers of exclued satellite */
+
+    int ddsat[MAXSAT*2];    /* double-difference satellite pair */
+    int inherit_fix;        /* double-difference ambiguity inherit fix status */
+    int inherix_fixc;       /* counts of double-difference ambiguity inherit fix */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */

@@ -26,6 +26,7 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <arc.h>
 
 #endif
 #include "arc.h"
@@ -38,6 +39,7 @@
 #define SQR(x)      ((x)*(x))
 #define EPS           0.000001
 #define ITERS         60
+
 /* function prototypes -------------------------------------------------------*/
 #ifdef IERS_MODEL
 extern int dehanttideinel_(double *xsta, int *year, int *mon, int *day,
@@ -91,16 +93,16 @@ const prcopt_t prcopt_default={ /* defaults processing options */
     PMODE_KINEMA,0,1,SYS_GPS|SYS_CMP,   /* mode,soltype,nf,navsys */
     15.0*D2R,{{0,0}},           /* elmin,snrmask */
     0,1,1,1,                    /* sateph,modear,glomodear,bdsmodear */
-    10,5,5,1,                   /* maxout,minlock,minfix,armaxiter */
+    10,5,5,1,                  /* maxout,minlock,minfix,armaxiter */
     0,0,0,0,                    /* estion,esttrop,dynamics,tidecorr */
     1,0,0,0,0,                  /* niter,codesmooth,intpref,sbascorr,sbassatsel */
     0,0,                        /* rovpos,refpos */
     {100.0,100.0},              /* eratio[] */
     {100.0,0.003,0.003,0.0,1.0}, /* err[] */
-    {30.0,0.03,0.3},            /* std[] */
+    {30.0,0.03,0.3},             /* std[] */
     {1E-1,1E-2,1E-2,1E-1,1E-1,0.5}, /* prn[] */
     5E-12,                      /* sclkstab */
-    {1.5,0.9999,0.25,0.1,0.05}, /* thresar */
+    {2.0,0.9999,0.25,0.1,0.05}, /* thresar */
     0.0,0.0,0.05,               /* elmaskar,almaskhold,thresslip */
     30.0,15.0,30.0,             /* maxtdif,maxinno,maxgdop */
     {0},{0},{0},                /* baseline,ru,rb */
@@ -139,6 +141,43 @@ static char *obscodes[]={       /* observation code strings */
     "2I","2Q","6I","6Q","3I", "3Q","3X","1I","1Q","5A"  /* 40-49 */
     "5B","5C","9A","9B","9C", "9X",""  ,""  ,""  ,""    /* 50-59 */
 };
+
+static char *BlockID[]={       /* GPS satellite Bolck IDs */
+        "BLOCK IIF",           /* G01 */
+        "BLOCK IIR",           /* G02 */
+        "BLOCK IIA",           /* G03 */
+        "BLOCK IIA",           /* G04 */
+        "BLOCK IIR",           /* G05 */
+        "BLOCK IIA",           /* G06 */
+        "BLOCK IIR",           /* G07 */
+        "BLOCK IIA",           /* G08 */
+        "BLOCK IIA",           /* G09 */
+        "BLOCK IIA",           /* G10 */
+        "BLOCK IIR",           /* G11 */
+        "BLOCK IIR",           /* G12 */
+        "BLOCK IIR",           /* G13 */
+        "BLOCK IIR",           /* G14 */
+        "BLOCK IIR",           /* G15 */
+        "BLOCK IIR",           /* G16 */
+        "BLOCK IIR",           /* G17 */
+        "BLOCK IIR",           /* G18 */
+        "BLOCK IIR",           /* G19 */
+        "BLOCK IIR",           /* G20 */
+        "BLOCK IIR",           /* G21 */
+        "BLOCK IIR",           /* G22 */
+        "BLOCK IIR",           /* G23 */
+        "BLOCK IIR",           /* G24 */
+        "BLOCK IIF",           /* G25 */
+        "BLOCK IIA",           /* G26 */
+        "BLOCK IIA",           /* G27 */
+        "BLOCK IIR",           /* G28 */
+        "BLOCK IIR",           /* G29 */
+        "BLOCK IIA",           /* G30 */
+        "BLOCK IIR",           /* G31 */
+        "BLOCK IIA",           /* G32 */
+        ""
+};
+
 static unsigned char obsfreqs[]={
     /* 1:L1/E1, 2:L2/B1, 3:L5/E5a/L3, 4:L6/LEX/B3, 5:E5b/B2, 6:E5(a+b), 7:S */
     0, 1, 1, 1, 1,  1, 1, 1, 1, 1, /*  0- 9 */
@@ -826,6 +865,7 @@ static int arc_filter_(const double *x, const double *P, const double *H,
     free(F); free(Q); free(K); free(I); free(KK);
     return info;
 }
+/*------------------------------------------------------------------------------*/
 extern int arc_filter(double *x, double *P, const double *H, const double *v,
                       const double *R, int n, int m,double *D)
 {
@@ -835,6 +875,31 @@ extern int arc_filter(double *x, double *P, const double *H, const double *v,
     if (D) arc_matcpy(D_,D,m,m);
     
     ix=arc_imat(n,1); for (i=k=0;i<n;i++) if (x[i]!=0.0&&P[i+i*n]>0.0) ix[k++]=i;
+    x_=arc_mat(k,1); xp_=arc_mat(k,1); P_=arc_mat(k,k); Pp_=arc_mat(k,k); H_=arc_mat(k,m);
+    for (i=0;i<k;i++) {
+        x_[i]=x[ix[i]];
+        for (j=0;j<k;j++) P_[i+j*k]=P[ix[i]+ix[j]*n];
+        for (j=0;j<m;j++) H_[i+j*k]=H[ix[i]+j*n];
+    }
+    info=arc_filter_(x_,P_,H_,v,R,k,m,xp_,Pp_,D_);
+    for (i=0;i<k;i++) {
+        x[ix[i]]=xp_[i];
+        for (j=0;j<k;j++) P[ix[i]+ix[j]*n]=Pp_[i+j*k];
+    }
+    free(ix); free(x_); free(xp_); free(P_); free(Pp_); free(H_); free(D_);
+    return info;
+}
+/*-------------------------------------------------------------------------------*/
+extern int arc_filter_active(double *x, double *P, const double *H, const double *v,
+                             const double *R, int n, int m,double *D,
+                             const int *active,int na)
+{
+    double *x_,*xp_,*P_,*Pp_,*H_,*D_=arc_eye(m);
+    int i,j,k,info,*ix;
+
+    if (D) arc_matcpy(D_,D,m,m);
+
+    ix=arc_imat(n,1); for (i=0;i<na;i++) ix[i]=active[i]; k=na;
     x_=arc_mat(k,1); xp_=arc_mat(k,1); P_=arc_mat(k,k); Pp_=arc_mat(k,k); H_=arc_mat(k,m);
     for (i=0;i<k;i++) {
         x_[i]=x[ix[i]];
@@ -871,14 +936,14 @@ extern int arc_smoother(const double *xf, const double *Qf, const double *xb,
     double *invQf= arc_mat(n, n),*invQb= arc_mat(n, n),*xx= arc_mat(n, 1);
     int i,info=-1;
 
-    arc_matcpy(invQf, Qf, n, n);
-    arc_matcpy(invQb, Qb, n, n);
+    arc_matcpy(invQf,Qf,n,n);
+    arc_matcpy(invQb,Qb,n,n);
     if (!arc_matinv(invQf, n)&&!arc_matinv(invQb, n)) {
         for (i=0;i<n*n;i++) Qs[i]=invQf[i]+invQb[i];
         if (!(info= arc_matinv(Qs, n))) {
-            arc_matmul("NN", n, 1, n, 1.0, invQf, xf, 0.0, xx);
-            arc_matmul("NN", n, 1, n, 1.0, invQb, xb, 1.0, xx);
-            arc_matmul("NN", n, 1, n, 1.0, Qs, xx, 0.0, xs);
+            arc_matmul("NN",n,1,n,1.0,invQf,xf,0.0,xx);
+            arc_matmul("NN",n,1,n,1.0,invQb,xb,1.0,xx);
+            arc_matmul("NN",n,1,n,1.0,Qs,xx,0.0,xs);
         }
     }
     free(invQf); free(invQb); free(xx);
@@ -2320,7 +2385,7 @@ extern void uniqnav(nav_t *nav)
     
     /* update carrier wave length */
     for (i=0;i<MAXSAT;i++) for (j=0;j<NFREQ;j++) {
-        nav->lam[i][j]= arc_satwavelen(i + 1, j, nav);
+        nav->lam[i][j]=arc_satwavelen(i+1,j,nav);
     }
 }
 /* compare observation data -------------------------------------------------*/
@@ -2553,16 +2618,15 @@ extern void arc_traceobs(int level, const obsd_t *obs, int n)
     char str[64],id[16];
     int i;
     
-    if (!fp_trace||level>level_trace) return;
+    if (level>level_trace) return;
     for (i=0;i<n;i++) {
         time2str(obs[i].time,str,3);
         satno2id(obs[i].sat,id);
-        fprintf(fp_trace," (%2d) %s %-3s rcv%d %13.3f %13.3f %13.3f %13.3f %d %d %d %d %3.1f %3.1f\n",
+        fprintf(stderr," (%2d) %s %-3s rcv%d %13.3f %13.3f %13.3f %13.3f %3d %3d %3d %3d %3.1f %3.1f\n",
               i+1,str,id,obs[i].rcv,obs[i].L[0],obs[i].L[1],obs[i].P[0],
               obs[i].P[1],obs[i].LLI[0],obs[i].LLI[1],obs[i].code[0],
               obs[i].code[1],obs[i].SNR[0]*0.25,obs[i].SNR[1]*0.25);
     }
-    fflush(fp_trace);
 }
 extern void arc_tracenav(int level, const nav_t *nav)
 {
@@ -2926,7 +2990,7 @@ extern double arc_geodist(const double *rs, const double *rr, double *e)
     double r;
     int i;
     
-    if (arc_norm(rs, 3)<RE_WGS84) return -1.0;
+    if (arc_norm(rs,3)<RE_WGS84) return -1.0;
     for (i=0;i<3;i++) e[i]=rs[i]-rr[i];
     r= arc_norm(e, 3);
     for (i=0;i<3;i++) e[i]/=r;
@@ -4213,6 +4277,7 @@ static double arc_q_gamma(double a, double x, double log_gamma_a)
     }
     return y;
 }
+/*------------------------------------------------------------------------------*/
 static double f_erfc(double x)
 {
     return x>=0.0?arc_q_gamma(0.5,x*x,LOG_PI/2.0):1.0+arc_p_gamma(0.5,x*x,LOG_PI/2.0);
@@ -4297,6 +4362,7 @@ extern double arc_norm_distri(const double u)
     p=(u<0.0)? 0.5-0.5*er: 0.5+0.5*er;
     return p;
 }
+/*------------------------------------------------------------------------------*/
 extern double arc_re_norm(double p)
 {
     if(p==0.5) return 0.0;
@@ -4313,6 +4379,7 @@ extern double arc_re_norm(double p)
       +y*0.6936233982e-12))))))))));
     return sqrt(y);
 }
+/*------------------------------------------------------------------------------*/
 extern double arc_re_chi2(int n,double p)
 {
     if(p>0.9999999)p=0.9999999;
@@ -4336,6 +4403,7 @@ extern double arc_re_chi2(int n,double p)
         x0=xx;
     }
 }
+/*------------------------------------------------------------------------------*/
 static void hhbg(int n,double *a)
 {
     int i,j,k,u,v;
@@ -4371,6 +4439,7 @@ static void hhbg(int n,double *a)
     }
     return;
 }
+/*------------------------------------------------------------------------------*/
 static int qrtt(int n,double *a,double *u,double *v,double eps,int jt)
 {
     int m,it,i,j,k,l,ii,jj,kk,ll;
@@ -4470,6 +4539,7 @@ extern int arc_mateigenvalue(const double* A,int n,double *u,double *v)
 
     free(_A_); return 1;
 }
+/*--------------------------------------------------------------------------------*/
 extern int arc_matdet(const double*A,int n,double*det)
 {
     int i;
@@ -4485,6 +4555,7 @@ extern int arc_matdet(const double*A,int n,double*det)
     free(u);free(v);
     return 1;
 }
+/*--------------------------------------------------------------------------------*/
 extern double arc_normcdf(double X)
 {
     double A1=0.4361836;
@@ -4502,6 +4573,126 @@ extern double arc_normcdf(double X)
     T=1.0-exp(-0.5*X*X)*(T*(A1+T*(A2+A3*T)))/sqrt(2.0*PI);
 
     return ((X>0.0)?T:1.0-T);
+}
+/*--------------------------------------------------------------------------------*/
+extern void arc_info(int per,int color,const char *info)
+{
+    static const char *c1[2]={"\033[30m","\033[0m"}; /* black */
+    static const char *c2[2]={"\033[31m","\033[0m"}; /* red */
+    static const char *c3[2]={"\033[32m","\033[0m"}; /* green */
+    static const char *c4[2]={"\033[33m","\033[0m"}; /* yellow */
+
+    static char str[264]="",ca[8]="",cb[8]="";
+
+    if      (color==1) strcpy(ca,c1[0]),strcpy(cb,c1[1]);
+    else if (color==2) strcpy(ca,c2[0]),strcpy(cb,c2[1]);
+    else if (color==3) strcpy(ca,c3[0]),strcpy(cb,c3[1]);
+    else if (color==4) strcpy(ca,c4[0]),strcpy(cb,c4[1]);
+
+    sprintf(str,"[%3d%] %s%s%s \n",per,ca,info,cb);
+    fprintf(stderr,"%s",str);
+}
+/*------------------------------------------------------------------------------*/
+extern void arc_trim(const char *strIn /*in*/, char *strOut /*in*/)
+{
+    int i, j ;
+    i=0; j=strlen(strIn)-1;
+
+    while(strIn[i]==' ') ++i; while(strIn[j]==' ') --j;
+
+    strncpy(strOut,strIn+i,j-i+1); strOut[j-i+1]='\0';
+}
+/* create directory ------------------------------------------------------------
+* create directory if not exist
+* args   : char   *path     I   file path to be saved
+* return : none
+* notes  : not recursive. only one level
+*-----------------------------------------------------------------------------*/
+extern void createdir(const char *path)
+{
+    char buff[1024],*p;
+
+    arc_log(ARC_INFO,"createdir: path=%s\n",path);
+
+    strcpy(buff,path);
+    if (!(p=strrchr(buff,FILEPATHSEP))) return;
+    *p='\0';
+
+#ifdef WIN32
+    CreateDirectory(buff,NULL);
+#else
+    mkdir(buff,0777);
+#endif
+}
+/* get meterological parameters ----------------------------------------------*/
+static void getmet(double lat, double *met)
+{
+    static const double metprm[][10]={ /* lat=15,30,45,60,75 */
+            {1013.25,299.65,26.31,6.30E-3,2.77,  0.00, 0.00,0.00,0.00E-3,0.00},
+            {1017.25,294.15,21.79,6.05E-3,3.15, -3.75, 7.00,8.85,0.25E-3,0.33},
+            {1015.75,283.15,11.66,5.58E-3,2.57, -2.25,11.00,7.24,0.32E-3,0.46},
+            {1011.75,272.15, 6.78,5.39E-3,1.81, -1.75,15.00,5.36,0.81E-3,0.74},
+            {1013.00,263.65, 4.11,4.53E-3,1.55, -0.50,14.50,3.39,0.62E-3,0.30}
+    };
+    int i,j;
+    double a;
+    lat=fabs(lat);
+    if      (lat<=15.0) for (i=0;i<10;i++) met[i]=metprm[0][i];
+    else if (lat>=75.0) for (i=0;i<10;i++) met[i]=metprm[4][i];
+    else {
+        j=(int)(lat/15.0); a=(lat-j*15.0)/15.0;
+        for (i=0;i<10;i++) met[i]=(1.0-a)*metprm[j-1][i]+a*metprm[j][i];
+    }
+}
+/* tropospheric delay correction -----------------------------------------------
+* compute sbas tropospheric delay correction (mops model)
+* args   : gtime_t time     I   time
+*          double   *pos    I   receiver position {lat,lon,height} (rad/m)
+*          double   *azel   I   satellite azimuth/elavation (rad)
+*          double   *var    O   variance of troposphric error (m^2)
+* return : slant tropospheric delay (m)
+*-----------------------------------------------------------------------------*/
+extern double sbstropcorr(gtime_t time, const double *pos, const double *azel,
+                          double *var,double *zwd)
+{
+    const double k1=77.604,k2=382000.0,rd=287.054,gm=9.784,g=9.80665;
+    static double pos_[3]={0},zh=0.0,zw=0.0;
+    int i;
+    double c,met[10],sinel=sin(azel[1]),h=pos[2],m;
+
+    arc_log(ARC_INFO,"sbstropcorr: pos=%.3f %.3f azel=%.3f %.3f\n",pos[0]*R2D,pos[1]*R2D,
+          azel[0]*R2D,azel[1]*R2D);
+
+    if (pos[2]<-100.0||10000.0<pos[2]||azel[1]<=0) {
+        *var=0.0;
+        return 0.0;
+    }
+    if (zh==0.0||fabs(pos[0]-pos_[0])>1E-7||fabs(pos[1]-pos_[1])>1E-7||
+        fabs(pos[2]-pos_[2])>1.0) {
+        getmet(pos[0]*R2D,met);
+        c=cos(2.0*PI*(time2doy(time)-(pos[0]>=0.0?28.0:211.0))/365.25);
+        for (i=0;i<5;i++) met[i]-=met[i+5]*c;
+        zh=1E-6*k1*rd*met[0]/gm;
+        zw=1E-6*k2*rd/(gm*(met[4]+1.0)-met[3]*rd)*met[2]/met[1];
+        zh*=pow(1.0-met[3]*h/met[1],g/(rd*met[3]));
+        zw*=pow(1.0-met[3]*h/met[1],(met[4]+1.0)*g/(rd*met[3])-1.0);
+        for (i=0;i<3;i++) pos_[i]=pos[i];
+    }
+    m=1.001/sqrt(0.002001+sinel*sinel);
+    *var=0.12*0.12*m*m;
+    if (zwd) *zwd=zw;
+    return (zh+zw)*m;
+}
+/* asignment of blockid-------------------------------------------------------*/
+extern void arc_blockid(pcv_t *pcv)
+{
+    arc_log(ARC_INFO,"arc_blockid: \n");
+
+    int i;
+    /* asign blockid to satellite prn */
+    for (i=0;i<NSATGPS;i++) strcpy(pcv[i].type,BlockID[i]); /* GPS */
+
+    for (i=0;i<NSATCMP;i++) strcpy(pcv[satno(SYS_CMP,i+1)].type,"BEIDOU");
 }
 /* dummy functions for lex extentions ----------------------------------------*/
 #ifndef EXTLEX

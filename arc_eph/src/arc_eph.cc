@@ -682,7 +682,7 @@ extern void arc_satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav
     double dt,pr;
     int i,j;
 
-    arc_log(ARC_INFO, "satposs : teph=%s n=%d ephopt=%d\n", time_str(teph, 3), n, ephopt);
+    arc_log(ARC_INFO,"satposs : teph=%s n=%d ephopt=%d\n",time_str(teph,3),n,ephopt);
     
     for (i=0;i<n&&i<2*MAXOBS;i++) {
         for (j=0;j<6;j++) rs [j+i*6]=0.0;
@@ -693,7 +693,7 @@ extern void arc_satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav
         for (j=0,pr=0.0;j<NFREQ;j++) if ((pr=obs[i].P[j])!=0.0) break;
         
         if (j>=NFREQ) {
-            arc_log(ARC_INFO, "no pseudorange %s sat=%2d\n", time_str(obs[i].time, 3), obs[i].sat);
+            arc_log(ARC_INFO,"no pseudorange %s sat=%2d\n",time_str(obs[i].time,3),obs[i].sat);
             continue;
         }
         /* transmission time by satellite clock */
@@ -720,7 +720,7 @@ extern void arc_satposs(gtime_t teph, const obsd_t *obs, int n, const nav_t *nav
         }
     }
     for (i=0;i<n&&i<2*MAXOBS;i++) {
-        arc_log(ARC_INFO, "%s sat=%2d rs=%13.3f %13.3f %13.3f dts=%12.3f var=%7.3f svh=%02X\n",
+        arc_log(ARC_INFO,"%s sat=%2d rs=%13.3f %13.3f %13.3f dts=%12.3f var=%7.3f svh=%02X\n",
                 time_str(time[i],6),obs[i].sat,rs[i*6],rs[1+i*6],rs[2+i*6],
                 dts[i*2]*1E9,var[i],svh[i]);
     }

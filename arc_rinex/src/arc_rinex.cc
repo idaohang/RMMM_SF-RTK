@@ -112,7 +112,7 @@ static double uravalue(int sva)
 {
     return 0<=sva&&sva<15?ura_nominal[sva]:8192.0;
 }
-/* ura value (m) to ura index ------------------------------------------------*/
+/* ura value (m) tso ura index ------------------------------------------------*/
 static int uraindex(double value)
 {
     int i;
@@ -143,9 +143,10 @@ static void init_sta(sta_t *sta)
 static void convcode(double ver, int sys, const char *str, char *type)
 {
     strcpy(type,"   ");
-    
+
     if      (!strcmp(str,"P1")) { /* ver.2.11 GPS L1PY,GLO L2P */
         if      (sys==SYS_GPS) sprintf(type,"%c1W",'C');
+        else if (sys==SYS_CMP) sprintf(type,"%c1P",'C'); /* add for BDS (ver.2.10) */
         else if (sys==SYS_GLO) sprintf(type,"%c1P",'C');
     }
     else if (!strcmp(str,"P2")) { /* ver.2.11 GPS L2PY,GLO L2P */
@@ -159,6 +160,7 @@ static void convcode(double ver, int sys, const char *str, char *type)
         else if (sys==SYS_GAL) sprintf(type,"%c1X",'C'); /* ver.2.12 */
         else if (sys==SYS_QZS) sprintf(type,"%c1C",'C');
         else if (sys==SYS_SBS) sprintf(type,"%c1C",'C');
+        else if (sys==SYS_CMP) sprintf(type,"%c1X",'C'); /* add */
     }
     else if (!strcmp(str,"C2")) {
         if (sys==SYS_GPS) {
@@ -198,6 +200,7 @@ static void convcode(double ver, int sys, const char *str, char *type)
         else if (sys==SYS_GAL) sprintf(type,"%c1X",str[0]); /* tentative */
         else if (sys==SYS_QZS) sprintf(type,"%c1C",str[0]);
         else if (sys==SYS_SBS) sprintf(type,"%c1C",str[0]);
+        else if (sys==SYS_CMP) sprintf(type,"%c1X",str[0]); /* add */
     }
     else if (str[1]=='2') {
         if      (sys==SYS_GPS) sprintf(type,"%c2W",str[0]);
@@ -223,7 +226,7 @@ static void convcode(double ver, int sys, const char *str, char *type)
     else if (str[1]=='8') {
         if      (sys==SYS_GAL) sprintf(type,"%c8X",str[0]);
     }
-    arc_log(ARC_INFO, "convcode: ver=%.2f sys=%2d type= %s -> %s\n", ver, sys, str, type);
+    arc_log(ARC_INFO,"convcode: ver=%.2f sys=%2d type= %s -> %s\n",ver,sys,str,type);
 }
 /* decode obs header ---------------------------------------------------------*/
 static void decode_obsh(FILE *fp, char *buff, double ver, int *tsys,
@@ -528,6 +531,8 @@ static int readrnxh(FILE *fp, double *ver, char *type, int *sys, int *tsys,
         else if (strstr(label,"RINEX VERSION / TYPE")) {
             *ver=str2num(buff,0,9);
             *type=*(buff+20);
+
+            if (strstr(buff,"COMPASS NAV DATA")) *type='N'; /* huace navigation data file */
             
             /* satellite system */
             switch (*(buff+40)) {
@@ -1193,6 +1198,9 @@ static int readrnxnavb(FILE *fp, const char *opt, double ver, int sys,
                 else if (93<=prn&&prn<=97) { /* extension */
                     sat=satno(SYS_QZS,prn+100);
                 }
+                else if (sys==SYS_CMP) {
+                    sat=satno(SYS_CMP,prn);
+                }
                 else sat=satno(SYS_GPS,prn);
             }
             /* decode toc field */
@@ -1405,7 +1413,7 @@ static int readrnxfile(const char *file, gtime_t ts, gtime_t te, double tint,
     if (sta) init_sta(sta);
     
     /* uncompress file */
-    if ((cstat= arc_rtk_uncompress(file, tmpfile))<0) {
+    if ((cstat=arc_rtk_uncompress(file, tmpfile))<0) {
         arc_log(ARC_WARNING, "rinex file uncompact error: %s\n", file);
         return 0;
     }
@@ -1465,7 +1473,7 @@ extern int arc_readrnxt(const char *file, int rcv, gtime_t ts, gtime_t te,
     const char *p;
     char type=' ',*files[MAXEXFILE]={0};
 
-    arc_log(ARC_INFO, "readrnxt: file=%s rcv=%d\n", file, rcv);
+    arc_log(ARC_INFO,"readrnxt: file=%s rcv=%d\n",file,rcv);
     
     if (!*file) {
         return readrnxfp(stdin,ts,te,tint,opt,0,1,&type,obs,nav,sta);

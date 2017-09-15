@@ -17,7 +17,6 @@
  *  Created on: July 07, 2017
  *********************************************************************************/
 
-#include <arc.h>
 #include "arc.h"
 
 /* constants -----------------------------------------------------------------*/
@@ -32,11 +31,12 @@
 #define ERR_BRDCI   0.5         /* broadcast iono model error factor */
 #define ERR_CBIAS   0.3         /* code bias error std (m) */
 #define REL_HUMI    0.7         /* relative humidity for saastamoinen model */
+#define MAXCLKVAR   10.0        /* rover station clock drift variance  */
 
 /* pseudorange measurement error variance ------------------------------------*/
 static double arc_varerr(const prcopt_t *opt, double el, int sys,int sat)
 {
-    double fact,varr,geo_factor;
+    double fact,varr,geo_factor=1.0;
 
     if (sys==SYS_CMP&&arc_is_bds_geo(sat)) geo_factor=EFACT_GEO;
 
@@ -61,7 +61,7 @@ static double arc_prange(const obsd_t *obs, const nav_t *nav, const double *azel
     const double *lam=nav->lam[obs->sat-1];
     double PC,P1,P1_P2,P1_C1,gamma;
     int i=0,j=1;
-    
+
     *var=0.0;
 
     /* test snr mask */
@@ -154,7 +154,7 @@ extern int arc_tropcorr(gtime_t time, const nav_t *nav, const double *pos,
     arc_log(ARC_INFO, "tropcorr: time=%s opt=%d pos=%.3f %.3f azel=%.3f %.3f\n",
             time_str(time, 3), tropopt, pos[0] * R2D, pos[1] * R2D, azel[0] * R2D,
             azel[1] * R2D);
-    
+
     /* saastamoinen model */
     if (tropopt==TROPOPT_SAAS
         ||tropopt==TROPOPT_EST||tropopt==TROPOPT_ESTG) {
@@ -220,16 +220,16 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
     int i,j,nv=0,sys,mask[4]={0};
 
     arc_log(ARC_INFO,"resprng : n=%d\n",n);
-    
+
     for (i=0;i<3;i++) rr[i]=x[i]; dtr=x[3];
-    
+
     ecef2pos(rr,pos);
-    
+
     for (i=*ns=0;i<n&&i<MAXOBS;i++) {
         vsat[i]=0; azel[i*2]=azel[1+i*2]=resp[i]=0.0;
-        
+
         if (!(sys=satsys(obs[i].sat,NULL))) continue;
-        
+
         /* reject duplicated observation data */
         if (i<n-1&&i<MAXOBS-1&&obs[i].sat==obs[i+1].sat) {
             arc_log(ARC_WARNING, "duplicated observation data %s sat=%2d\n",
@@ -240,17 +240,17 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
         /* geometric distance/azimuth/elevation angle */
         if ((r=arc_geodist(rs+i*6,rr,e))<=0.0||
                 arc_satazel(pos,e,azel+i*2)<opt->elmin) continue;
-        
+
         /* psudorange with code bias correction */
         if ((P=arc_prange(obs+i,nav,azel+i*2,iter,opt,&vmeas))==0.0) continue;
-        
+
         /* excluded satellite? */
         if (satexclude(obs[i].sat,svh[i],opt)) continue;
-        
+
         /* ionospheric corrections */
         if (!arc_ionocorr(obs[i].time,nav,obs[i].sat,pos,azel+i*2,
                           iter>0?opt->ionoopt:IONOOPT_BRDC,&dion,&vion)) continue;
-        
+
         /* GPS-L1 -> L1/B1 */
         if ((lam_L1=nav->lam[obs[i].sat-1][0])>0.0) {
             dion*=SQR(lam_L1/lam_carr[0]);
@@ -262,18 +262,18 @@ static int arc_rescode(int iter, const obsd_t *obs, int n, const double *rs,
         }
         /* pseudorange residual */
         v[nv]=P-(r+dtr-CLIGHT*dts[i*2]+dion+dtrp);
-        
+
         /* design matrix */
         for (j=0;j<NX;j++) H[j+nv*NX]=j<3?-e[j]:(j==3?1.0:0.0);
-        
+
         /* time system and receiver bias offset correction */
         if      (sys==SYS_GLO) {v[nv]-=x[4]; H[4+nv*NX]=1.0; mask[1]=1;}
         else if (sys==SYS_GAL) {v[nv]-=x[5]; H[5+nv*NX]=1.0; mask[2]=1;}
         else if (sys==SYS_CMP) {v[nv]-=x[6]; H[6+nv*NX]=1.0; mask[3]=1;}
         else mask[0]=1;
-        
+
         vsat[i]=1; resp[i]=v[nv]; (*ns)++;
-        
+
         /* error variance */
         var[nv++]=arc_varerr(opt,azel[1+i*2],sys,obs[i].sat)+vare[i]+vmeas+vion+vtrp;
 
@@ -298,7 +298,7 @@ static int arc_valsol(const double *azel, const int *vsat, int n,
     int i,ns;
 
     arc_log(ARC_INFO,"valsol  : n=%d nv=%d\n",n,nv);
-    
+
     /* chi-square validation of residuals */
     vv=arc_dot(v,v,nv);
     if (nv>nx&&vv>chisqr[nv-nx-1]) {
@@ -332,13 +332,13 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
     int i,j,k,info,stat,nv,ns;
 
     arc_log(ARC_INFO,"estpos  : n=%d\n",n);
-    
+
     v=arc_mat(n+4,1); H=arc_mat(NX,n+4); var=arc_mat(n+4,1);
 
     for (i=0;i<3;i++) x[i]=sol->rr[i];
-    
+
     for (i=0;i<MAXITR;i++) {
-        
+
         /* pseudorange residuals */
         nv=arc_rescode(i,obs,n,rs,dts,vare,svh,nav,x,opt,v,H,var,azel,vsat,resp,
                        &ns);
@@ -358,13 +358,13 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
             break;
         }
         for (j=0;j<NX;j++) x[j]+=dx[j];
-        
+
         if (arc_norm(dx,NX)<1E-4) {
             sol->type=0;
             sol->time=timeadd(obs[0].time,-x[3]/CLIGHT);
             sol->ns=(unsigned char)ns;
             sol->age=0.0;
-            
+
             /* validate solution */
             if (!(stat=arc_valsol(azel,vsat,n,opt,v,nv,NX,msg,sol))) {
                 sol->stat=SOLQ_NONE;
@@ -386,7 +386,7 @@ static int arc_estpos(const obsd_t *obs, int n, const double *rs, const double *
         }
     }
     if (i>=MAXITR) sprintf(msg,"iteration divergent i=%d",i);
-    
+
     free(v); free(H); free(var);
     return 0;
 }
@@ -400,16 +400,16 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
     sol_t sol_e={{0}};
     char tstr[32],name[16],msg_e[128];
     double *rs_e,*dts_e,*vare_e,*azel_e,*resp_e,rms_e,rms=100.0;
-    int i,j,k,nvsat,stat=0,*svh_e,*vsat_e,sat=0;
+    int i,j,k,l,nvsat,stat=0,*svh_e,*vsat_e,sat=0;
 
     arc_log(ARC_INFO, "raim_fde: %s n=%2d\n", time_str(obs[0].time,0),n);
-    
+
     if (!(obs_e=(obsd_t *)malloc(sizeof(obsd_t)*n))) return 0;
     rs_e=arc_mat(6,n); dts_e=arc_mat(2,n);vare_e=arc_mat(1,n); azel_e=arc_zeros(2,n);
     svh_e=arc_imat(1,n); vsat_e= arc_imat(1,n); resp_e= arc_mat(1,n);
-    
+
     for (i=0;i<n;i++) {
-        
+
         /* satellite exclution */
         for (j=k=0;j<n;j++) {
             if (j==i) continue;
@@ -439,7 +439,7 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
 
         arc_log(ARC_INFO, "raim_fde: exsat=%2d rms=%8.3f\n", obs[i].sat,rms_e);
         if (rms_e>rms) continue;
-        
+
         /* save result */
         for (j=k=0;j<n;j++) {
             if (j==i) continue;
@@ -448,7 +448,14 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
             resp[j]=resp_e[k++];
         }
         stat=1;
-        *sol=sol_e;
+        sol->time=sol_e.time; /* solution time */
+        sol->stat=sol_e.stat;
+        sol->dop =sol_e.dop;
+        sol->ns  =sol_e.ns;
+        sol->type=sol_e.type;
+        for (l=0;l<6;l++) sol->rr[l] =sol_e.rr[l]; /* reciver position and velecity */
+        for (l=0;l<6;l++) sol->dtr[l]=sol_e.dtr[l]; /* clock drift */
+        for (l=0;l<6;l++) sol->qr[l] =sol_e.qr[l];  /* position covariance */
         sat=obs[i].sat;
         rms=rms_e;
         vsat[i]=0;
@@ -466,72 +473,102 @@ static int arc_raim_fde(const obsd_t *obs, int n, const double *rs,
 /* doppler residuals ---------------------------------------------------------*/
 static int arc_resdop(const obsd_t *obs, int n, const double *rs, const double *dts,
                       const nav_t *nav, const double *rr, const double *x,
-                      const double *azel, const int *vsat, double *v, double *H)
+                      const double *azel, const int *vsat, double *v, double *H,
+                      ssat_t *ssat,const prcopt_t *opt,int first)
 {
     double lam,rate,pos[3],E[9],a[3],e[3],vs[3],cosel;
     int i,j,nv=0;
 
-    arc_log(ARC_INFO, "resdop  : n=%d\n", n);
-    
+    arc_log(ARC_INFO,"resdop  : n=%d\n",n);
+
     ecef2pos(rr,pos); xyz2enu(pos,E);
-    
+
     for (i=0;i<n&&i<MAXOBS;i++) {
-        
+
         lam=nav->lam[obs[i].sat-1][0];
-        
+
         if (obs[i].D[0]==0.0||lam==0.0
             ||!vsat[i]|| arc_norm(rs+3+i*6,3)<=0.0) {
             continue;
         }
+        if (azel[2*i+1]<opt->elmin) continue;
+
         /* line-of-sight vector in ecef */
         cosel=cos(azel[1+i*2]);
         a[0]=sin(azel[i*2])*cosel;
         a[1]=cos(azel[i*2])*cosel;
         a[2]=sin(azel[1+i*2]);
-        arc_matmul("TN", 3, 1, 3, 1.0, E, a, 0.0, e);
-        
+
+        arc_matmul("TN",3,1,3,1.0,E,a,0.0,e);
+
         /* satellite velocity relative to receiver in ecef */
         for (j=0;j<3;j++) vs[j]=rs[j+3+i*6]-x[j];
-        
+
         /* range rate with earth rotation correction */
-        rate= arc_dot(vs, e, 3)+OMGE/CLIGHT*(rs[4+i*6]*rr[0]+rs[1+i*6]*x[0]-
-                                      rs[3+i*6]*rr[1]-rs[  i*6]*x[1]);
+        rate=arc_dot(vs,e,3)+OMGE/CLIGHT*(rs[4+i*6]*rr[0]+rs[1+i*6]*x[0]-
+                                          rs[3+i*6]*rr[1]-rs[i*6]*x[1]);
         /* doppler residual */
         v[nv]=-lam*obs[i].D[0]-(rate+x[3]-CLIGHT*dts[1+i*2]);
-        
+
+        /* save doppler measurements */
+        if (ssat) {
+            arc_matcpy(ssat[obs[i].sat-1].e,e,3,1);
+            ssat[obs[i].sat-1].doppler[0]=-lam*obs[i].D[0]; /* todo:need to more test */
+            ssat[obs[i].sat-1].rate=rate;
+            ssat[obs[i].sat-1].doppler_res=v[nv];
+            for (j=0;j<6;j++) ssat[obs[i].sat-1].rs [j]=rs [i*6+j];
+            for (j=0;j<2;j++) ssat[obs[i].sat-1].dts[j]=dts[i*2+j];
+        }
         /* design matrix */
         for (j=0;j<4;j++) H[j+nv*4]=j<3?-e[j]:1.0;
         nv++;
     }
     return nv;
 }
+/* check rover station clock drift--------------------------------------------*/
+static int arc_chk_clk(sol_t *sol,double clk)
+{
+    arc_log(ARC_INFO,"arc_chk_clk: \n");
+
+    return fabs(sol->clk_dri-clk)>=MAXCLKVAR;
+}
 /* estimate receiver velocity ------------------------------------------------*/
-static void arc_estvel(const obsd_t *obs, int n, const double *rs, const double *dts,
-                       const nav_t *nav, const prcopt_t *opt, sol_t *sol,
-                       const double *azel, const int *vsat)
+static void arc_estvel(const obsd_t *obs, int n, const double *rs,
+                       const double *dts,const nav_t *nav, const prcopt_t *opt,
+                       sol_t *sol,const double *azel, const int *vsat,ssat_t *ssat)
 {
     double x[4]={0},dx[4],Q[16],*v,*H;
     int i,j,nv;
 
     arc_log(ARC_INFO,"estvel  : n=%d\n",n);
-    
+
     v=arc_mat(n,1); H=arc_mat(4,n);
-    
+
+    if (ssat) for (i=0;i<MAXSAT;i++) ssat[i].doppler[0]=0;
+
     for (i=0;i<MAXITR;i++) {
-        
-        /* doppler residuals */   
+
+        /* doppler residuals */
         if ((nv=arc_resdop(obs,n,rs,dts,nav,sol->rr,
-                           x,azel,vsat,v,H))<4) {
+                           x,azel,vsat,v,H,ssat,opt,i))<4) {
             break;
         }
         /* least square estimation */
         if (arc_lsq(H,v,4,nv,dx,Q)) {
-			break;
-		}
+            break;
+        }
         for (j=0;j<4;j++) x[j]+=dx[j];
         if (arc_norm(dx,4)<1E-6) {
+
             for (i=0;i<3;i++) sol->rr[i+3]=x[i];
             sol->doppler=1; /* set flag */
+
+            if (arc_chk_clk(sol,x[3])) { /* check rover station clock drift */
+                sol->clk_jmp=1; /* detect clock jump */
+                arc_log(ARC_WARNING,"arc_estvel: "
+                        "rover station clock drift change large \n");
+            }
+            sol->clk_dri=x[3]; /* rover station clock drift */
             break;
         }
     }
@@ -560,18 +597,19 @@ extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
     prcopt_t opt_=*opt;
     double *rs,*dts,*var,*azel_,*resp;
     int i,stat,vsat[MAXOBS]={0},svh[MAXOBS];
-    
+
     sol->stat=SOLQ_NONE; sol->doppler=0;
-    
+
     if (n<=0) {strcpy(msg,"no observation data"); return 0;}
 
     arc_log(ARC_INFO,"pntpos  : tobs=%s n=%d\n",time_str(obs[0].time,3),n);
-    
+
     sol->time=obs[0].time; if (msg) msg[0]='\0';
-    
+    sol->clk_jmp=0; /* initial reciver clock jump */
+
     rs=arc_mat(6,n); dts=arc_mat(2,n); var=arc_mat(1,n);
     azel_=arc_zeros(2,n); resp=arc_mat(1,n);
-    
+
     if (opt_.mode!=PMODE_SINGLE) { /* for precise positioning */
 #if 0
         opt_.sateph =EPHOPT_BRDC;
@@ -581,17 +619,17 @@ extern int arc_pntpos(const obsd_t *obs, int n, const nav_t *nav,
     }
     /* satellite positons, velocities and clocks */
     arc_satposs(sol->time,obs,n,nav,opt_.sateph,rs,dts,var,svh);
-    
+
     /* estimate receiver position with pseudorange */
     stat=arc_estpos(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);
-    
+
     /* raim fde */
     if (!stat&&n>=6&&opt->posopt[4]) {
         stat=arc_raim_fde(obs,n,rs,dts,var,svh,nav,&opt_,sol,azel_,vsat,resp,msg);
     }
     /* estimate receiver velocity with doppler */
-    arc_estvel(obs,n,rs,dts,nav,&opt_,sol,azel_,vsat);
-    
+    arc_estvel(obs,n,rs,dts,nav,&opt_,sol,azel_,vsat,ssat);
+
     if (azel) {
         for (i=0;i<n*2;i++) azel[i]=azel_[i];
     }

@@ -30,5 +30,6 @@
 #include "arc_PF.h"
 #include "arc_assert_macros.hpp"
 #include "glog/logging.h"
-
+#include <QtCore>
+#include <QtGui>
 #endif

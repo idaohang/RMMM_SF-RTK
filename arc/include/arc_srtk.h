@@ -32,8 +32,9 @@
 extern "C" {
 #endif
 /* constants/global variables -------------------------------------------------*/
-#define ARC_TRACE_MAT                     /* matrix printf */
-#define GLOG            1                 /* google log for debug */
+//#define ARC_TRACE_MAT                     /* matrix printf */
+//#define ARC_NOSTATICS                     /* no output solution statics informations */
+#define GLOG            0                 /* google log for debug */
 #define ARC_LOGTOFILE   1                 /* google log output file */
 #define ARC_NOLOG       -1                /* disable log informations */
 #define ARC_INFO        0				  /* google information log */
@@ -62,7 +63,8 @@ extern int  arc_pf_srtk(gtime_t ts, gtime_t te, double ti, double tu,
                         const prcopt_t *popt, const solopt_t *sopt,
                         const filopt_t *fopt, char **infile, int n, char *outfile);
 /* single frequency rtk positioning ------------------------------------------*/
-extern int  arc_srtkpos(rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
+extern int  arc_srtkpos (rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
+extern int  arc_srtkpos2(rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
 /* arc trace log functions ---------------------------------------------------*/
 extern void arc_traceopen(const char *file);
 extern void arc_traceclose(void);
@@ -115,6 +117,8 @@ extern double arc_tropmapf_chao(gtime_t time, const double *pos, const double *a
                                 double *mapfw);
 extern double arc_tropmapf_cfa2_2(gtime_t time, const double *pos, const double *azel,
                                   double *mapfw);
+extern double sbstropcorr(gtime_t time, const double *pos, const double *azel,
+                          double *var,double *zwd);
 /* ukf filter -------------------------------------------------------------------*/
 extern ukf_t* arc_ukf_filter_new(unsigned int state_dim,
                                  unsigned int measure_dim,
@@ -168,6 +172,9 @@ extern int  arc_filter(double *x, double *P, const double *H, const double *v,
                        const double *R, int n, int m,double * D);
 extern int  arc_smoother(const double *xf, const double *Qf, const double *xb,
                          const double *Qb, int n, double *xs, double *Qs);
+extern int arc_filter_active(double *x, double *P, const double *H, const double *v,
+                             const double *R, int n, int m,double *D,
+                             const int *active,int na);
 extern void arc_add_fatal(fatalfunc_t *func);
 
 /* time and string functions -------------------------------------------------*/
@@ -304,6 +311,7 @@ extern int  arc_readfcb(const char *file, nav_t *nav);
 extern void arc_alm2pos(gtime_t time, const alm_t *alm, double *rs, double *dts);
 extern int arc_pppnx(const prcopt_t *opt);
 extern int addobsdata(obs_t *obs, const obsd_t *data);
+extern void arc_blockid(pcv_t *pcv);
 
 /* integer ambiguity resolution ----------------------------------------------*/
 extern int arc_lambda(int n, int m, const double *a, const double *Q, double *F,
@@ -342,6 +350,49 @@ extern int arc_mateigenvalue(const double* A,int n,double *u,double *v);
 extern int arc_matdet(const double*A,int n,double*det);
 extern double arc_normcdf(double X);
 
+/* options---------------------------------------------------------------------*/
+extern void setsysopts(const prcopt_t *prcopt, const solopt_t *solopt,
+                       const filopt_t *filopt);
+extern void getsysopts(prcopt_t *popt, solopt_t *sopt, filopt_t *fopt);
+extern void resetsysopts(void);
+extern int saveopts(const char *file, const char *mode, const char *comment,
+                    const opt_t *opts);
+extern int loadopts(const char *file, opt_t *opts);
+extern int opt2buf(const opt_t *opt, char *buff);
+extern int opt2str(const opt_t *opt, char *str);
+extern int str2opt(opt_t *opt, const char *str);
+extern opt_t *searchopt(const char *name, const opt_t *opts);
+extern void arc_info(int per,int color,const char *info);
+extern void arc_trim(const char *strIn /*in*/, char *strOut /*in*/);
+extern void arc_setroverobs(const char *file);
+extern void arc_setbaseobs(const char *file);
+extern void arc_setnav(const char *file);
+extern void arc_setgpsnav(const char *file);
+extern void arc_setbdsnav(const char *file);
+/* solutions output-----------------------------------------------------------*/
+extern int rtkoutstat(rtk_t *rtk, char *buff);
+extern void rtkclosestat(void);
+extern int rtkopenstat(const char *file, int level);
+extern int outsolheads(unsigned char *buff, const solopt_t *opt);
+extern void outsolhead(FILE *fp, const solopt_t *opt);
+extern void createdir(const char *path);
+extern void outprcopt(FILE *fp, const prcopt_t *opt);
+extern void outsolex(FILE *fp, const sol_t *sol, const ssat_t *ssat,
+                     const solopt_t *opt);
+extern void outsol(FILE *fp, const sol_t *sol, const double *rb,
+                   const solopt_t *opt);
+extern int outsolexs(unsigned char *buff, const sol_t *sol, const ssat_t *ssat,
+                     const solopt_t *opt);
+extern int outsols(unsigned char *buff, const sol_t *sol, const double *rb,
+                   const solopt_t *opt);
+extern int outprcopts(unsigned char *buff, const prcopt_t *opt);
+extern void rtkinit(rtk_t *rtk, const prcopt_t *opt);
+extern void rtkfree(rtk_t *rtk);
+extern void rtkclosestat2(void);
+extern int rtkoutstat2(rtk_t *rtk, char *buff);
+extern int rtkopenstat2(const char *file, int level);
+/* plot----------------------------------------------------------------------*/
+extern int arc_plot(int argc, char *argv[]);
 #ifdef __cplusplus
 }
 #endif

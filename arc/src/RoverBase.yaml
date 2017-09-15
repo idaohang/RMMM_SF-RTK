@@ -1,0 +1,123 @@
+
+# ARC-SRTK options (2017.08.01 v1.0)
+
+## Solver parameters
+pos1-posmode: 3                 # (0:single,1:dgps,2:kinematic,3:static,4:movingbase,5:fixed,6:ppp_kine,7:ppp_static)
+pos1-frequency: 1               # (1:l1,2:l1+l2,3:l1+l2+l5,4:l1+l2+l5+l6,5:l1+l2+l5+l6+l7)
+pos1-soltype: 0                 # (0:forward,1:backward,2:combined)
+pos1-elmask: 15                 # (deg)
+pos1-snrmask: 0                 # (dBHz)
+pos1-dynamics:  0               # (0:off,1:on)
+pos1-tidecorr:  0               # (0:off,1:on) 
+pos2-armode:    3               # (0:off,1:continuous,2:instantaneous,3:fix_and_hold)
+pos1-ionoopt : 1                # 0:off,1:brdc)
+pos1-tropopt : 1                # (0:off,1:saas,2:sbas,3:est_ztd,4:est_ztdgrad,6:HOPF,7:UNB3,8:MOPS,9:GCAT,10:BALCK,11:WAAS) 
+pos1-sateph :  0                # (0:brdc,1:precise)
+pos1-exclsats :                 # (prn ...)
+pos1-navsys: 1                  # (1:gps+2:sbas+4:glo+8:gal+16:qzs+32:comp)
+
+pos2-arthres: 1.5
+pos2-arlockcnt: 0
+pos2-arelmask: 0                # (deg)
+pos2-arminfix: 5
+pos2-elmaskhold: 0              # (deg)
+pos2-aroutcnt: 5
+pos2-maxage: 30                 # (s)
+pos2-slipthres: 0.05            # (m)
+pos2-rejionno: 30               # (m)
+pos2-rejgdop: 30
+pos2-niter: 1
+pos2-baselen: 0                 # (m)
+pos2-basesig: 0                 # (m)
+misc-timeinterp: 0              # (0:off,1:on)
+misc-sbasatsel: 0               # (0:all)
+
+# Solver parameter statistics (for kalman filter)
+stats-eratio1: 100
+stats-eratio2: 100
+stats-errphase: 0.003           # (m)
+stats-errphaseel: 0.003         # (m)
+stats-errphasebl: 0             # (m/10km)
+stats-errdoppler: 1             # (Hz)
+stats-stdbias: 30               # (m)
+stats-stdiono: 0.03             # (m)
+stats-stdtrop: 0.3              # (m)
+stats-prnaccelh: 10             # (m/s^2)
+stats-prnaccelv: 10             # (m/s^2)
+stats-prnbias: 0.0001           # (m)
+stats-prniono: 0.001            # (m)
+stats-prntrop: 0.0001           # (m)
+stats-clkstab: 5e-12            # (s/s)
+
+# Base station location
+ant2-postype: 1                 # (0:llh,1:xyz,2:single,3:posfile,4:rinexhead,5:rtcm)
+ant2-pos1: -2392060.4126                    # (deg|m)         
+ant2-pos2: 5383990.1051                    # (deg|m)         
+ant2-pos3: 2435512.0331                    # (m|m)	        
+ant2-anttype: 
+ant2-antdele: 0                 # (m)
+ant2-antdeln: 0                 # (m)
+ant2-antdelu: 0                 # (m)
+
+# Set position of rover antenna
+ant1-anttype: ''                # antenna types specified in rtklib documentation
+ant1-antdele: 0                 # (m)
+ant1-antdeln: 0                 # (m)
+ant1-antdelu: 0                 # (m)
+
+# Output file options
+out-solformat: 2                # (0:llh,1:xyz,2:enu,3:nmea)
+out-outhead: 1                  # (0:off,1:on)
+out-outopt: 0                   # (0:off,1:on)
+out-timesys: 0                  # (0:gpst,1:utc,2:jst)
+out-timeform: 1                 # (0:tow,1:hms)
+out-timendec: 3
+out-degform: 0                  # (0:deg,1:dms)
+out-fieldsep: ''
+out-height: 0                   # (0:ellipsoidal,1:geodetic)
+out-geoid: 0                    # (0:internal,1:egm96,2:egm08_2.5,3:egm08_1,4:gsi2000)
+out-solstatic: 0                # (0:all,1:single)
+out-nmeaintv1: 0                # (s)
+out-nmeaintv2: 0                # (s)
+out-outstat: 2                  # (0:off,1:state,2:residual)
+
+# Extra correction data files
+file-satantfile:              # satellite antenna parameters file
+file-rcvantfile:              # receiver antenna parameters file
+file-staposfile:              # station positions file  
+file-geoidfile:               # external geoid data file 
+file-ionofile:                # ionosphere data file
+file-dcbfile:                 # dcb data file
+file-tempdir: tmp
+file-geexefile: 
+file-solstatfile:             # solution statistics file
+file-tracefile:               # debug trace file
+file-roverobs: /home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/CLP10160.16o               # rover station observation file
+file-baseobs: /home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/JZD10160.16o                # base station observation file
+file-navfile: /home/sujinglan/arc_rtk/arc_test/data/gps_bds/static/brdm0160.16p                # navigation file  
+file-bdsnav:                  # bds navigation file 
+file-gpsnav:                  # gps navigation file
+
+amb-instantaneous: 0            # (0:off,1:on)
+amb-part: 0                     # (0:off,1:on)
+amb-part-D : 0                  # (0:off,1:on)
+amb-delay: 0                    # (0:off,1:on)
+amb-adop: 0                     # (0:off,1:on)
+
+doppler-estclk:0                # (0:off,1:on)
+doppler-clkprn:0                # (m/s)
+
+snr-detect:0                    # (0:off,1:on)
+snr-alpha: 0
+
+ukf: 0                          # (0:off,1:on)
+ukf-alpha: 0
+ukf-Z: 0
+ukf-beta: 0
+
+robust-kalman:0                 # (0:off,1:on)
+robust-kalman-alpha: 0
+
+difference-pseudorange-initial:         0          # (0:off,1:on)
+difference-pseudorange-initial-dynamic: 0          # (0:off,1:on)
+

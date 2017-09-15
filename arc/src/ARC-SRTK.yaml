@@ -1,0 +1,132 @@
+# ARC-SRTK-OPTIONS
+
+pos1-posmode       :2          # (0:single,1:dgps,2:kinematic,3:static,4:movingbase,5:fixed,6:ppp-kine,7:ppp-static)
+pos1-frequency     :1          # (1:l1,2:l1+l2,3:l1+l2+l5,4:l1+l2+l5+l6,5:l1+l2+l5+l6+l7)
+pos1-soltype       :0          # (0:forward,1:backward,2:combined)
+pos1-elmask        :15         # (deg)
+pos1-snrmask       :0          # (dBHz)
+pos1-dynamics      :0          # (0:off,1:on)
+pos1-tidecorr      :0          # (0:off,1:on)
+pos1-ionoopt       :1          # (0:off,1:brdc,2:sbas,3:dual-freq,4:est-stec,5:ionex-tec,6:qzs-brdc,7:qzs-lex,8:vtec_sf,9:vtec_ef,10:gtec)
+pos1-tropopt       :1          # (0:off,1:saas,2:sbas,3:est-ztd,4:est-ztdgrad)
+pos1-sateph        :0          # (0:brdc,1:precise,2:brdc+sbas,3:brdc+ssrapc,4:brdc+ssrcom)
+pos1-exclsats      :           # (prn ...)
+pos1-navsys        :33          # (1:gps+2:sbas+4:glo+8:gal+16:qzs+32:comp)
+pos2-armode        :3          # (0:off,1:continuous,2:instantaneous,3:fix-and-hold)
+pos2-gloarmode     :0          # (0:off,1:on,2:autocal)
+pos2-bdsarmode     :1          # (0:off,1:on,2:autocal)
+pos2-arthres       :3.0
+pos2-arlockcnt     :5
+pos2-arelmask      :10         # (deg)
+pos2-arminfix      :5
+pos2-elmaskhold    :25         # (deg)
+pos2-aroutcnt      :10
+pos2-maxage        :15         # (s)
+pos2-slipthres     :0.05       # (m)
+pos2-rejionno      :15.0       # (m)
+pos2-rejgdop       :30
+pos2-niter         :1
+pos2-baselen       :0          # (m)
+pos2-basesig       :0          # (m)
+out-solformat      :1          # (0:llh,1:xyz,2:enu,3:nmea)
+out-outhead        :1          # (0:off,1:on)
+out-outopt         :1          # (0:off,1:on)
+out-timesys        :1          # (0:gpst,1:utc,2:jst)
+out-timeform       :0          # (0:tow,1:hms)
+out-timendec       :3
+out-degform        :0          # (0:deg,1:dms)
+out-fieldsep       :32
+out-height         :0          # (0:ellipsoidal,1:geodetic)
+out-geoid          :0          # (0:internal,1:egm96,2:egm08_2.5,3:egm08_1,4:gsi2000)
+out-solstatic      :0          # (0:all,1:single)
+out-nmeaintv1      :0          # (s)
+out-nmeaintv2      :0          # (s)
+out-outstat        :2          # (0:off,1:state,2:residual)
+stats-eratio1      :100
+stats-eratio2      :100
+stats-errphase     :0.003      # (m)
+stats-errphaseel   :0.003      # (m)
+stats-errphasebl   :0          # (m/10km)
+stats-errdoppler   :0          # (Hz)
+stats-stdbias      :30         # (m)
+stats-stdiono      :0.03       # (m)
+stats-stdtrop      :0.03       # (m)
+stats-prnaccelh    :0.3        # (m/s^2)
+stats-prnaccelv    :0.3        # (m/s^2)
+stats-prnbias      :0.3        # (m)
+stats-prniono      :0.01       # (m)
+stats-prntrop      :0.01       # (m)
+stats-clkstab      :5e-12      # (s/s)
+ant1-postype       :0          # (0:llh,1:xyz,2:single,3:posfile,4:rinexhead,5:rtcm)
+ant1-pos1          :-90        # (deg|m)
+ant1-pos2          :0          # (deg|m)
+ant1-pos3          :-6378137   # (m|m)
+ant1-anttype       :
+ant1-antdele       :0          # (m)
+ant1-antdeln       :0          # (m)
+ant1-antdelu       :0          # (m)
+ant2-postype       :1          # (0:llh,1:xyz,2:single,3:posfile,4:rinexhead,5:rtcm)
+ant2-pos1          :-2267815.1675 # (deg|m)
+ant2-pos2          :5009407.1635   # (deg|m)
+ant2-pos3          :3220952.9060   # (m|m)
+ant2-anttype       :
+ant2-antdele       :0          # (m)
+ant2-antdeln       :0          # (m)
+ant2-antdelu       :0          # (m)
+misc-timeinterp    :0          # (0:off,1:on)
+misc-sbasatsel     :0          # (0:all)
+file-satantfile    :           # satellite antenna parameters file
+file-rcvantfile    :           # receiver antenna parameters file
+file-staposfile    :           # station positions file
+file-geoidfile     :           # external geoid data file
+file-ionofile      :           # ionosphere data file
+file-dcbfile       :           # dcb data file
+file-tempdir       :
+file-geexefile     :
+file-solstatfile   :
+file-tracefile     :
+file-roverobs      :/home/sujinglan/arc_rtk/arc_test/data/gps_bds/20170818/rover/GPSC1Log201707130627_35.17o
+file-baseobs       :/home/sujinglan/arc_rtk/arc_test/data/gps_bds/20170818/base/5202K81320201707130000B.17o
+file-navfile       :/home/sujinglan/arc_rtk/arc_test/data/gps_bds/20170818/base/5202K81320201707130000B.17n
+file-bdsnav        :/home/sujinglan/arc_rtk/arc_test/data/gps_bds/20170818/base/5202K81320201707130000B.17c
+file-output        :/home/sujinglan/arc_rtk/arc/src/result
+amb-instantaneous  :0          # (0:off 1:on)
+amb-part           :0          # (0:off 1:on)
+amb-part-D         :0          # (0:off 1:on)
+amb-delay          :0          # (0:off 1:on)
+amb-adop           :0          # (0:off 1:on)
+amb-no-solution    :0          # (0:off 1:on)
+amb-ref-delayc     :5          # counts of reset single-difference reference ambiguity
+doppler-estclk     :1          # (0:off 1:on)
+doppler-clkprn     :0.05       # (m/s)
+doppler-velprne    :0.01       # (m/s)
+doppler-velprnn    :0.01       # (m/s)
+doppler-velprnu    :0.01       # (m/s)
+snr-detect         :1          # (0:off 1:on)
+snr-alpha          :0.01       # (dBHz)
+ukf                :0          # (0:off 1:on)
+ukf-alpha          :0.0001
+ukf-Z              :0
+ukf-beta           :4
+robust-kalman      :1          # (0:off 1:on)
+robust-kalman-alpha :0.001
+difference-pseudorange-initial :0         # (0:off 1:on)
+difference-pseudorange-initial-dynamic :0 # (0:off 1:on)
+misc-timeinterp    :1          # (0:off 1:on)
+pos2-maxinnoc      :15.0       # reject threshold of innovation (m) for carrier-phase
+testeclipse        :1          # exclude measurements of eclipsing satellite (block IIA)
+use-double-difference-solution :0 # estimate double-difference ambiguity and no estimate single-difference anbiguity
+half-fix-ambiguity :0          # fix half of all ambiguity by elvations
+amb-inherit        :0          # double-difference inherit when lambda failed
+pos-raim-fde       :1          # raim fde check
+inherit-double-ambiguity-thres :1.5 # thres of inherixing double-difference ambiguity
+reset-hold        :30.0             # thres of reset double-difference ambiguity in hold ambiguity
+inherit-fix-counts:5          # double-difference ambiguity inherit fix counts
+inherit-impact-factor: 0.001  # inherit double-difference ambiguity impact factor
+fixn              :0.01  # process noice of fixing double-difference ambiguity
+maxage-thres      :5.0   # max of rover and base station observation time differencce
+gpsmodear         :1     # GPS AR mode (0:off,1:on)
+inherit-age       :5     # inherit double-difference ambiguity age (times of epoch)
+lambda-difference-test :50.0    # thres of lambda difference test
+lambda-project-thres   :0.01    # lambda ambiguity fix project test thres
+phase-windup-model     :1       # phase windup model (0:off 1:on)
